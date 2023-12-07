@@ -7,7 +7,7 @@ from models.moa_model import MOAModel
 tf = try_import_tf()
 
 
-class SocialCuriosityModule(MOAModel):
+class SelfishModule(RecurrentTFModelV2):
     def __init__(self, obs_space, action_space, num_outputs, model_config, name):
         """
         An extension of the MOA, including a forward and inverse model that together create a
@@ -21,23 +21,23 @@ class SocialCuriosityModule(MOAModel):
         super(SocialCuriosityModule, self).__init__(
             obs_space, action_space, num_outputs, model_config, name
         )
-        self._social_curiosity_reward = None
+        self.selfish_reward = None
         self._inverse_model_loss = None
 
-        self.scm_encoder_model = self.create_scm_encoder_model(obs_space, model_config)
-        self.forward_model = self.create_forward_model(model_config, self.scm_encoder_model)
-        self.inverse_model = self.create_inverse_model(model_config, self.scm_encoder_model)
+        self.selfish_encoder_model = self.create_selfish_encoder_model(obs_space, model_config)
+        self.forward_model = self.create_reward_model(model_config, self.scm_encoder_model)
+        # self.inverse_model = self.create_inverse_model(model_config, self.scm_encoder_model)
 
-        for model in [self.scm_encoder_model, self.forward_model, self.inverse_model]:
+        for model in [self.selfish_encoder_model, self.forward_model]:
             self.register_variables(model.variables)
             model.summary()
 
         self.scm_loss_weight = model_config["custom_options"]["scm_loss_weight"]
 
     @staticmethod
-    def create_scm_encoder_model(obs_space, model_config):
+    def create_selfish_encoder_model(obs_space, model_config):
         """
-        Create the encoder submodel, which is part of the SCM.
+        Create the encoder submodel, which combine with the actor model.
         :param obs_space: A single agent's observation space.
         :param model_config: The model config dict.
         :return: A new encoder model.
@@ -48,7 +48,7 @@ class SocialCuriosityModule(MOAModel):
         # Divide by 255 to transform [0,255] uint8 rgb pixel values to [0,1] float32.
         last_layer = tf.keras.backend.cast(input_layer, tf.float32)
         last_layer = tf.math.divide(last_layer, 255.0)
-
+        # This is basically a convolution network which transform the picture to the vector
         activation = get_activation_fn(model_config.get("conv_activation"))
         filters = model_config.get("conv_filters")
         out_size, kernel, stride = filters[-1]
@@ -64,7 +64,7 @@ class SocialCuriosityModule(MOAModel):
 
         return tf.keras.Model(input_layer, flattened_conv_out, name="SCM_Encoder_Model")
 
-    def create_forward_model(self, model_config, encoder):
+    def create_reward_model(self, model_config, encoder):
         """
         Create the forward submodel of the total reward model.
         Inputs: [Encoded state at t - 1,
@@ -76,6 +76,14 @@ class SocialCuriosityModule(MOAModel):
         :param encoder: The SCM encoder submodel.
         :return: A new forward model.
         """
+        
+        
+
+
+
+
+
+
         encoder_output_size = encoder.output_shape[-1]
         inputs = [
             self.create_encoded_input_layer(encoder_output_size, "encoded_input_now"),

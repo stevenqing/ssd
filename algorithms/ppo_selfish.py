@@ -38,7 +38,7 @@ from algorithms.ppo_moa import (
 tf = try_import_tf()
 
 
-def loss_with_scm(policy, model, dist_class, train_batch):
+def loss_with_selfish(policy, model, dist_class, train_batch):
     """
     Calculate PPO loss with SCM and MOA loss
     :return: Combined PPO+MOA+SCM loss
@@ -96,13 +96,12 @@ def setup_ppo_selfish_mixins(policy, obs_space, action_space, config):
     setup_selfish_mixins(policy, obs_space, action_space, config)
 
 
-def validate_ppo_scm_config(config):
+def validate_ppo_selfish_config(config):
     """
     Validates the PPO+MOA+SCM config
     :param config: The config to validate
     """
-    validate_scm_config(config)
-    validate_moa_config(config)
+    validate_selfish_config(config)
     validate_config(config)
 
 
@@ -114,32 +113,33 @@ def build_ppo_scm_trainer(scm_config):
     """
     tf.keras.backend.set_floatx("float32")
 
-    trainer_name = "SCMPPOTrainer"
-
+    trainer_name = "SELFISHPPOTrainer"
+    
+    # mixins not defined well, maybe changed later
     scm_ppo_policy = build_tf_policy(
-        name="SCMPPOTFPolicy",
+        name="SELFISHPPOTFPolicy",
         get_default_config=lambda: scm_config,
-        loss_fn=loss_with_scm,
+        loss_fn=loss_with_selfish,
         make_model=build_model,
-        stats_fn=extra_scm_stats,
-        extra_action_fetches_fn=extra_scm_fetches,
-        postprocess_fn=postprocess_ppo_scm,
+        stats_fn=extra_selfish_stats,
+        extra_action_fetches_fn=extra_selfish_fetches,
+        postprocess_fn=postprocess_ppo_selfish,
         gradients_fn=clip_gradients,
         before_init=setup_config,
-        before_loss_init=setup_ppo_scm_mixins,
+        before_loss_init=setup_ppo_selfish_mixins,
         mixins=[LearningRateSchedule, EntropyCoeffSchedule, KLCoeffMixin, ValueNetworkMixin]
         + get_moa_mixins()
         + get_curiosity_mixins(),
     )
 
-    scm_ppo_trainer = build_trainer(
+    selfish_ppo_trainer = build_trainer(
         name=trainer_name,
-        default_policy=scm_ppo_policy,
+        default_policy=selfish_ppo_policy,
         make_policy_optimizer=choose_policy_optimizer,
-        default_config=scm_config,
-        validate_config=validate_ppo_scm_config,
+        default_config=selfish_config,
+        validate_config=validate_ppo_selfish_config,
         after_optimizer_step=update_kl,
         after_train_result=warn_about_bad_reward_scales,
-        mixins=[SCMResetConfigMixin],
+        mixins=[SELFISHResetConfigMixin],
     )
-    return scm_ppo_trainer
+    return selfish_ppo_trainer
