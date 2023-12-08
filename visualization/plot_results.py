@@ -164,106 +164,114 @@ def extract_stats(dfs, requested_keys):
 
 # Plot the results for a given generated progress.csv file, found in your ray_results folder.
 def plot_csvs_results(paths):
-    path = paths[0]
-    env, model_name = get_env_and_model_name_from_path(path)
-
-    dfs = []
     for path in paths:
-        df = pd.read_csv(path, sep=",")
-        # Set NaN values to 0, common at start of training due to ray behavior
-        df = df.fillna(0)
-        dfs.append(df)
+        # path = paths[0]
+        env, model_name,folder_name = get_env_and_model_name_from_path(path)
+        print(env,model_name,folder_name)
+        dfs = []
+        for path in paths:
+            df = pd.read_csv(path, sep=",")
+            # Set NaN values to 0, common at start of training due to ray behavior
+            df = df.fillna(0)
+            dfs.append(df)
 
-    plots = []
+        plots = []
 
-    # Convert environment steps to 1e8 representation
-    timesteps_totals = [df.timesteps_total for df in dfs]
-    timesteps_totals = [
-        [timestep / 1e8 for timestep in timesteps_total] for timesteps_total in timesteps_totals
-    ]
+        # Convert environment steps to 1e8 representation
+        timesteps_totals = [df.timesteps_total for df in dfs]
+        timesteps_totals = [
+            [timestep / 1e8 for timestep in timesteps_total] for timesteps_total in timesteps_totals
+        ]
 
-    reward_color = get_color_from_model_name(model_name)
-    reward_means = [df.episode_reward_mean for df in dfs]
-    plots.append(
-        PlotData(
-            timesteps_totals, reward_means, "Reward", "Mean collective episode reward", reward_color
+        reward_color = get_color_from_model_name(model_name,folder_name)
+        reward_means = [df.episode_reward_mean for df in dfs]
+        plots.append(
+            PlotData(
+                timesteps_totals, reward_means, "Reward", "Mean collective episode reward", reward_color
+            )
         )
-    )
 
-    episode_len_means = [df.episode_len_mean for df in dfs]
-    plots.append(
-        PlotData(
-            timesteps_totals,
-            episode_len_means,
-            "episode_length",
-            "Mean episode length",
-            "pink",
+        episode_len_means = [df.episode_len_mean for df in dfs]
+        plots.append(
+            PlotData(
+                timesteps_totals,
+                episode_len_means,
+                "episode_length",
+                "Mean episode length",
+                "pink",
+            )
         )
-    )
 
-    metric_details = [
-        PlotGraphics("cur_lr", "Learning rate", "purple"),
-        PlotGraphics("policy_entropy", "Policy Entropy", "b"),
-        PlotGraphics("policy_loss", "Policy loss", "r"),
-        PlotGraphics("vf_loss", "Value function loss", "orange"),
-        PlotGraphics("total_a3c_loss", "Total A3C loss", "yellow"),
-        PlotGraphics("total_loss", "Total loss", "yellow"),
-        PlotGraphics("moa_loss", "MOA loss", "black"),
-        PlotGraphics("scm_loss", "SCM loss", "black"),
-        PlotGraphics("social_influence_reward", "MOA reward", "black"),
-        PlotGraphics("social_curiosity_reward", "Curiosity reward", "black"),
-        PlotGraphics("cur_influence_reward_weight", "Influence reward weight", "orange"),
-        PlotGraphics("cur_curiosity_reward_weight", "Curiosity reward weight", "orange"),
-        PlotGraphics("extrinsic_reward", "Extrinsic reward", "g"),
-        PlotGraphics("total_successes_mean", "Total successes", "black"),
-        # Switch environment metrics
-        PlotGraphics("switches_on_at_termination_mean", "Switches on at termination", "black"),
-        PlotGraphics("total_pulled_on_mean", "Total switched on", "black"),
-        PlotGraphics("total_pulled_off_mean", "Total switched off", "black"),
-        PlotGraphics("timestep_first_switch_pull_mean", "Time at first switch pull", "black"),
-        PlotGraphics("timestep_last_switch_pull_mean", "Time at last switch pull", "black"),
-    ]
+        metric_details = [
+            PlotGraphics("cur_lr", "Learning rate", "purple"),
+            PlotGraphics("policy_entropy", "Policy Entropy", "b"),
+            PlotGraphics("policy_loss", "Policy loss", "r"),
+            PlotGraphics("vf_loss", "Value function loss", "orange"),
+            PlotGraphics("total_a3c_loss", "Total A3C loss", "yellow"),
+            PlotGraphics("total_loss", "Total loss", "yellow"),
+            PlotGraphics("moa_loss", "MOA loss", "black"),
+            PlotGraphics("scm_loss", "SCM loss", "black"),
+            PlotGraphics("social_influence_reward", "MOA reward", "black"),
+            PlotGraphics("social_curiosity_reward", "Curiosity reward", "black"),
+            PlotGraphics("cur_influence_reward_weight", "Influence reward weight", "orange"),
+            PlotGraphics("cur_curiosity_reward_weight", "Curiosity reward weight", "orange"),
+            PlotGraphics("extrinsic_reward", "Extrinsic reward", "g"),
+            PlotGraphics("total_successes_mean", "Total successes", "black"),
+            # Switch environment metrics
+            PlotGraphics("switches_on_at_termination_mean", "Switches on at termination", "black"),
+            PlotGraphics("total_pulled_on_mean", "Total switched on", "black"),
+            PlotGraphics("total_pulled_off_mean", "Total switched off", "black"),
+            PlotGraphics("timestep_first_switch_pull_mean", "Time at first switch pull", "black"),
+            PlotGraphics("timestep_last_switch_pull_mean", "Time at last switch pull", "black"),
+        ]
 
-    extracted_data = extract_stats(dfs, [detail.column_name for detail in metric_details])
-    for metric in metric_details:
-        if metric.column_name in extracted_data:
-            plots.append(
-                PlotData(
-                    timesteps_totals,
-                    extracted_data[metric.column_name],
-                    metric.column_name,
-                    metric.legend_name,
-                    metric.color,
+        extracted_data = extract_stats(dfs, [detail.column_name for detail in metric_details])
+        for metric in metric_details:
+            if metric.column_name in extracted_data:
+                plots.append(
+                    PlotData(
+                        timesteps_totals,
+                        extracted_data[metric.column_name],
+                        metric.column_name,
+                        metric.legend_name,
+                        metric.color,
+                    )
                 )
-            )
 
-    for plot in plots:
+        for plot in plots:
 
-        def plot_fn():
-            plot_single_category_result(
-                plot.x_data,
-                plot.y_data,
-                plot.plot_graphics.color,
-                plot.plot_graphics.legend_name,
-                plot.plot_graphics.column_name,
-            )
+            def plot_fn():
+                plot_single_category_result(
+                    plot.x_data,
+                    plot.y_data,
+                    plot.plot_graphics.color,
+                    plot.plot_graphics.legend_name,
+                    plot.plot_graphics.column_name,
+                )
 
-        try:
-            plot_and_save(
-                plot_fn, path, plot.plot_graphics.column_name + "_" + env + "_" + model_name
-            )
-        except ZeroDivisionError:
-            pass
+            try:
+                plot_and_save(
+                    plot_fn, path, plot.plot_graphics.column_name + "_" + env + "_" + model_name + "_" + folder_name
+                )
+            except ZeroDivisionError:
+                pass
 
 
-def get_color_from_model_name(model_name):
+def get_color_from_model_name(model_name,folder_name):
+    name = model_name + "_" + folder_name
     name_to_color = {
-        "baseline": "blue",
-        "moa": "red",
-        "scm": "orange",
+        "baseline_origin": "blue",
+        "baseline_collective": "slateblue",
+        "baseline_inequity": "navy",
+        "moa_origin": "red",
+        "moa_collective": "mistyrose",
+        "moa_inequity": "brown",
+        "scm_origin": "orange",
+        "scm_collective": "gold",
+        "scm_inequity": "olive",
         "scm no influence reward": "green",
     }
-    name_lower = model_name.lower()
+    name_lower = name.lower()
     if name_lower in name_to_color.keys():
         return name_to_color[name_lower]
     else:
@@ -279,19 +287,44 @@ def get_color_from_model_name(model_name):
 
 def get_env_and_model_name_from_path(path):
     category_path = path.split("/")[-3]
+    folder_path = path.split("/")[-2]
     if "baseline" in category_path:
         model_name = "baseline"
+        if "origin" in folder_path:
+            folder_name = "origin"
+        elif "collective" in folder_path:
+            folder_name = "collective"
+        elif "inequity" in folder_path:
+            folder_name = "inequity"
     elif "moa" in category_path:
-        model_name = "MOA"
-    elif "scm" in category_path:
+        model_name = "MOA"        
+        if "origin" in folder_path:
+            folder_name = "origin"
+        elif "collective" in folder_path:
+            folder_name = "collective"
+        elif "inequity" in folder_path:
+            folder_name = "inequity"
+    elif  "scm" in category_path:
         if "no_influence" in category_path:
-            model_name = "SCM no influence reward"
+            model_name = "SCM no influence reward"            
+            if "origin" in folder_path:
+                folder_name = "origin"
+            elif "collective" in folder_path:
+                folder_name = "collective"
+            elif "inequity" in folder_path:
+                folder_name = "inequity"
         else:
             model_name = "SCM"
+            if "origin" in folder_path:
+                folder_name = "origin"
+            elif "collective" in folder_path:
+                folder_name = "collective"
+            elif "inequity" in folder_path:
+                folder_name = "inequity"
     else:
         raise NotImplementedError
     env = category_path.split("_")[0]
-    return env, model_name
+    return env, model_name,folder_name
 
 
 def get_experiment_rewards(paths):

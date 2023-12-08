@@ -26,9 +26,9 @@ class SelfishModule(RecurrentTFModelV2):
 
         self.selfish_encoder_model = self.create_selfish_encoder_model(obs_space, model_config)
         self.forward_model = self.create_reward_model(model_config, self.scm_encoder_model)
-        # self.inverse_model = self.create_inverse_model(model_config, self.scm_encoder_model)
+        self.inverse_model = self.create_selfish_factor_model(model_config, self.scm_encoder_model)
 
-        for model in [self.selfish_encoder_model, self.forward_model]:
+        for model in [self.selfish_encoder_model, self.forward_model,self.inverse_model]:
             self.register_variables(model.variables)
             model.summary()
 
@@ -66,24 +66,16 @@ class SelfishModule(RecurrentTFModelV2):
 
     def create_reward_model(self, model_config, encoder):
         """
-        Create the forward submodel of the total reward model.
+        Create the forward submodel of the reward model.
         Inputs: [Encoded state at t - 1,
                  Actions at t - 1,
                  LSTM output at t - 1,
                  Social influence at t - 1]
         Output: Predicted encoded state at t
         :param model_config: The model config dict.
-        :param encoder: The SCM encoder submodel.
+        :param encoder: The Reward encoder submodel.
         :return: A new forward model.
         """
-        
-        
-
-
-
-
-
-
         encoder_output_size = encoder.output_shape[-1]
         inputs = [
             self.create_encoded_input_layer(encoder_output_size, "encoded_input_now"),
@@ -109,17 +101,17 @@ class SelfishModule(RecurrentTFModelV2):
 
         return tf.keras.Model(inputs, output_layer, name="SCM_Forward_Model")
 
-    def create_inverse_model(self, model_config, encoder):
+    def create_selfish_factor_model(self, model_config, encoder):
         """
-        Create the inverse submodel of the SCM.
+        Create the selfish factor prediction model.
         Inputs:[Encoded state at t,
                 Encoded state at t - 1,
-                Actions at t - 1,
-                MOA LSTM output at t - 1]
-        Output: Predicted social influence reward at t - 1
+                Actions at t - 1,(which will not be used)
+                Selfish factor prediction at t - 1]
+        Output: Predicted selfish factor at t - 1
         :param model_config: The model config dict.
         :param encoder: The SCM encoder submodel.
-        :return: A new inverse model.
+        :return: A new selfish_factor prediction model.
         """
         encoder_output_size = encoder.output_shape[-1]
         inputs = [
@@ -144,7 +136,7 @@ class SelfishModule(RecurrentTFModelV2):
             kernel_initializer=normc_initializer(1.0),
         )(fc_layer)
 
-        return tf.keras.Model(inputs, output_layer, name="SCM_Inverse_Model")
+        return tf.keras.Model(inputs, output_layer, name="SELFISH_FACTOR_Model")
 
     @staticmethod
     def create_encoded_input_layer(encoded_input_shape, name):
