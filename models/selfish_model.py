@@ -18,7 +18,7 @@ class SelfishModule(RecurrentTFModelV2):
         :param model_config: The model config dict.
         :param name: The model name.
         """
-        super(SocialCuriosityModule, self).__init__(
+        super(SelfishModule, self).__init__(
             obs_space, action_space, num_outputs, model_config, name
         )
         self.selfish_reward = None
@@ -70,7 +70,7 @@ class SelfishModule(RecurrentTFModelV2):
         Inputs: [Encoded state at t - 1,
                  Actions at t - 1,
                  LSTM output at t - 1,
-                 Social influence at t - 1]
+                 Individual Reward at t - 1]
         Output: Predicted encoded state at t
         :param model_config: The model config dict.
         :param encoder: The Reward encoder submodel.
@@ -99,7 +99,7 @@ class SelfishModule(RecurrentTFModelV2):
             kernel_initializer=normc_initializer(1.0),
         )(fc_layer)
 
-        return tf.keras.Model(inputs, output_layer, name="SCM_Forward_Model")
+        return tf.keras.Model(inputs, output_layer, name="Individual_Reward_Model")
 
     def create_selfish_factor_model(self, model_config, encoder):
         """
@@ -110,7 +110,7 @@ class SelfishModule(RecurrentTFModelV2):
                 Selfish factor prediction at t - 1]
         Output: Predicted selfish factor at t - 1
         :param model_config: The model config dict.
-        :param encoder: The SCM encoder submodel.
+        :param encoder: The Selfish encoder submodel.
         :return: A new selfish_factor prediction model.
         """
         encoder_output_size = encoder.output_shape[-1]
@@ -136,7 +136,7 @@ class SelfishModule(RecurrentTFModelV2):
             kernel_initializer=normc_initializer(1.0),
         )(fc_layer)
 
-        return tf.keras.Model(inputs, output_layer, name="SELFISH_FACTOR_Model")
+        return tf.keras.Model(inputs, output_layer, name="Selfish_Factor_Model")
 
     @staticmethod
     def create_encoded_input_layer(encoded_input_shape, name):
