@@ -159,7 +159,7 @@ class SelfishModule(RecurrentTFModelV2):
         :param seq_lens: The LSTM sequence lengths.
         :return: The SCM output and new model state.
         """
-        output, new_state = super(SocialCuriosityModule, self).forward(input_dict, state, seq_lens)
+        output, new_state = super(SelfishModule, self).forward(input_dict, state, seq_lens)
 
         encoded_state = self.scm_encoder_model(input_dict["obs"]["curr_obs"])
         new_state.append(encoded_state)
