@@ -23,15 +23,15 @@ from ray.rllib.utils import try_import_tf
 
 from algorithms.common_funcs_reward_model import (
     EXTRINSIC_REWARD,
-    SOCIAL_INFLUENCE_REWARD,
-    MOAResetConfigMixin,
+    PREDICTED_REWARD,
+    REWARDResetConfigMixin,
     build_model,
-    get_moa_mixins,
-    moa_fetches,
-    moa_postprocess_trajectory,
-    setup_moa_loss,
-    setup_moa_mixins,
-    validate_moa_config,
+    get_reward_model_mixins,
+    reward_model_fetches,
+    reward_model_postprocess_trajectory,
+    setup_reward_model_loss,
+    setup_reward_model_mixins,
+    validate_reward_model_config,
 )
 
 tf = try_import_tf()

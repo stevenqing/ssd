@@ -13,7 +13,6 @@ OTHERS_ACTIONS = "others_actions"
 PREDICTED_ACTIONS = "predicted_actions"
 VISIBILITY = "others_visibility"
 VISIBILITY_MATRIX = "visibility_matrix"
-SOCIAL_INFLUENCE_REWARD = "social_influence_reward"
 EXTRINSIC_REWARD = "extrinsic_reward"
 
 # Frozen logits of the policy that computed the action
@@ -63,11 +62,15 @@ class InfluenceScheduleMixIn(object):
         return weight * self.baseline_influence_reward_weight
 
 
-class MOALoss(object):
-    def __init__(self, pred_logits, true_actions, loss_weight=1.0, others_visibility=None):
-        """Train MOA model with supervised cross entropy loss on a trajectory.
-        The model is trying to predict others' actions at timestep t+1 given all
-        actions at timestep t.
+class REWARDLoss(object):
+    def __init__(self, reward_preds, true_rewards, loss_weight=1.0, others_visibility=None):
+        """Train Reward prediction model with supervised cross entropy loss on a 
+           trajectory.
+           The model is trying to predict others' reward at timestep t+1 given all 
+           states and actions at timestep t.
+        Inputs:
+            reward_preds: [B,N,1]
+            true_rewards: [B,N,1]
         Returns:
             A scalar loss tensor (cross-entropy loss).
         """
@@ -75,16 +78,10 @@ class MOALoss(object):
         # for t=0 cannot have been made at timestep -1, as the simulation starts at timestep 0.
         # Thus we remove the first prediction, as this value contains no sensible data.
         # NB: This means we start at n=1.
-        action_logits = pred_logits[1:-1, :, :]  # [B, N, A]
-
-        # true_actions[n] contains the actions made by other agents at n-1.
-        # Therefore, true_actions[2] contains actions made at time 1,
-        # which is where action_logits starts.
-        true_actions = tf.cast(true_actions[2:, :], tf.int32)  # [B, N]
 
         # Compute softmax cross entropy
         self.ce_per_entry = tf.nn.sparse_softmax_cross_entropy_with_logits(
-            labels=true_actions, logits=action_logits
+            labels=true_rewards, logits=reward_preds
         )
 
         # Zero out the loss if the other agent isn't visible to this one.
@@ -99,11 +96,10 @@ class MOALoss(object):
         tf.Print(self.total_loss, [self.total_loss], message="MOA CE loss")
 
 
-def setup_moa_loss(logits, policy, train_batch):
+def setup_reward_model_loss(logits, policy, train_batch):
     # Instantiate the prediction loss
-    moa_preds = train_batch[PREDICTED_ACTIONS]
-    moa_preds = tf.reshape(moa_preds, [-1, policy.model.num_other_agents, logits.shape[-1]])
-    true_actions = train_batch[OTHERS_ACTIONS]
+    reward_preds = train_batch['predicted_reward'] # need to reconsider in here, checking featches
+    true_rewards = train_batch['extrinsic_reward']
     # 0/1 multiplier array representing whether each agent is visible to
     # the current agent.
     if policy.train_moa_only_when_visible:
@@ -111,16 +107,16 @@ def setup_moa_loss(logits, policy, train_batch):
         others_visibility = train_batch[VISIBILITY]
     else:
         others_visibility = None
-    moa_loss = MOALoss(
-        moa_preds,
-        true_actions,
-        loss_weight=policy.moa_loss_weight,
+    reward_model_loss = REWARDLoss(
+        reward_preds,
+        true_rewards,
+        loss_weight=policy.moa_loss_weight, # not sure if it's good
         others_visibility=others_visibility,
     )
-    return moa_loss
+    return reward_model_loss
 
 
-def moa_postprocess_trajectory(policy, sample_batch, other_agent_batches=None, episode=None):
+def reward_postprocess_trajectory(policy, sample_batch, other_agent_batches=None, episode=None):
     # Weigh social influence reward and add to batch.
     sample_batch = weigh_and_add_influence_reward(policy, sample_batch)
 
@@ -128,21 +124,15 @@ def moa_postprocess_trajectory(policy, sample_batch, other_agent_batches=None, e
 
 
 def weigh_and_add_influence_reward(policy, sample_batch):
-    cur_influence_reward_weight = policy.compute_influence_reward_weight()
     # Since the reward calculation is delayed by 1 step, sample_batch[SOCIAL_INFLUENCE_REWARD][0]
     # contains the reward for timestep -1, which does not exist. Hence we shift the array.
     # Then, pad with a 0-value at the end to make the influence rewards align with sample_batch.
     # This leaks some information about the episode end though.
-    influence = np.concatenate((sample_batch[SOCIAL_INFLUENCE_REWARD][1:], [0]))
 
     # Clip and weigh influence reward
-    influence = np.clip(influence, -policy.influence_reward_clip, policy.influence_reward_clip)
-    influence = influence * cur_influence_reward_weight
 
     # Add to trajectory
-    sample_batch[SOCIAL_INFLUENCE_REWARD] = influence
     sample_batch["extrinsic_reward"] = sample_batch["rewards"]
-    sample_batch["rewards"] = sample_batch["rewards"] + influence
 
     return sample_batch
 
@@ -210,12 +200,9 @@ def moa_fetches(policy):
     return {
         # Be aware that this is frozen here so that we don't
         # propagate agent actions through the reward
-        ACTION_LOGITS: policy.model.action_logits(),
         # TODO(@evinitsky) remove this once we figure out how to split the obs
-        OTHERS_ACTIONS: policy.model.other_agent_actions(),
         VISIBILITY: policy.model.visibility(),
-        SOCIAL_INFLUENCE_REWARD: policy.model.social_influence_reward(),
-        PREDICTED_ACTIONS: policy.model.predicted_actions(),
+        REWARD_PREDS: policy.model.predicted_rewards(), # check policy.model.predicted_actions()
     }
 
 
