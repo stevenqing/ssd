@@ -16,6 +16,7 @@ BASE_ACTIONS = {
 }  # Rotate clockwise
 
 
+
 class Agent(object):
     def __init__(self, agent_id, start_pos, start_orientation, full_map, row_size, col_size):
         """Superclass for all agents.
@@ -152,6 +153,46 @@ class Agent(object):
     def consume(self, char):
         """Defines how an agent interacts with the char it is standing on"""
         raise NotImplementedError
+
+
+
+COIN_ACTIONS = {
+    0: "MOVE_LEFT",  # Move left
+    1: "MOVE_RIGHT",  # Move right
+    2: "MOVE_UP",  # Move up
+    3: "MOVE_DOWN",  # Move down
+}
+
+class CoinAgent(Agent):
+    def __init__(self, agent_id, start_pos, start_orientation, full_map, view_len, penalty):
+        self.view_len = view_len
+        super().__init__(agent_id, start_pos, start_orientation, full_map, view_len, view_len)
+        self.update_agent_pos(start_pos)
+        self.penalty = penalty
+
+    # Ugh, this is gross, this leads to the actions basically being
+    # defined in two places
+    def action_map(self, action_number):
+        """Maps action_number to a desired action in the map"""
+        return COIN_ACTIONS[action_number]
+
+    def get_done(self):
+        return False
+
+    def consume(self, char):
+        """Defines how an agent interacts with the char it is standing on"""
+        self.reward_this_turn += self.penalty
+        if char == b"A":
+            self.reward_this_turn += 1
+            if agent_id == 2:
+                self.penalty = 2
+        elif char == b"B":
+            self.reward_this_turn += 1
+            if agent_id == 1:
+                self.penalty = 2
+            return b" "
+        else:
+            return char
 
 
 HARVEST_ACTIONS = BASE_ACTIONS.copy()
