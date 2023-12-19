@@ -11,7 +11,7 @@ APPLE_RADIUS = 2
 # Add custom actions to the agent
 _HARVEST_ACTIONS = {"FIRE": 5}  # length of firing range
 
-SPAWN_PROB = [0, 0.005, 0.02, 0.05]
+SPAWN_PROB = [0.1, 0, 0, 0]
 
 COIN_VIEW_SIZE = 5
 
@@ -43,6 +43,7 @@ class CoinEnv(MapEnv):
             for col in range(self.base_map.shape[1]):
                 if self.base_map[row, col] == b"A" or b"B":
                     self.apple_points.append([row, col])
+        self.penalty = 0
 
     @property
     def action_space(self):
@@ -52,17 +53,20 @@ class CoinEnv(MapEnv):
         map_with_agents = self.get_map_with_agents()
 
         for i in range(self.num_agents):
-            agent_id = "agent-" + str(i)
+            agent_id = i
             spawn_point = self.spawn_point()
             rotation = self.spawn_rotation()
             grid = map_with_agents
-            agent = CoinAgent(agent_id, spawn_point, rotation, grid, view_len=COIN_VIEW_SIZE)
+            agent = CoinAgent(agent_id, spawn_point, rotation, grid, view_len=COIN_VIEW_SIZE,self.penalty)
             self.agents[agent_id] = agent
+            # there maybe a problem with the penalty
+            self.penalty = agent.penalty
+            
 
     def custom_reset(self):
         """Initialize the walls and the apples"""
         for apple_point in self.apple_points:
-            self.single_update_map(apple_point[0], apple_point[1], b"A")
+            self.single_update_map(apple_point[0], apple_point[1], apple_point[2])
 
     def custom_action(self, agent, action):
         agent.fire_beam(b"F")
@@ -96,7 +100,7 @@ class CoinEnv(MapEnv):
         for i in range(len(self.apple_points)):
             row, col = self.apple_points[i]
             # apples can't spawn where agents are standing or where an apple already is
-            if [row, col] not in agent_positions and self.world_map[row, col] != b"A":
+            if [row, col] not in agent_positions and self.world_map[row, col] != b"A" or b"B":
                 num_apples = 0
                 for j in range(-APPLE_RADIUS, APPLE_RADIUS + 1):
                     for k in range(-APPLE_RADIUS, APPLE_RADIUS + 1):
@@ -106,14 +110,17 @@ class CoinEnv(MapEnv):
                                 0 <= x + j < self.world_map.shape[0]
                                 and self.world_map.shape[1] > y + k >= 0
                             ):
-                                if self.world_map[x + j, y + k] == b"A":
+                                if self.world_map[x + j, y + k] == b"A" or b"B":
                                     num_apples += 1
 
-                spawn_prob = SPAWN_PROB[min(num_apples, 3)]
+                spawn_prob = SPAWN_PROB[num_apples]
                 rand_num = random_numbers[r]
                 r += 1
                 if rand_num < spawn_prob:
-                    new_apple_points.append((row, col, b"A"))
+                    if random.randint(0,1) == 0:
+                        new_apple_points.append((row, col, b"A"))
+                    else:
+                        new_apple_points.append((row, col, b"B"))
         return new_apple_points
 
     def count_apples(self, window):

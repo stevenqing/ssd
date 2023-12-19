@@ -1,7 +1,7 @@
 from social_dilemmas.envs.cleanup import CleanupEnv
 from social_dilemmas.envs.harvest import HarvestEnv
 from social_dilemmas.envs.switch import SwitchEnv
-
+from social_dilemmas.envs.coin import CoinEnv
 
 def get_env_creator(
     env,
@@ -24,6 +24,17 @@ def get_env_creator(
                 beta=beta,
             )
 
+    if env == "coin":
+
+        def env_creator(_):
+            return CoinEnv(
+                num_agents=num_agents,
+                return_agent_actions=True,
+                use_collective_reward=use_collective_reward,
+                inequity_averse_reward=inequity_averse_reward,
+                alpha=alpha,
+                beta=beta,
+            )
     elif env == "cleanup":
 
         def env_creator(_):
