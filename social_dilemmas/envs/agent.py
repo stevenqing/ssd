@@ -182,13 +182,15 @@ class CoinAgent(Agent):
     def consume(self, char):
         """Defines how an agent interacts with the char it is standing on"""
         self.reward_this_turn += self.penalty
+        agent1 = "agent-" + str(1)
+        agent2 = "agent-" + str(2)
         if char == b"A":
             self.reward_this_turn += 1
-            if agent_id == 2:
+            if self.agent_id == agent2:
                 self.penalty = 2
         elif char == b"B":
             self.reward_this_turn += 1
-            if agent_id == 1:
+            if self.agent_id == agent1:
                 self.penalty = 2
             return b" "
         else:

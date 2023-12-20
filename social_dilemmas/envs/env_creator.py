@@ -53,6 +53,6 @@ def get_env_creator(
             return SwitchEnv(num_agents=num_agents, num_switches=num_switches)
 
     else:
-        raise ValueError(f"env must be one of harvest, cleanup, switch, not {env}")
+        raise ValueError(f"env must be one of coin, harvest, cleanup, switch, not {env}")
 
     return env_creator

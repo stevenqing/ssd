@@ -41,9 +41,10 @@ class CoinEnv(MapEnv):
         self.apple_points = []
         for row in range(self.base_map.shape[0]):
             for col in range(self.base_map.shape[1]):
-                if self.base_map[row, col] == b"A" or b"B":
-                    self.apple_points.append([row, col])
-        self.penalty = 0
+                if self.base_map[row, col] == b"A":
+                    self.apple_points.append([row, col, "A"])
+                elif self.base_map[row, col] == b"B":
+                    self.apple_points.append([row, col, "B"])
 
     @property
     def action_space(self):
@@ -51,22 +52,29 @@ class CoinEnv(MapEnv):
 
     def setup_agents(self):
         map_with_agents = self.get_map_with_agents()
-
+        penalty = 0
         for i in range(self.num_agents):
-            agent_id = i
+            agent_id = "agent-" + str(i)
             spawn_point = self.spawn_point()
             rotation = self.spawn_rotation()
             grid = map_with_agents
-            agent = CoinAgent(agent_id, spawn_point, rotation, grid, view_len=COIN_VIEW_SIZE,self.penalty)
+            agent = CoinAgent(agent_id, spawn_point, rotation, grid, COIN_VIEW_SIZE,penalty)
             self.agents[agent_id] = agent
             # there maybe a problem with the penalty
-            self.penalty = agent.penalty
+            if agent_id == 2 and agent.penalty > 0:
+                agent1 = self.agents[1]
+                tmp_agent = CoinAgent(agent1.agent_id, agent1.spawn_point, agent1.rotation, agent1.grid, agent1.COIN_VIEW_SIZE, agent.panalty)
+                self.agents[1] = tmp_agent
+            penalty = agent.penalty
             
 
     def custom_reset(self):
         """Initialize the walls and the apples"""
         for apple_point in self.apple_points:
-            self.single_update_map(apple_point[0], apple_point[1], apple_point[2])
+            if apple_point[2] == 'A':
+                self.single_update_map(apple_point[0], apple_point[1], b"A")
+            elif apple_point[2] == 'B':
+                self.single_update_map(apple_point[0], apple_point[1], b"B")
 
     def custom_action(self, agent, action):
         agent.fire_beam(b"F")
@@ -98,14 +106,15 @@ class CoinEnv(MapEnv):
         random_numbers = rand(len(self.apple_points))
         r = 0
         for i in range(len(self.apple_points)):
-            row, col = self.apple_points[i]
+            print(self.apple_points[i])
+            row, col, char = self.apple_points[i]
             # apples can't spawn where agents are standing or where an apple already is
             if [row, col] not in agent_positions and self.world_map[row, col] != b"A" or b"B":
                 num_apples = 0
                 for j in range(-APPLE_RADIUS, APPLE_RADIUS + 1):
                     for k in range(-APPLE_RADIUS, APPLE_RADIUS + 1):
                         if j ** 2 + k ** 2 <= APPLE_RADIUS:
-                            x, y = self.apple_points[i]
+                            x, y, char = self.apple_points[i]
                             if (
                                 0 <= x + j < self.world_map.shape[0]
                                 and self.world_map.shape[1] > y + k >= 0
@@ -113,7 +122,7 @@ class CoinEnv(MapEnv):
                                 if self.world_map[x + j, y + k] == b"A" or b"B":
                                     num_apples += 1
 
-                spawn_prob = SPAWN_PROB[num_apples]
+                spawn_prob = SPAWN_PROB[min(num_apples,1)]
                 rand_num = random_numbers[r]
                 r += 1
                 if rand_num < spawn_prob:

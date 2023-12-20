@@ -699,6 +699,7 @@ class MapEnv(MultiAgentEnv):
             self.single_update_map(*point)
 
     def single_update_map(self, row, col, char):
+        print(char)
         self.world_map[row, col] = char
         self.world_map_color[row + self.map_padding, col + self.map_padding] = self.color_map[char]
 
