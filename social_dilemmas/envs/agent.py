@@ -188,6 +188,7 @@ class CoinAgent(Agent):
             self.reward_this_turn += 1
             if self.agent_id == agent2:
                 self.penalty = 2
+            return b" "
         elif char == b"B":
             self.reward_this_turn += 1
             if self.agent_id == agent1:

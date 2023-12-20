@@ -24,7 +24,7 @@ def get_env_creator(
                 beta=beta,
             )
 
-    if env == "coin":
+    elif env == "coin":
 
         def env_creator(_):
             return CoinEnv(

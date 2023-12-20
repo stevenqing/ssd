@@ -26,6 +26,7 @@ DEFAULT_COLOURS = {
     b"": np.array([180, 180, 180], dtype=np.uint8),  # Grey board walls
     b"@": np.array([180, 180, 180], dtype=np.uint8),  # Grey board walls
     b"A": np.array([0, 255, 0], dtype=np.uint8),  # Green apples
+    b"B": np.array([218,112,214], dtype=np.uint8), # Light purple apples
     b"F": np.array([255, 255, 0], dtype=np.uint8),  # Yellow firing beam
     b"P": np.array([159, 67, 255], dtype=np.uint8),  # Generic agent (any player)
     # Colours for agents. R value is a unique identifier
@@ -699,7 +700,6 @@ class MapEnv(MultiAgentEnv):
             self.single_update_map(*point)
 
     def single_update_map(self, row, col, char):
-        print(char)
         self.world_map[row, col] = char
         self.world_map_color[row + self.map_padding, col + self.map_padding] = self.color_map[char]
 

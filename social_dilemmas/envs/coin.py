@@ -1,6 +1,6 @@
 import numpy as np
 from numpy.random import rand
-
+import random
 from social_dilemmas.envs.agent import CoinAgent
 from social_dilemmas.envs.gym.discrete_with_dtype import DiscreteWithDType
 from social_dilemmas.envs.map_env import MapEnv
@@ -103,10 +103,8 @@ class CoinEnv(MapEnv):
 
         new_apple_points = []
         agent_positions = self.agent_pos
-        random_numbers = rand(len(self.apple_points))
         r = 0
         for i in range(len(self.apple_points)):
-            print(self.apple_points[i])
             row, col, char = self.apple_points[i]
             # apples can't spawn where agents are standing or where an apple already is
             if [row, col] not in agent_positions and self.world_map[row, col] != b"A" or b"B":
@@ -123,9 +121,9 @@ class CoinEnv(MapEnv):
                                     num_apples += 1
 
                 spawn_prob = SPAWN_PROB[min(num_apples,1)]
-                rand_num = random_numbers[r]
+                rand_num = np.random.choice([0,0.1],p=[0.9,0.1])
                 r += 1
-                if rand_num < spawn_prob:
+                if rand_num == spawn_prob:
                     if random.randint(0,1) == 0:
                         new_apple_points.append((row, col, b"A"))
                     else:
