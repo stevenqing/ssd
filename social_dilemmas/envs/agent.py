@@ -83,8 +83,9 @@ class Agent(object):
         return util.return_view(self.full_map, self.pos, self.row_size, self.col_size)
 
     def compute_reward(self):
-        reward = self.reward_this_turn
+        reward = self.reward_this_turn-self.penalty
         self.reward_this_turn = 0
+        self.penalty = 0
         return reward
 
     def set_pos(self, new_pos):
@@ -163,6 +164,7 @@ COIN_ACTIONS = {
     3: "MOVE_DOWN",  # Move down
 }
 
+#COIN_ACTIONS = BASE_ACTIONS.copy()
 class CoinAgent(Agent):
     def __init__(self, agent_id, start_pos, start_orientation, full_map, view_len, penalty):
         self.view_len = view_len
@@ -181,9 +183,8 @@ class CoinAgent(Agent):
 
     def consume(self, char):
         """Defines how an agent interacts with the char it is standing on"""
-        self.reward_this_turn += self.penalty
-        agent1 = "agent-" + str(1)
-        agent2 = "agent-" + str(2)
+        agent1 = "agent-" + str(0)
+        agent2 = "agent-" + str(1)
         if char == b"A":
             self.reward_this_turn += 1
             if self.agent_id == agent2:

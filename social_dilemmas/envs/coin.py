@@ -6,12 +6,10 @@ from social_dilemmas.envs.gym.discrete_with_dtype import DiscreteWithDType
 from social_dilemmas.envs.map_env import MapEnv
 from social_dilemmas.maps import COIN_MAP
 
-APPLE_RADIUS = 2
 
 # Add custom actions to the agent
 _HARVEST_ACTIONS = {"FIRE": 5}  # length of firing range
 
-SPAWN_PROB = [0.1, 0, 0, 0]
 
 COIN_VIEW_SIZE = 5
 
@@ -61,7 +59,8 @@ class CoinEnv(MapEnv):
             agent = CoinAgent(agent_id, spawn_point, rotation, grid, COIN_VIEW_SIZE,penalty)
             self.agents[agent_id] = agent
             # there maybe a problem with the penalty
-            if agent_id == 2 and agent.penalty > 0:
+            agent_id_1 = "agent-" + str(1)
+            if agent_id == agent_id_1 and agent.penalty > 0:
                 agent1 = self.agents[1]
                 tmp_agent = CoinAgent(agent1.agent_id, agent1.spawn_point, agent1.rotation, agent1.grid, agent1.COIN_VIEW_SIZE, agent.panalty)
                 self.agents[1] = tmp_agent
@@ -100,31 +99,26 @@ class CoinEnv(MapEnv):
         new_apple_points: list of 2-d lists
             a list containing lists indicating the spawn positions of new apples
         """
-
+        current_apples = []
         new_apple_points = []
         agent_positions = self.agent_pos
-        r = 0
-        for i in range(len(self.apple_points)):
-            row, col, char = self.apple_points[i]
-            # apples can't spawn where agents are standing or where an apple already is
-            if [row, col] not in agent_positions and self.world_map[row, col] != b"A" or b"B":
-                num_apples = 0
-                for j in range(-APPLE_RADIUS, APPLE_RADIUS + 1):
-                    for k in range(-APPLE_RADIUS, APPLE_RADIUS + 1):
-                        if j ** 2 + k ** 2 <= APPLE_RADIUS:
-                            x, y, char = self.apple_points[i]
-                            if (
-                                0 <= x + j < self.world_map.shape[0]
-                                and self.world_map.shape[1] > y + k >= 0
-                            ):
-                                if self.world_map[x + j, y + k] == b"A" or b"B":
-                                    num_apples += 1
-
-                spawn_prob = SPAWN_PROB[min(num_apples,1)]
-                rand_num = np.random.choice([0,0.1],p=[0.9,0.1])
-                r += 1
+        # apples can't spawn where agents are standing or where an apple already is
+        isapple = False
+        for row in range(1,np.shape(self.world_map)[0]-1):
+            for col in range(1,np.shape(self.world_map)[1]-1):
+                char = self.world_map[row, col]
+                if char == b'A' or char == b'B':
+                    current_apples.append([row, col])
+                    isapple = True
+        if isapple == False:
+            row = random.randint(1,np.shape(self.world_map)[0]-1)
+            col = random.randint(1,np.shape(self.world_map)[1]-1)
+            if [row, col] not in agent_positions:
+                spawn_prob = 0.1
+                rand_num = np.random.choice([1,0.1],p=[0.9,0.1])
                 if rand_num == spawn_prob:
-                    if random.randint(0,1) == 0:
+                    num = random.randint(0,1)
+                    if num == 0:
                         new_apple_points.append((row, col, b"A"))
                     else:
                         new_apple_points.append((row, col, b"B"))
