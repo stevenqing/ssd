@@ -44,6 +44,9 @@ class Agent(object):
         self.col_size = col_size
         self.reward_this_turn = 0
         self.prev_visible_agents = None
+        self.penalty_1 = 0
+        self.penalty_2 = 0
+        self.penalty_3 = 0
 
     @property
     def action_space(self):
@@ -83,9 +86,19 @@ class Agent(object):
         return util.return_view(self.full_map, self.pos, self.row_size, self.col_size)
 
     def compute_reward(self):
-        reward = self.reward_this_turn-self.penalty
+        agent1 = "agent-" + str(0)
+        agent2 = "agent-" + str(1)
+        agent3 = "agent-" + str(2)
+        if self.agent_id == agent1:
+            reward = self.reward_this_turn - self.penalty_1
+        elif self.agent_id == agent2:
+            reward = self.reward_this_turn - self.penalty_2
+        elif self.agent_id == agent3:
+            reward = self.reward_this_turn - self.penalty_3
         self.reward_this_turn = 0
-        self.penalty = 0
+        self.penalty_1 = 0
+        self.penalty_2 = 0
+        self.penalty_3 = 0
         return reward
 
     def set_pos(self, new_pos):
@@ -188,13 +201,59 @@ class CoinAgent(Agent):
         if char == b"A":
             self.reward_this_turn += 1
             if self.agent_id == agent2:
-                self.penalty = 2
+                self.penalty_1 = 2
             return b" "
         elif char == b"B":
             self.reward_this_turn += 1
             if self.agent_id == agent1:
-                self.penalty = 2
+                self.penalty_2 = 2
             return b" "
+        else:
+            return char
+
+class Coin3Agent(Agent):
+    def __init__(self, agent_id, start_pos, start_orientation, full_map, view_len, penalty_1, penalty_2, penalty_3):
+        self.view_len = view_len
+        super().__init__(agent_id, start_pos, start_orientation, full_map, view_len, view_len)
+        self.update_agent_pos(start_pos)
+        self.penalty_1 = penalty_1
+        self.penalty_2 = penalty_2
+        self.penalty_3 = penalty_3
+
+    # Ugh, this is gross, this leads to the actions basically being
+    # defined in two places
+    def action_map(self, action_number):
+        """Maps action_number to a desired action in the map"""
+        return COIN_ACTIONS[action_number]
+
+    def get_done(self):
+        return False
+
+    def consume(self, char):
+        """Defines how an agent interacts with the char it is standing on"""
+        agent1 = "agent-" + str(0)
+        agent2 = "agent-" + str(1)
+        agent3 = "agent-" + str(2)
+        if char == b"A":
+            self.reward_this_turn += 1
+            if self.agent_id == agent2:
+                self.penalty_2 = 2
+            elif self.agent_id == agent3:
+                self.penalty_3 = 2
+            return b" "
+        elif char == b"B":
+            self.reward_this_turn += 1
+            if self.agent_id == agent1:
+                self.penalty_1 = 2
+            elif self.agent_id == agent3:
+                self.penalty_3 = 2
+            return b" "
+        elif char == b"C":
+            self.reward_this_turn += 1
+            if self.agent_id == agent1:
+                self.penalty_1 = 2
+            elif self.agent_id == agent2:
+                self.penalty_2 = 2
         else:
             return char
 
