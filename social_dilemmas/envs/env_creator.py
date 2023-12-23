@@ -39,7 +39,7 @@ def get_env_creator(
     elif env == "coin3":
 
         def env_creator(_):
-            return CoinEnv(
+            return Coin3Env(
                 num_agents=num_agents,
                 return_agent_actions=True,
                 use_collective_reward=use_collective_reward,

@@ -212,13 +212,10 @@ class CoinAgent(Agent):
             return char
 
 class Coin3Agent(Agent):
-    def __init__(self, agent_id, start_pos, start_orientation, full_map, view_len, penalty_1, penalty_2, penalty_3):
+    def __init__(self, agent_id, start_pos, start_orientation, full_map, view_len):
         self.view_len = view_len
         super().__init__(agent_id, start_pos, start_orientation, full_map, view_len, view_len)
         self.update_agent_pos(start_pos)
-        self.penalty_1 = penalty_1
-        self.penalty_2 = penalty_2
-        self.penalty_3 = penalty_3
 
     # Ugh, this is gross, this leads to the actions basically being
     # defined in two places
@@ -254,6 +251,7 @@ class Coin3Agent(Agent):
                 self.penalty_1 = 2
             elif self.agent_id == agent2:
                 self.penalty_2 = 2
+            return b" "
         else:
             return char
 

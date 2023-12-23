@@ -52,13 +52,12 @@ class Coin3Env(MapEnv):
 
     def setup_agents(self):
         map_with_agents = self.get_map_with_agents()
-        penalty = 0
         for i in range(self.num_agents):
             agent_id = "agent-" + str(i)
             spawn_point = self.spawn_point()
             rotation = self.spawn_rotation()
             grid = map_with_agents
-            agent = CoinAgent(agent_id, spawn_point, rotation, grid, COIN_VIEW_SIZE,penalty)
+            agent = Coin3Agent(agent_id, spawn_point, rotation, grid, COIN_VIEW_SIZE)
             self.agents[agent_id] = agent
             
 
@@ -123,9 +122,20 @@ class Coin3Env(MapEnv):
                         new_apple_points.append((row, col, b"C"))
         return new_apple_points
 
-    def count_apples(self, window):
-        # compute how many apples are in window
-        unique, counts = np.unique(window, return_counts=True)
-        counts_dict = dict(zip(unique, counts))
-        num_apples = counts_dict.get(b"A", 0)
-        return num_apples
+    def count_apples(self):
+        # Return apples pos and type
+        apple_pos = [[0,0],[0,0],[0,0]]
+        apple_type = [0,0,0]
+        for row in range(1,np.shape(self.world_map)[0]-1):
+           for col in range(1,np.shape(self.world_map)[1]-1):
+               char = self.world_map[row, col]
+               if char == b'A':
+                   apple_pos[0] = [int(row),int(col)]
+                   apple_type[0] = 1
+               elif char == b'B':
+                   apple_pos[1] = [int(row),int(col)]
+                   apple_type[1] = 2
+               elif char == b'C':
+                   apple_pos[2] = [int(row),int(col)]
+                   apple_type[2] = 3
+        return apple_pos, apple_type

@@ -6,7 +6,7 @@ import numpy as np
 from gym.spaces import Box, Dict
 from ray.rllib.agents.callbacks import DefaultCallbacks
 from ray.rllib.env import MultiAgentEnv
-
+import json
 _MAP_ENV_ACTIONS = {
     "MOVE_LEFT": [0, -1],  # Move left
     "MOVE_RIGHT": [0, 1],  # Move right
@@ -27,6 +27,7 @@ DEFAULT_COLOURS = {
     b"@": np.array([180, 180, 180], dtype=np.uint8),  # Grey board walls
     b"A": np.array([0, 255, 0], dtype=np.uint8),  # Green apples
     b"B": np.array([218,112,214], dtype=np.uint8), # Light purple apples
+    b"C": np.array([128, 42, 42], dtype=np.uint8), # Brown apples
     b"F": np.array([255, 255, 0], dtype=np.uint8),  # Yellow firing beam
     b"P": np.array([159, 67, 255], dtype=np.uint8),  # Generic agent (any player)
     # Colours for agents. R value is a unique identifier
@@ -87,6 +88,9 @@ class MapEnv(MultiAgentEnv):
         return_agent_actions: bool
             If true, the observation space will include the actions of other agents
         """
+        self.store_trajs = True
+        self.file_path = '/scratch/prj/inf_du/shuqing/trajs_file.json' 
+
         self.num_agents = num_agents
         self.base_map = self.ascii_to_numpy(ascii_map)
         self.view_len = view_len
@@ -234,9 +238,11 @@ class MapEnv(MultiAgentEnv):
 
         self.beam_pos = []
         agent_actions = {}
+        store_actions = []
         for agent_id, action in actions.items():
             agent_action = self.agents[agent_id].action_map(action)
             agent_actions[agent_id] = agent_action
+            store_actions.append(int(action))
 
         # Remove agents from color map
         for agent in self.agents.values():
@@ -245,11 +251,15 @@ class MapEnv(MultiAgentEnv):
 
         self.update_moves(agent_actions)
 
+        apple_pos, apple_type = self.count_apples()
+        apple_pos = [item for sublist in apple_pos for item in sublist]    
+        
         for agent in self.agents.values():
             pos = agent.pos
             new_char = agent.consume(self.world_map[pos[0], pos[1]])
             self.single_update_map(pos[0], pos[1], new_char)
 
+        
         # execute custom moves like firing
         self.update_custom_moves(agent_actions)
 
@@ -257,13 +267,24 @@ class MapEnv(MultiAgentEnv):
         self.custom_map_update()
 
         map_with_agents = self.get_map_with_agents()
+        
+        #Add agents' positions 
+        positions = []
+
         # Add agents to color map
         for agent in self.agents.values():
             row, col = agent.pos[0], agent.pos[1]
+            positions.append(agent.pos)
             # Firing beams have priority over agents and should cover them
-            if self.world_map[row, col] not in [b"F", b"C"]:
-                self.single_update_world_color_map(row, col, agent.get_char_id())
-
+            # to avoid conflicts in b"C"
+            if self.num_agents > 3:
+                if self.world_map[row, col] not in [b"F", b"C"]:
+                    self.single_update_world_color_map(row, col, agent.get_char_id())
+        positions = [item for sublist in positions for item in sublist] 
+        
+        
+        store_trajs = {'vector_states':[],'actions':[],'rewards':[]}
+        store_rewards = []
         observations = {}
         rewards = {}
         dones = {}
@@ -287,8 +308,22 @@ class MapEnv(MultiAgentEnv):
             else:
                 observations[agent.agent_id] = {"curr_obs": rgb_arr}
             rewards[agent.agent_id] = agent.compute_reward()
+            store_rewards.append(rewards[agent.agent_id])
             dones[agent.agent_id] = agent.get_done()
             infos[agent.agent_id] = {}
+        
+        if self.store_trajs:
+            vector_state = positions + apple_pos + apple_type
+            vector_state = [int(i) for i in vector_state]
+            store_trajs['vector_states'] = vector_state
+            store_trajs['actions'] = store_actions
+            store_trajs['rewards'] = store_rewards
+
+        with open(self.file_path, "a") as json_file:
+            json.dump(store_trajs, json_file)
+            json_file.write('\n')
+
+        store_trajs = {'vector_states':[],'actions':[],'rewards':[]}
 
         if self.use_collective_reward:
             collective_reward = sum(rewards.values())
