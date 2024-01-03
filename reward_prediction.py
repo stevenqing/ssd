@@ -15,49 +15,40 @@ obs_action = []
 num_epochs = 100
 batch_size = 32
 count = 0
-'''
+
 with open("/scratch/prj/inf_du/shuqing/trajs_file.json","r") as file:
     for line in file:
-        try:
-            data = json.loads(line)
-            obs.append(tf.squeeze(np.array(data["obs"])))
-            actions.append(tf.squeeze(np.array(data["actions"])))
-            rewards.append(tf.squeeze(np.array(data["rewards"])))
-            i = tf.concat([tf.squeeze(np.array(data["obs"]).flatten()), tf.squeeze(np.array(data["actions"]))], 0)
-            i = i.numpy().tolist()
-            obs_action.append(i)
-        except:
-            pass
+        #try:
+        data = json.loads(line)
+        obs.append(tf.squeeze(np.array(data["vector_states"])))
+        actions.append(tf.squeeze(np.array(data["actions"])))
+        rewards.append(np.squeeze(np.array(data["rewards"])).tolist())
+        i = tf.concat([tf.squeeze(np.array(data["vector_states"])), tf.squeeze(np.array(data["actions"]))], 0)
+        i = i.numpy().tolist()
+        obs_action.append(i)
+        #except:
+         #   pass
 print(np.shape(obs_action),np.shape(obs),np.shape(actions),np.shape(rewards))
-print(type(obs_action),type(obs))
-'''
+
 # X1 = obs[:100]
 # X2 = actions[:100]
 # y = rewards[:100]
 
 # X1_train, X1_test, X2_train, X2_test, y_train, y_test = train_test_split(obs, actions, rewards, test_size=0.2, random_state=42)
 
+# split the obs and action
+X_train,X_test,y_train,y_test = train_test_split(obs_action,rewards, test_size=0.2, random_state=42)
 
-# X_train,X_test,y_train,y_test = train_test_split(obs_action,rewards, test_size=0.2, random_state=42)
-
-X, y = make_classification(n_samples=1000, n_features=3794, n_classes=2, random_state=42)
-y_one_hot = np.eye(5)[y]
-X_random_train,X_random_test,y_random_train,y_random_test = train_test_split(X,y_one_hot,test_size=0.2,random_state=42)
 
 # X1_train = tf.constant(X1_train)
 # X2_train = tf.constant(X2_train)
 # y_train = tf.constant(y_train)
 
-
+X_train = tf.constant(X_train)
+y_train = tf.constant(y_train)
 
 
 # 数据标准化
-
-scaler = StandardScaler()
-X_train = scaler.fit_transform(X_random_train)
-X_test = scaler.transform(X_random_test)
-
-
 '''
 train_dataset = tf.data.Dataset.from_tensor_slices(({'input_1':X1_train,'input_2':X2_train} , y_train))
 train_dataset = train_dataset.shuffle(buffer_size=1024).batch(64)
@@ -69,12 +60,16 @@ train_dataset = tf.data.Dataset.from_tensor_slices((X_train , y_train))
 train_dataset = train_dataset.shuffle(buffer_size=1024).batch(64)
 test_dataset = tf.data.Dataset.from_tensor_slices((X_test , y_test))
 test_dataset = test_dataset.shuffle(buffer_size=1024).batch(64)
+'''
 
 '''
 
 # 2. 构建模型
 # input_placeholder_1 = tf.compat.v1.placeholder(dtype=tf.int64, shape=(None,39,32,3))
 # input_placeholder_2 = tf.compat.v1.placeholder(dtype=tf.int64, shape=(None,5))
+'''
+
+
 '''
 # 定义第一个输入
 input_1 = tf.keras.layers.Input(shape=(39,32,3), name='input_1') # (input_placeholder_1)
@@ -101,12 +96,14 @@ dense2 = layers.Dense(64, activation='relu')(dense1)
 output = layers.Dense(5, activation='sigmoid')(dense2)
 
 '''
+
+#print(X_train[1])
 model = models.Sequential([
-    layers.Flatten(input_shape=(3749,)),  # 将28x28的图像展平成一维数组
+    layers.Flatten(input_shape=(np.shape(X_train)[1],)),  # 将28x28的图像展平成一维数组
     layers.Dense(1024, activation='relu'),   # 全连接层，128个神经元，使用ReLU激活函数
     layers.Dense(512, activation='relu'),
 	layers.Dense(128, activation='relu'),
-	layers.Dense(5, activation='sigmoid')   # 输出层，使用Sigmoid激活函数进行二元分类
+	layers.Dense(np.shape(y_train)[1], activation='sigmoid')   # 输出层，使用Sigmoid激活函数进行二元分类
 ])
 
 
@@ -118,7 +115,7 @@ loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
 optimizer = tf.keras.optimizers.Adam(learning_rate=0.01,clipvalue=2.0)
 # 编译模型
 model.compile(optimizer=optimizer,
-              loss=loss_fn,
+              loss='mse',
               metrics=['accuracy'])
 
 # 4. 训练模型
@@ -145,9 +142,11 @@ for epoch in range(num_epochs):
         
         # 更新模型参数
         optimizer.apply_gradients(zip(gradients, model.trainable_variables))
-'''
 #model.fit(train_dataset, epochs=num_epochs, batch_size=batch_size, validation_data=test_dataset)
-model.fit([X_train,y_random_train],epochs=num_epochs,batch_size=batch_size)
+'''
+
+
+model.fit(X_train,y_train,epochs=num_epochs,batch_size=batch_size)
 # 5. 评估模型
 test_loss, test_acc = model.evaluate([X1_test,X2_test], y_test)
 print(f"Test Accuracy: {test_acc}")

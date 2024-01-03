@@ -1,8 +1,9 @@
 """Base class for an agent that defines the possible actions. """
 
 import numpy as np
-
+# from lbf10.LBF10Env import round_pos
 import utility_funcs as util
+import random
 
 # basic moves every agent should do
 BASE_ACTIONS = {
@@ -210,6 +211,36 @@ class CoinAgent(Agent):
             return b" "
         else:
             return char
+
+
+
+class LBF10Agent(Agent):
+    def __init__(self, agent_id, start_pos, start_orientation, full_map, view_len):
+        self.view_len = view_len
+        super().__init__(agent_id, start_pos, start_orientation, full_map, view_len, view_len)
+        self.update_agent_pos(start_pos)
+        self.initial_level = self.init_level(max_level=3)
+
+    def init_level(self,max_level):
+        return random.randint(1,3)
+
+    # Ugh, this is gross, this leads to the actions basically being
+    # defined in two places
+    def action_map(self, action_number):
+        """Maps action_number to a desired action in the map"""
+        return COIN_ACTIONS[action_number]
+
+    def get_done(self):
+        return False
+
+    def consume(self,char):
+        """Defines how an agent interacts with the char it is standing on"""
+        return char
+
+    def compute_reward(self):
+        return None
+                
+
 
 class Coin3Agent(Agent):
     def __init__(self, agent_id, start_pos, start_orientation, full_map, view_len):

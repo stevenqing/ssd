@@ -90,7 +90,7 @@ class MapEnv(MultiAgentEnv):
         """
         self.store_trajs = True
         self.file_path = '/scratch/prj/inf_du/shuqing/trajs_file.json' 
-
+        self.count = 0
         self.num_agents = num_agents
         self.base_map = self.ascii_to_numpy(ascii_map)
         self.view_len = view_len
@@ -235,7 +235,7 @@ class MapEnv(MultiAgentEnv):
         dones: dict indicating whether each agent is done
         info: dict to pass extra info to gym
         """
-
+        self.count += 1
         self.beam_pos = []
         agent_actions = {}
         store_actions = []
@@ -311,20 +311,21 @@ class MapEnv(MultiAgentEnv):
             store_rewards.append(rewards[agent.agent_id])
             dones[agent.agent_id] = agent.get_done()
             infos[agent.agent_id] = {}
-        
-        if self.store_trajs:
-            vector_state = positions + apple_pos + apple_type
-            vector_state = [int(i) for i in vector_state]
-            store_trajs['vector_states'] = vector_state
-            store_trajs['actions'] = store_actions
-            store_trajs['rewards'] = store_rewards
-
-        with open(self.file_path, "a") as json_file:
-            json.dump(store_trajs, json_file)
-            json_file.write('\n')
-
-        store_trajs = {'vector_states':[],'actions':[],'rewards':[]}
-
+        if self.count < 5000:
+            print(self.count)
+            if self.store_trajs:
+                vector_state = positions + apple_pos + apple_type
+                vector_state = [int(i) for i in vector_state]
+                store_trajs['vector_states'] = vector_state
+                store_trajs['actions'] = store_actions
+                store_trajs['rewards'] = store_rewards
+    
+            with open(self.file_path, "a") as json_file:
+                json.dump(store_trajs, json_file)
+                json_file.write('\n')
+    
+            store_trajs = {'vector_states':[],'actions':[],'rewards':[]}
+    
         if self.use_collective_reward:
             collective_reward = sum(rewards.values())
             for agent in rewards.keys():
