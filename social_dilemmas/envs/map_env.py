@@ -1,12 +1,14 @@
 """Base map class that defines the rendering process
 """
-
+import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
 from gym.spaces import Box, Dict
 from ray.rllib.agents.callbacks import DefaultCallbacks
 from ray.rllib.env import MultiAgentEnv
 import json
+tf.config.experimental_run_functions_eagerly(True)
+
 _MAP_ENV_ACTIONS = {
     "MOVE_LEFT": [0, -1],  # Move left
     "MOVE_RIGHT": [0, 1],  # Move right
@@ -69,8 +71,10 @@ class MapEnv(MultiAgentEnv):
         return_agent_actions=False,
         use_collective_reward=False,
         inequity_averse_reward=False,
+        use_reward_model=True,
         alpha=0.0,
         beta=0.0,
+        store_trajs=False,
     ):
         """
 
@@ -88,10 +92,12 @@ class MapEnv(MultiAgentEnv):
         return_agent_actions: bool
             If true, the observation space will include the actions of other agents
         """
-        self.store_trajs = True
+        self.store_trajs = store_trajs
         self.file_path = '/scratch/prj/inf_du/shuqing/trajs_file.json' 
+        self.saved_model_path = '/scratch/prj/inf_du/shuqing/reward_model' 
         self.count = 0
         self.num_agents = num_agents
+        self.use_reward_model = use_reward_model
         self.base_map = self.ascii_to_numpy(ascii_map)
         self.view_len = view_len
         self.map_padding = view_len
@@ -130,7 +136,6 @@ class MapEnv(MultiAgentEnv):
                 elif self.base_map[row, col] == b"@":
                     self.wall_points.append([row, col])
         self.setup_agents()
-
     @property
     def observation_space(self):
         obs_space = {
@@ -311,8 +316,7 @@ class MapEnv(MultiAgentEnv):
             store_rewards.append(rewards[agent.agent_id])
             dones[agent.agent_id] = agent.get_done()
             infos[agent.agent_id] = {}
-        if self.count < 5000:
-            print(self.count)
+        if self.count < 1000:
             if self.store_trajs:
                 vector_state = positions + apple_pos + apple_type
                 vector_state = [int(i) for i in vector_state]
@@ -326,6 +330,17 @@ class MapEnv(MultiAgentEnv):
     
             store_trajs = {'vector_states':[],'actions':[],'rewards':[]}
     
+        if self.use_reward_model:
+            reward_model = tf.saved_model.load(self.saved_model_path)
+            vector_state = positions + apple_pos + apple_type
+            vector_state = [int(i) for i in vector_state]
+            obs_action = vector_state + store_actions
+            obs_action = tf.constant(obs_action,dtype=tf.float32)
+            obs_action = tf.reshape(obs_action,[1,18]) 
+            reward_predicted = reward_model(obs_action)
+            for agent in rewards.keys():
+                tf.print(reward_predicted[0][0])
+                rewards[agent] += reward_predicted[int(agent[-1])]
         if self.use_collective_reward:
             collective_reward = sum(rewards.values())
             for agent in rewards.keys():

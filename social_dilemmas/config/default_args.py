@@ -175,6 +175,13 @@ def add_default_args(parser):
         help="Train using collective reward instead of individual reward.",
     )
 
+    parser.add_argument(
+        "--use_reward_model",
+        action="store_true",
+        default=False,
+        help="Train using collective reward instead of individual reward.",
+    )
+
     # MOA Parameters
     parser.add_argument(
         "--moa_loss_weight",

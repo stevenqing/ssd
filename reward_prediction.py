@@ -7,6 +7,10 @@ from sklearn.datasets import make_classification
 from tensorflow.keras import layers, models
 import json
 import numpy as np
+
+saving_path = '/scratch/prj/inf_du/shuqing/reward_model'
+
+loaded_model = tf.keras.models.load_model(saving_path)
 # 1. 准备数据
 obs = []
 actions = []
@@ -18,16 +22,19 @@ count = 0
 
 with open("/scratch/prj/inf_du/shuqing/trajs_file.json","r") as file:
     for line in file:
-        #try:
-        data = json.loads(line)
-        obs.append(tf.squeeze(np.array(data["vector_states"])))
-        actions.append(tf.squeeze(np.array(data["actions"])))
-        rewards.append(np.squeeze(np.array(data["rewards"])).tolist())
-        i = tf.concat([tf.squeeze(np.array(data["vector_states"])), tf.squeeze(np.array(data["actions"]))], 0)
-        i = i.numpy().tolist()
-        obs_action.append(i)
-        #except:
-         #   pass
+        try:
+            data = json.loads(line)
+            obs.append(tf.squeeze(np.array(data["vector_states"])))
+            actions.append(tf.squeeze(np.array(data["actions"])))
+            rewards.append(np.squeeze(np.array(data["rewards"])).tolist())
+            i = tf.concat([tf.squeeze(np.array(data["vector_states"])), tf.squeeze(np.array(data["actions"]))], 0)
+            i = i.numpy().tolist()
+            obs_action.append(i)
+            count+=1
+            if count > 1000:
+                break
+        except:
+            pass
 print(np.shape(obs_action),np.shape(obs),np.shape(actions),np.shape(rewards))
 
 # X1 = obs[:100]
@@ -146,9 +153,12 @@ for epoch in range(num_epochs):
 '''
 
 
-model.fit(X_train,y_train,epochs=num_epochs,batch_size=batch_size)
+model.fit(X_train,y_train,epochs=1,batch_size=batch_size)
+
+#model.save(saving_path)
+tf.saved_model.save(model,saving_path)
 # 5. 评估模型
-test_loss, test_acc = model.evaluate([X1_test,X2_test], y_test)
+test_loss, test_acc = model.evaluate(X_test, y_test)
 print(f"Test Accuracy: {test_acc}")
 
 # 6. 进行预测

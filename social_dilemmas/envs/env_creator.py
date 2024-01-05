@@ -8,6 +8,7 @@ def get_env_creator(
     num_agents,
     use_collective_reward=False,
     inequity_averse_reward=False,
+    use_reward_model=False,
     alpha=0.0,
     beta=0.0,
     num_switches=6,
@@ -37,13 +38,13 @@ def get_env_creator(
             )
     
     elif env == "coin3":
-
         def env_creator(_):
             return Coin3Env(
                 num_agents=num_agents,
                 return_agent_actions=True,
                 use_collective_reward=use_collective_reward,
                 inequity_averse_reward=inequity_averse_reward,
+                use_reward_model=use_reward_model,
                 alpha=alpha,
                 beta=beta,
             )
