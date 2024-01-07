@@ -8,14 +8,14 @@ import json
 import numpy as np
 from tqdm import tqdm
 
-saving_path = '/scratch/prj/inf_du/shuqing/reward_model.pth'
+saving_path = './reward_model.pth'
 
 # 1. Prepare the data
 obs_action = []
 rewards = []
 obs = []
 actions = []
-with open("/scratch/prj/inf_du/shuqing/trajs_file.json", "r") as file:
+with open("./trajs_file.json", "r") as file:
     for line in file:
         try:
             data = json.loads(line)
@@ -60,6 +60,8 @@ model = nn.Sequential(
     nn.Linear(128, len(rewards[0])),  # Output layer
     nn.Sigmoid()
 )
+
+causal_mask = nn.Parameter(torch.ones(len(obs_action[1]), len(rewards[0])), requires_grad=True)
 
 # 4. Train the model
 num_epochs = 1
