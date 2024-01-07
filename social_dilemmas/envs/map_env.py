@@ -7,7 +7,8 @@ from gym.spaces import Box, Dict
 from ray.rllib.agents.callbacks import DefaultCallbacks
 from ray.rllib.env import MultiAgentEnv
 import json
-tf.config.experimental_run_functions_eagerly(True)
+import torch
+import time
 
 _MAP_ENV_ACTIONS = {
     "MOVE_LEFT": [0, -1],  # Move left
@@ -92,9 +93,12 @@ class MapEnv(MultiAgentEnv):
         return_agent_actions: bool
             If true, the observation space will include the actions of other agents
         """
+        
+        self.saved_model_path = '/scratch/prj/inf_du/shuqing/reward_model.pth' 
+        self.reward_model = torch.load(self.saved_model_path)
+        self.reward_model.eval()
         self.store_trajs = store_trajs
         self.file_path = '/scratch/prj/inf_du/shuqing/trajs_file.json' 
-        self.saved_model_path = '/scratch/prj/inf_du/shuqing/reward_model' 
         self.count = 0
         self.num_agents = num_agents
         self.use_reward_model = use_reward_model
@@ -316,7 +320,7 @@ class MapEnv(MultiAgentEnv):
             store_rewards.append(rewards[agent.agent_id])
             dones[agent.agent_id] = agent.get_done()
             infos[agent.agent_id] = {}
-        if self.count < 1000:
+        if self.count < 1000 or 4000 < self.count < 5000:
             if self.store_trajs:
                 vector_state = positions + apple_pos + apple_type
                 vector_state = [int(i) for i in vector_state]
@@ -324,23 +328,23 @@ class MapEnv(MultiAgentEnv):
                 store_trajs['actions'] = store_actions
                 store_trajs['rewards'] = store_rewards
     
-            with open(self.file_path, "a") as json_file:
-                json.dump(store_trajs, json_file)
-                json_file.write('\n')
+                with open(self.file_path, "a") as json_file:
+                    json.dump(store_trajs, json_file)
+                    json_file.write('\n')
     
             store_trajs = {'vector_states':[],'actions':[],'rewards':[]}
-    
         if self.use_reward_model:
-            reward_model = tf.saved_model.load(self.saved_model_path)
             vector_state = positions + apple_pos + apple_type
             vector_state = [int(i) for i in vector_state]
             obs_action = vector_state + store_actions
-            obs_action = tf.constant(obs_action,dtype=tf.float32)
-            obs_action = tf.reshape(obs_action,[1,18]) 
-            reward_predicted = reward_model(obs_action)
+            obs_action = torch.FloatTensor(obs_action)
+            obs_action = torch.reshape(obs_action,(1,18)) 
+            reward_predicted = self.reward_model(obs_action)
+            team_reward = 0
             for agent in rewards.keys():
-                tf.print(reward_predicted[0][0])
-                rewards[agent] += reward_predicted[int(agent[-1])]
+                team_reward += reward_predicted[0][int(agent[-1])].item()
+            for agent in rewards.keys():
+                rewards[agent] = rewards[agent] + team_reward
         if self.use_collective_reward:
             collective_reward = sum(rewards.values())
             for agent in rewards.keys():
