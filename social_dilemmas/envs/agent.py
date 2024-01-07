@@ -1,7 +1,6 @@
 """Base class for an agent that defines the possible actions. """
 
 import numpy as np
-# from lbf10.LBF10Env import round_pos
 import utility_funcs as util
 import random
 
@@ -220,6 +219,13 @@ class LBF10Agent(Agent):
         super().__init__(agent_id, start_pos, start_orientation, full_map, view_len, view_len)
         self.update_agent_pos(start_pos)
         self.initial_level = self.init_level(max_level=3)
+
+    def round_pos(self,pos):
+        round_pos = []
+        [row,col] = pos[0]
+        round_pos = [[row,col],[row+1,col],[row-1,col],[row,col+1],[row,col-1],[row,col+1]]
+        return round_pos
+    
 
     def init_level(self,max_level):
         return random.randint(1,3)

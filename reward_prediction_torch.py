@@ -58,11 +58,11 @@ model = nn.Sequential(
     nn.Linear(512, 128),  # Fully connected layer
     nn.ReLU(),
     nn.Linear(128, len(rewards[0])),  # Output layer
-    nn.Sigmoid()
+    nn.Tanh()
 )
 
 # 4. Train the model
-num_epochs = 1
+num_epochs = 10
 batch_size = 32
 optimizer = optim.Adam(model.parameters(), lr=0.01)
 criterion = nn.MSELoss()

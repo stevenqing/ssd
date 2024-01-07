@@ -179,7 +179,7 @@ def add_default_args(parser):
         "--use_reward_model",
         action="store_true",
         default=False,
-        help="Train using collective reward instead of individual reward.",
+        help="Train using reward model.",
     )
 
     # MOA Parameters
