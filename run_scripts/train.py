@@ -54,8 +54,8 @@ def build_experiment_config_dict(args):
     elif args.model == "moa":
         ModelCatalog.register_custom_model(model_name, MOAModel)
     elif args.model == "reward":
-        from reward_prediction_torch import CausalModel
-        ModelCatalog.register_custom_model(model_name, CausalModel)
+        # from reward_prediction_torch import CausalModel
+        # ModelCatalog.register_custom_model(model_name, CausalModel)
         ModelCatalog.register_custom_model(model_name, BaselineModel)
     elif args.model == "baseline":
         ModelCatalog.register_custom_model(model_name, BaselineModel)
