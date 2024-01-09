@@ -202,7 +202,7 @@ def extract_last_actions_from_episodes(episodes, batch_type=False, own_actions=N
     return all_actions
 
 
-def reward_fetches(policy):
+def extra_reward_fetches(policy):
     """Adds logits, moa predictions of counterfactual actions to experience train_batches."""
     return {
         # Be aware that this is frozen here so that we don't
