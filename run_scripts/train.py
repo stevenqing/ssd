@@ -2,7 +2,7 @@ import argparse
 import copy
 import sys
 from datetime import datetime
-
+import os
 import numpy as np
 import pytz
 import ray
@@ -20,6 +20,7 @@ from algorithms.impala_moa import build_impala_moa_trainer
 from algorithms.ppo_baseline import build_ppo_baseline_trainer
 from algorithms.ppo_moa import build_ppo_moa_trainer
 from algorithms.ppo_scm import build_ppo_scm_trainer
+from algorithms.ppo_reward import build_ppo_reward_trainer
 from models.baseline_model import BaselineModel
 from models.moa_model import MOAModel
 from models.scm_model import SocialCuriosityModule
@@ -38,7 +39,7 @@ def build_experiment_config_dict(args):
     :return: An Experiment config dict.
     """
     env_creator = get_env_creator(
-        args.env, args.num_agents, args.use_collective_reward, args.num_switches
+        args.env, args.num_agents, use_collective_reward=args.use_collective_reward,use_reward_model=args.use_reward_model
     )
     env_name = args.env + "_env"
     register_env(env_name, env_creator)
@@ -52,9 +53,11 @@ def build_experiment_config_dict(args):
         ModelCatalog.register_custom_model(model_name, SocialCuriosityModule)
     elif args.model == "moa":
         ModelCatalog.register_custom_model(model_name, MOAModel)
+    elif args.model == "reward":
+        ModelCatalog.register_custom_model(model_name, BaselineModel)
     elif args.model == "baseline":
         ModelCatalog.register_custom_model(model_name, BaselineModel)
-
+    
     # Each policy can have a different configuration (including custom model)
     def gen_policy():
         return None, obs_space, act_space, {"custom_model": model_name}
@@ -208,6 +211,15 @@ def get_trainer(args, config):
         if args.algorithm == "IMPALA":
             # trainer = build_impala_scm_trainer(config)
             raise NotImplementedError
+    elif args.model == "reward":
+        if args.algorithm == "A3C":
+            # trainer = build_a3c_scm_trainer(config)
+            raise NotImplementedError
+        if args.algorithm == "PPO":
+            trainer = build_ppo_reward_trainer(config)
+        if args.algorithm == "IMPALA":
+            # trainer = build_impala_scm_trainer(config)
+            raise NotImplementedError
     if trainer is None:
         raise NotImplementedError("The provided combination of model and algorithm was not found.")
     return trainer
@@ -331,7 +343,11 @@ def create_hparam_tune_dict(model, is_config=False):
             "curiosity_reward_weight": wrapper(np.random.exponential(1)),
             "scm_forward_vs_inverse_loss_weight": wrapper(np.random.uniform(0, 1)),
         }
-
+    elif model == "reward":
+        model_options = {
+            "moa_loss_weight": wrapper(np.random.exponential(1 / 15)),
+            "influence_reward_weight": wrapper(np.random.exponential(1)),
+        }
     hparam_dict = {
         **baseline_options,
         "model": {"custom_options": model_options},
@@ -374,6 +390,26 @@ def run(args, experiments):
 
 
 if __name__ == "__main__":
+    '''
+    os.environ["WANDB_API_KEY"] = "186456d6d9cac422aff22e29ff95e5f3869b60b9"
+    if "WANDB_API_KEY" in os.environ and args.wandb:
+   
+        wandb_project = f'{args.exp}_{args.framework}'
+        wandb_group = "ssd"
+
+        # Set up Weights And Biases logging if API key is set in environment variable.
+        wdb_callbacks = [
+            WandbLoggerCallback(
+                project=wandb_project,
+                group=wandb_group,
+                api_key=os.environ["WANDB_API_KEY"],
+                log_config=True,
+            )
+        ]
+    else:
+        wdb_callbacks = []
+        print("WARNING! No wandb API key found, running without wandb!")
+'''
     parsed_args = parser.parse_args()
     experiment = create_experiment(parsed_args)
     run(parsed_args, experiment)

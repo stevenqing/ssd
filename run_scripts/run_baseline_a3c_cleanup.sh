@@ -3,9 +3,9 @@
 python train.py \
 --env cleanup \
 --model baseline \
---algorithm PPO \
+--algorithm A3C \
 --num_agents 5 \
---num_workers 4 \
+--num_workers 48 \
 --rollout_fragment_length 1000 \
 --num_envs_per_worker 16 \
 --stop_at_timesteps_total $((500 * 10 ** 6)) \

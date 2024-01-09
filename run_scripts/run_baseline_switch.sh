@@ -10,7 +10,7 @@ python train.py \
 --stop_at_timesteps_total $((1 * 10 ** 6)) \
 --num_workers 12 \
 --cpus_per_worker 1 \
---gpus_per_worker 0.25 \
+--gpus_per_worker 0 \
 --gpus_for_driver 1 \
 --cpus_for_driver 1 \
 --num_samples 1 \

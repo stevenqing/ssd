@@ -5,10 +5,10 @@ python train.py \
 --model scm \
 --algorithm PPO \
 --num_agents 5 \
---num_workers 6 \
+--num_workers 24 \
 --rollout_fragment_length 1000 \
 --num_envs_per_worker 32 \
---stop_at_timesteps_total $((500 * 10 ** 6)) \
+--stop_at_timesteps_total $((300 * 10 ** 6)) \
 --memory $((160 * 10 ** 9)) \
 --cpus_per_worker 1 \
 --gpus_per_worker 0 \

@@ -59,24 +59,24 @@ def extra_reward_model_stats(policy, train_batch):
     base_stats = {
         **base_stats,
         "var_gnorm": tf.global_norm([x for x in policy.model.trainable_variables()]),
-        "moa_loss": policy.reward_model_loss,
+        # "moa_loss": policy.reward_model_loss,
     }
 
     return base_stats
 
 
-def postprocess_ppo_moa(policy, sample_batch, other_agent_batches=None, episode=None):
+def postprocess_ppo_reward(policy, sample_batch, other_agent_batches=None, episode=None):
     """
     Add the influence reward to the trajectory.
     Then, add the policy logits, VF preds, and advantages to the trajectory.
     :return: Updated trajectory (batch)
     """
-    batch = moa_postprocess_trajectory(policy, sample_batch)
+    batch = reward_postprocess_trajectory(policy, sample_batch)
     batch = postprocess_ppo_gae(policy, batch)
     return batch
 
 
-def setup_ppo_moa_mixins(policy, obs_space, action_space, config):
+def setup_ppo_reward_mixins(policy, obs_space, action_space, config):
     """
     Calls init on all PPO+MOA mixins in the policy
     """
@@ -84,19 +84,19 @@ def setup_ppo_moa_mixins(policy, obs_space, action_space, config):
     KLCoeffMixin.__init__(policy, config)
     EntropyCoeffSchedule.__init__(policy, config["entropy_coeff"], config["entropy_coeff_schedule"])
     LearningRateSchedule.__init__(policy, config["lr"], config["lr_schedule"])
-    setup_moa_mixins(policy, obs_space, action_space, config)
+    setup_reward_mixins(policy, obs_space, action_space, config)
 
 
-def validate_ppo_moa_config(config):
+def validate_ppo_reward_config(config):
     """
-    Validates the PPO+MOA config
+    Validates the PPO+REWARD MODEL config
     :param config: The config to validate
     """
-    validate_moa_config(config)
+    validate_reward_config(config)
     validate_config(config)
 
 
-def build_ppo_moa_trainer(moa_config):
+def build_ppo_reward_trainer(moa_config):
     """
     Creates a MOA+PPO policy class, then creates a trainer with this policy.
     :param moa_config: The configuration dictionary.
@@ -106,30 +106,29 @@ def build_ppo_moa_trainer(moa_config):
 
     trainer_name = "MOAPPOTrainer"
 
-    moa_ppo_policy = build_tf_policy(
-        name="MOAPPOTFPolicy",
-        get_default_config=lambda: moa_config,
-        loss_fn=loss_with_moa,
-        make_model=build_model,
-        stats_fn=extra_moa_stats,
-        extra_action_fetches_fn=extra_moa_fetches,
-        postprocess_fn=postprocess_ppo_moa,
+    reward_ppo_policy = build_tf_policy(
+        name="REWARDPPOTFPolicy",
+        get_default_config=lambda: config,
+        loss_fn=ppo_surrogate_loss,
+        stats_fn=extra_reward_stats,
+        extra_action_fetches_fn=extra_reward_fetches,
+        postprocess_fn=postprocess_ppo_reward,
         gradients_fn=clip_gradients,
         before_init=setup_config,
-        before_loss_init=setup_ppo_moa_mixins,
+        before_loss_init=setup_ppo_reward_mixins,
         mixins=[LearningRateSchedule, EntropyCoeffSchedule, KLCoeffMixin, ValueNetworkMixin]
-        + get_moa_mixins(),
+        + get_reward_mixins(),
     )
 
-    moa_ppo_trainer = build_trainer(
+    reward_ppo_trainer = build_trainer(
         name=trainer_name,
-        default_policy=moa_ppo_policy,
+        default_policy=reward_ppo_policy,
         make_policy_optimizer=choose_policy_optimizer,
-        default_config=moa_config,
-        validate_config=validate_ppo_moa_config,
+        default_config=reward_config,
+        validate_config=validate_ppo_reward_config,
         after_optimizer_step=update_kl,
         after_train_result=warn_about_bad_reward_scales,
-        mixins=[MOAResetConfigMixin],
+        mixins=[REWARDResetConfigMixin],
     )
 
-    return moa_ppo_trainer
+    return reward_ppo_trainer

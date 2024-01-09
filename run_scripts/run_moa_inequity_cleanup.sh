@@ -22,3 +22,4 @@ python train.py \
 --influence_reward_weight 1.0 \
 --influence_reward_schedule_steps 0 10000000 100000000 300000000 \
 --influence_reward_schedule_weights 0.0 0.0 1.0 0.5
+--inequity_averse_reward True

@@ -132,8 +132,13 @@ def weigh_and_add_influence_reward(policy, sample_batch):
     # Clip and weigh influence reward
 
     # Add to trajectory
+    # first define the reward model
+    # then set it to eval model 
+    # use it to predict the counterfactual team reward
+    print(sample_batch["observation"],sample_batch["action"]) 
+    predicted_causal_reward = self.reward_model(sample_batch["counterfactual_obs_action"])
     sample_batch["extrinsic_reward"] = sample_batch["rewards"]
-
+    sample_batch["rewards"] = sample_batch["rewards"] + predicted_causal_reward
     return sample_batch
 
 
@@ -195,18 +200,18 @@ def extract_last_actions_from_episodes(episodes, batch_type=False, own_actions=N
     return all_actions
 
 
-def moa_fetches(policy):
+def reward_fetches(policy):
     """Adds logits, moa predictions of counterfactual actions to experience train_batches."""
     return {
         # Be aware that this is frozen here so that we don't
         # propagate agent actions through the reward
         # TODO(@evinitsky) remove this once we figure out how to split the obs
         VISIBILITY: policy.model.visibility(),
-        REWARD_PREDS: policy.model.predicted_rewards(), # check policy.model.predicted_actions()
+        # REWARD_PREDS: policy.model.predicted_rewards(), # check policy.model.predicted_actions()
     }
 
 
-class MOAConfigInitializerMixIn(object):
+class REWARDConfigInitializerMixIn(object):
     def __init__(self, config):
         config = config["model"]["custom_options"]
         self.num_other_agents = config["num_other_agents"]
@@ -219,7 +224,7 @@ class MOAConfigInitializerMixIn(object):
         self.influence_only_when_visible = config["influence_only_when_visible"]
 
 
-class MOAResetConfigMixin(object):
+class REWARDResetConfigMixin(object):
     @staticmethod
     def reset_policies(policies, new_config, session):
         custom_options = new_config["model"]["custom_options"]
@@ -252,19 +257,19 @@ def build_model(policy, obs_space, action_space, config):
     return policy.model
 
 
-def setup_moa_mixins(policy, obs_space, action_space, config):
+def setup_reward_mixins(policy, obs_space, action_space, config):
     InfluenceScheduleMixIn.__init__(policy, config)
-    MOAConfigInitializerMixIn.__init__(policy, config)
+    REWARDConfigInitializerMixIn.__init__(policy, config)
 
 
-def get_moa_mixins():
+def get_reward_mixins():
     return [
-        MOAConfigInitializerMixIn,
+        REWARDConfigInitializerMixIn,
         InfluenceScheduleMixIn,
     ]
 
 
-def validate_moa_config(config):
+def validate_reward_config(config):
     config = config["model"]["custom_options"]
     if config["influence_reward_weight"] < 0:
         raise ValueError("Influence reward weight must be >= 0.")
