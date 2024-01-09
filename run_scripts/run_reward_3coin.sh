@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 python train.py \
---env cleanup \
+--env coin3 \
 --model reward \
 --algorithm PPO \
 --num_agents 3 \

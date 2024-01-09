@@ -20,7 +20,7 @@ from algorithms.impala_moa import build_impala_moa_trainer
 from algorithms.ppo_baseline import build_ppo_baseline_trainer
 from algorithms.ppo_moa import build_ppo_moa_trainer
 from algorithms.ppo_scm import build_ppo_scm_trainer
-from algorithms.ppo_reward import build_ppo_reward_trainer
+from algorithms.ppo_reward_model import build_ppo_reward_trainer
 from models.baseline_model import BaselineModel
 from models.moa_model import MOAModel
 from models.scm_model import SocialCuriosityModule
@@ -54,6 +54,8 @@ def build_experiment_config_dict(args):
     elif args.model == "moa":
         ModelCatalog.register_custom_model(model_name, MOAModel)
     elif args.model == "reward":
+        from reward_prediction_torch import CausalModel
+        ModelCatalog.register_custom_model(model_name, CausalModel)
         ModelCatalog.register_custom_model(model_name, BaselineModel)
     elif args.model == "baseline":
         ModelCatalog.register_custom_model(model_name, BaselineModel)

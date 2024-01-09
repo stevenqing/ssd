@@ -20,6 +20,8 @@ ACTION_LOGITS = "action_logits"
 COUNTERFACTUAL_ACTIONS = "counterfactual_actions"
 POLICY_SCOPE = "func"
 
+# add by ReedZyd
+PREDICTED_REWARD = "predicted_reward"
 
 class InfluenceScheduleMixIn(object):
     def __init__(self, config):

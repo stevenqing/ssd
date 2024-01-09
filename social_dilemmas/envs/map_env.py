@@ -9,6 +9,9 @@ from ray.rllib.env import MultiAgentEnv
 import json
 import torch
 import time
+from reward_prediction_torch import CausalModel
+from ray.rllib.models import ModelCatalog
+
 
 _MAP_ENV_ACTIONS = {
     "MOVE_LEFT": [0, -1],  # Move left
@@ -95,10 +98,17 @@ class MapEnv(MultiAgentEnv):
         """
         
         self.saved_model_path = '/scratch/prj/inf_du/shuqing/reward_model.pth' 
+        self.file_path = '/scratch/prj/inf_du/shuqing/trajs_file.json' 
+        # TODO add by ReedZyd, please remove these lines when you use this code
+        # self.saved_model_path = 'reward_model_wo_causality.pth' 
+        # self.file_path = './trajs_file.json' 
+
+        # ModelCatalog.register_custom_model("causal_model", CausalModel)
+        #####################################################################
         self.reward_model = torch.load(self.saved_model_path)
+        # self.reward_model = torch.load(self.saved_model_path)
         self.reward_model.eval()
         self.store_trajs = store_trajs
-        self.file_path = '/scratch/prj/inf_du/shuqing/trajs_file.json' 
         self.count = 0
         self.num_agents = num_agents
         self.use_reward_model = use_reward_model

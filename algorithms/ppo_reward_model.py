@@ -21,17 +21,17 @@ from ray.rllib.policy.tf_policy import EntropyCoeffSchedule, LearningRateSchedul
 from ray.rllib.policy.tf_policy_template import build_tf_policy
 from ray.rllib.utils import try_import_tf
 
+# TODO 统一reward model的接口
 from algorithms.common_funcs_reward_model import (
     EXTRINSIC_REWARD,
     PREDICTED_REWARD,
     REWARDResetConfigMixin,
     build_model,
-    get_reward_model_mixins,
-    reward_model_fetches,
-    reward_model_postprocess_trajectory,
+    get_reward_mixins,
+    reward_fetches,
+    reward_postprocess_trajectory,
     setup_reward_model_loss,
-    setup_reward_model_mixins,
-    validate_reward_model_config,
+    validate_reward_config,
 )
 
 tf = try_import_tf()
