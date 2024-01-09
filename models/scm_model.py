@@ -31,7 +31,7 @@ class SocialCuriosityModule(MOAModel):
 
         for model in [self.scm_encoder_model, self.forward_model, self.inverse_model]:
             self.register_variables(model.variables)
-            model.summary()
+            # model.summary()
 
         self.scm_loss_weight = model_config["custom_options"]["scm_loss_weight"]
 

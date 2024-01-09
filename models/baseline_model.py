@@ -41,7 +41,7 @@ class BaselineModel(RecurrentTFModelV2):
 
         self.encoder_model = tf.keras.Model(inputs, [last_layer], name="Baseline_Encoder_Model")
         self.register_variables(self.encoder_model.variables)
-        self.encoder_model.summary()
+        # self.encoder_model.summary()
 
         # Action selection/value function
         cell_size = model_config["custom_options"].get("cell_size")
@@ -55,7 +55,7 @@ class BaselineModel(RecurrentTFModelV2):
         )
 
         self.register_variables(self.policy_model.rnn_model.variables)
-        self.policy_model.rnn_model.summary()
+        # self.policy_model.rnn_model.summary()
 
     @override(ModelV2)
     def forward(self, input_dict, state, seq_lens):

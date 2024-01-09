@@ -11,6 +11,7 @@ from ray.rllib.agents.ppo.ppo_tf_policy import (
     clip_gradients,
     kl_and_loss_stats,
     postprocess_ppo_gae,
+    ppo_surrogate_loss,
     setup_config,
     vf_preds_fetches,
 )
@@ -21,6 +22,13 @@ from ray.rllib.policy.tf_policy import EntropyCoeffSchedule, LearningRateSchedul
 from ray.rllib.policy.tf_policy_template import build_tf_policy
 from ray.rllib.utils import try_import_tf
 
+# introduce the trained model
+import torch
+save_path = '/scratch/prj/inf_du/shuqing/reward_model.pth'
+global reward_model
+reward_model = torch.load(save_path)
+reward_model.eval()
+
 # TODO 统一reward model的接口
 from algorithms.common_funcs_reward_model import (
     EXTRINSIC_REWARD,
@@ -28,9 +36,10 @@ from algorithms.common_funcs_reward_model import (
     REWARDResetConfigMixin,
     build_model,
     get_reward_mixins,
-    extra_reward_fetches,
+    reward_fetches,
     reward_postprocess_trajectory,
     setup_reward_model_loss,
+    setup_reward_mixins,
     validate_reward_config,
 )
 
@@ -46,9 +55,49 @@ def loss_with_reward_model(policy, model, dist_class, train_batch):
     """
     logits, state = model.from_batch(train_batch)
     action_dist = dist_class(logits, model)
-    reward_model_loss = setup_reward_model_loss(logits, policy, train_batch)
-    policy.reward_model_loss = reward_model_loss.total_loss 
-    return policy.reward_model_loss
+
+    # reward_loss = setup_reward_loss(logits, policy, train_batch)
+    # policy.reward_loss = reward_loss.total_loss
+
+    if state:
+        max_seq_len = tf.reduce_max(train_batch["seq_lens"])
+        mask = tf.sequence_mask(train_batch["seq_lens"], max_seq_len)
+        mask = tf.reshape(mask, [-1])
+    else:
+        mask = tf.ones_like(train_batch[Postprocessing.ADVANTAGES], dtype=tf.bool)
+
+    policy.loss_obj = PPOLoss(
+        dist_class,
+        model,
+        train_batch[Postprocessing.VALUE_TARGETS],
+        train_batch[Postprocessing.ADVANTAGES],
+        train_batch[SampleBatch.ACTIONS],
+        train_batch[SampleBatch.ACTION_DIST_INPUTS],
+        train_batch[SampleBatch.ACTION_LOGP],
+        train_batch[SampleBatch.VF_PREDS],
+        action_dist,
+        model.value_function(),
+        policy.kl_coeff,
+        mask,
+        policy.entropy_coeff,
+        policy.config["clip_param"],
+        policy.config["vf_clip_param"],
+        policy.config["vf_loss_coeff"],
+        policy.config["use_gae"],
+    ) 
+
+
+    return policy.loss_obj.loss
+
+def extra_reward_fetches(policy):
+    """
+    Adds value function, logits, reward predictions to experience train_batch
+    :return: Updated fetches
+    """
+    ppo_fetches = vf_preds_fetches(policy)
+    ppo_fetches.update(reward_fetches(policy))
+    return ppo_fetches
+
 
 def extra_reward_model_stats(policy, train_batch):
     """
@@ -71,7 +120,7 @@ def postprocess_ppo_reward(policy, sample_batch, other_agent_batches=None, episo
     Then, add the policy logits, VF preds, and advantages to the trajectory.
     :return: Updated trajectory (batch)
     """
-    batch = reward_postprocess_trajectory(policy, sample_batch)
+    batch = reward_postprocess_trajectory(policy, sample_batch, reward_model=reward_model)
     batch = postprocess_ppo_gae(policy, batch)
     return batch
 
@@ -96,7 +145,7 @@ def validate_ppo_reward_config(config):
     validate_config(config)
 
 
-def build_ppo_reward_trainer(moa_config):
+def build_ppo_reward_trainer(reward_config):
     """
     Creates a MOA+PPO policy class, then creates a trainer with this policy.
     :param moa_config: The configuration dictionary.
@@ -108,8 +157,8 @@ def build_ppo_reward_trainer(moa_config):
 
     reward_ppo_policy = build_tf_policy(
         name="REWARDPPOTFPolicy",
-        get_default_config=lambda: config,
-        loss_fn=ppo_surrogate_loss,
+        get_default_config=lambda: reward_config,
+        loss_fn=loss_with_reward_model,
         stats_fn=extra_reward_model_stats,
         extra_action_fetches_fn=extra_reward_fetches,
         postprocess_fn=postprocess_ppo_reward,

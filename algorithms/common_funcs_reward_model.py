@@ -118,14 +118,14 @@ def setup_reward_model_loss(logits, policy, train_batch):
     return reward_model_loss
 
 
-def reward_postprocess_trajectory(policy, sample_batch, other_agent_batches=None, episode=None):
+def reward_postprocess_trajectory(policy, sample_batch, reward_model=None, other_agent_batches=None, episode=None):
     # Weigh social influence reward and add to batch.
-    sample_batch = weigh_and_add_influence_reward(policy, sample_batch)
+    sample_batch = weigh_and_add_influence_reward(policy, sample_batch, reward_model=reward_model)
 
     return sample_batch
 
 
-def weigh_and_add_influence_reward(policy, sample_batch):
+def weigh_and_add_influence_reward(policy, sample_batch, reward_model=None):
     # Since the reward calculation is delayed by 1 step, sample_batch[SOCIAL_INFLUENCE_REWARD][0]
     # contains the reward for timestep -1, which does not exist. Hence we shift the array.
     # Then, pad with a 0-value at the end to make the influence rewards align with sample_batch.
@@ -137,10 +137,9 @@ def weigh_and_add_influence_reward(policy, sample_batch):
     # first define the reward model
     # then set it to eval model 
     # use it to predict the counterfactual team reward
-    print(sample_batch["observation"],sample_batch["action"]) 
-    predicted_causal_reward = self.reward_model(sample_batch["counterfactual_obs_action"])
-    sample_batch["extrinsic_reward"] = sample_batch["rewards"]
-    sample_batch["rewards"] = sample_batch["rewards"] + predicted_causal_reward
+    # predicted_causal_reward = reward_model(sample_batch["counterfactual_obs_action"])
+    # sample_batch["extrinsic_reward"] = sample_batch["rewards"]
+    # sample_batch["rewards"] = sample_batch["rewards"] + predicted_causal_reward
     return sample_batch
 
 
@@ -202,13 +201,15 @@ def extract_last_actions_from_episodes(episodes, batch_type=False, own_actions=N
     return all_actions
 
 
-def extra_reward_fetches(policy):
+def reward_fetches(policy):
     """Adds logits, moa predictions of counterfactual actions to experience train_batches."""
     return {
         # Be aware that this is frozen here so that we don't
         # propagate agent actions through the reward
         # TODO(@evinitsky) remove this once we figure out how to split the obs
-        VISIBILITY: policy.model.visibility(),
+        ACTION_LOGITS: policy.model.action_logits(),
+        # OTHERS_ACTIONS: policy.model.other_agent_actions(), 
+        # VISIBILITY: policy.model.visibility(),
         # REWARD_PREDS: policy.model.predicted_rewards(), # check policy.model.predicted_actions()
     }
 

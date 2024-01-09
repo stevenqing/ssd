@@ -9,7 +9,7 @@ from ray.rllib.env import MultiAgentEnv
 import json
 import torch
 import time
-from reward_prediction_torch import CausalModel
+# from reward_prediction_torch import CausalModel
 from ray.rllib.models import ModelCatalog
 
 
@@ -182,6 +182,12 @@ class MapEnv(MultiAgentEnv):
                     shape=(self.num_agents - 1,),
                     dtype=np.uint8,
                 ),
+                "vector_obs_action": Box(
+                    low=0,
+                    high=100,
+                    shape=(15,), #TODO: settle for coin3, need to change that later
+                    dtype=np.uint8,
+                ),
             }
         obs_space = Dict(obs_space)
         # Change dtype so that ray can put all observations into one flat batch
@@ -312,6 +318,10 @@ class MapEnv(MultiAgentEnv):
             agent.full_map = map_with_agents
             rgb_arr = self.color_view(agent)
             # concatenate on the prev_actions to the observations
+            vector_state = positions + apple_pos + apple_type
+            vector_state = [int(i) for i in vector_state]
+            # vector_obs_action = self.get_obs_action(positions,apple_pos,apple_type,store_actions)
+            print(np.shape(vector_state))
             if self.return_agent_actions:
                 prev_actions = np.array(
                     [actions[key] for key in sorted(actions.keys()) if key != agent.agent_id]
@@ -322,10 +332,11 @@ class MapEnv(MultiAgentEnv):
                     "other_agent_actions": prev_actions,
                     "visible_agents": visible_agents,
                     "prev_visible_agents": agent.prev_visible_agents,
+                    "vector_obs_action": vector_state,
                 }
                 agent.prev_visible_agents = visible_agents
             else:
-                observations[agent.agent_id] = {"curr_obs": rgb_arr}
+                observations[agent.agent_id] = {"curr_obs": rgb_arr,"vector_state": vector_state}
             rewards[agent.agent_id] = agent.compute_reward()
             store_rewards.append(rewards[agent.agent_id])
             dones[agent.agent_id] = agent.get_done()
@@ -371,7 +382,14 @@ class MapEnv(MultiAgentEnv):
 
         dones["__all__"] = np.any(list(dones.values()))
         return observations, rewards, dones, infos
-
+    
+    def get_obs_action(self, positions, apple_pos, apple_type, store_actions):
+        vector_state = positions + apple_pos + apple_type
+        vector_state = [int(i) for i in vector_state]
+        obs_action = vector_state + store_actions
+        obs_action = torch.FloatTensor(obs_action)
+        obs_action = torch.reshape(obs_action,(1,-1)) 
+    
     def reset(self):
         """Reset the environment.
 
