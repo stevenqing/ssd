@@ -3,7 +3,7 @@ from ray.rllib.models import ModelCatalog
 from ray.rllib.policy.policy import Policy
 from ray.rllib.utils import try_import_tf
 from ray.rllib.utils.annotations import override
-
+import torch
 from algorithms.common_funcs_baseline import BaselineResetConfigMixin
 
 tf = try_import_tf()
@@ -125,7 +125,7 @@ def reward_postprocess_trajectory(policy, sample_batch, reward_model=None, other
     return sample_batch
 
 
-def weigh_and_add_influence_reward(policy, sample_batch, reward_model=None):
+def weigh_and_add_influence_reward(policy, sample_batch, reward_model=None, action_range=4):
     # Since the reward calculation is delayed by 1 step, sample_batch[SOCIAL_INFLUENCE_REWARD][0]
     # contains the reward for timestep -1, which does not exist. Hence we shift the array.
     # Then, pad with a 0-value at the end to make the influence rewards align with sample_batch.
@@ -137,10 +137,49 @@ def weigh_and_add_influence_reward(policy, sample_batch, reward_model=None):
     # first define the reward model
     # then set it to eval model 
     # use it to predict the counterfactual team reward
+    
+    print(np.shape(sample_batch["obs"]),sample_batch.keys())
+    vector_state = sample_batch["obs"][0][-15:]
+    # 625 is the curr_obs shape, which equals to 15*15*3
+    other_action = sample_batch["obs"][625:627]
+    
+
+    #calculate counterfactual actions
+    cf_action_list = []
+    range_action = np.arange(0,action_range,1)
+    if len(other_action) < 3:
+        for i in range_action:
+            for j in range_action:
+                cf_action_list.append([i,j])
+    else:
+        #TODO:to be implemented for cleanup or harvest(with larger action space and more agents; maybe use sampling method)
+        pass
+    
+    cf_action_list = torch.tensor(cf_action_list)
+    vector_state = torch.tensor(vector_state).expand(np.shape(cf_action_list)[0],-1)
+    print(np.shape(vector_state),np.shape(cf_action_list))
+    
+    #TODO: to determine the agent's position, so that we could find the right position to cancatenate to the cf_obs_action
+    # cf_vector_obs_action = torch.cat((
     # predicted_causal_reward = reward_model(sample_batch["counterfactual_obs_action"])
     # sample_batch["extrinsic_reward"] = sample_batch["rewards"]
     # sample_batch["rewards"] = sample_batch["rewards"] + predicted_causal_reward
     return sample_batch
+
+def calculate_cf_action(action_list,action_range):
+    cf_action_list = []
+    range_action = np.arange(0,action_range,1)
+    if len(action_list) < 3:
+        for i in range_action:
+            for j in range_action:
+                cf_action_list.append([i,j])
+    else:
+        #TODO:to be implemented for cleanup or harvest
+        pass
+    return cf_action_list
+            
+        
+
 
 
 def agent_name_to_idx(agent_num, self_id):

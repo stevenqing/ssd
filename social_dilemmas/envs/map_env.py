@@ -182,13 +182,13 @@ class MapEnv(MultiAgentEnv):
                     shape=(self.num_agents - 1,),
                     dtype=np.uint8,
                 ),
-                "vector_obs_action": Box(
+                "vector_state": Box(
                     low=0,
                     high=100,
                     shape=(15,), #TODO: settle for coin3, need to change that later
-                    dtype=np.uint8,
+                    dtype=np.int32,
                 ),
-            }
+                }
         obs_space = Dict(obs_space)
         # Change dtype so that ray can put all observations into one flat batch
         # with the correct dtype.
@@ -321,7 +321,6 @@ class MapEnv(MultiAgentEnv):
             vector_state = positions + apple_pos + apple_type
             vector_state = [int(i) for i in vector_state]
             # vector_obs_action = self.get_obs_action(positions,apple_pos,apple_type,store_actions)
-            print(np.shape(vector_state))
             if self.return_agent_actions:
                 prev_actions = np.array(
                     [actions[key] for key in sorted(actions.keys()) if key != agent.agent_id]
@@ -332,7 +331,7 @@ class MapEnv(MultiAgentEnv):
                     "other_agent_actions": prev_actions,
                     "visible_agents": visible_agents,
                     "prev_visible_agents": agent.prev_visible_agents,
-                    "vector_obs_action": vector_state,
+                    "vector_state": vector_state,
                 }
                 agent.prev_visible_agents = visible_agents
             else:
@@ -388,7 +387,9 @@ class MapEnv(MultiAgentEnv):
         vector_state = [int(i) for i in vector_state]
         obs_action = vector_state + store_actions
         obs_action = torch.FloatTensor(obs_action)
-        obs_action = torch.reshape(obs_action,(1,-1)) 
+        obs_action = torch.reshape(obs_action,(1,-1))
+        obs_action = obs_action.numpy()
+        return obs_action
     
     def reset(self):
         """Reset the environment.
@@ -419,11 +420,13 @@ class MapEnv(MultiAgentEnv):
                 # No previous actions so just pass in "wait" action
                 prev_actions = np.array([4 for _ in range(self.num_agents - 1)]).astype(np.uint8)
                 visible_agents = self.find_visible_agents(agent.agent_id)
+                init_vector_state = np.array([1, 7, 1, 1, 7, 6, 3, 3, 5, 5, 6, 2, 1, 2, 3]).astype(np.int32)
                 observations[agent.agent_id] = {
                     "curr_obs": rgb_arr,
                     "other_agent_actions": prev_actions,
                     "visible_agents": visible_agents,
                     "prev_visible_agents": visible_agents,
+                    "vector_state": init_vector_state,
                 }
                 agent.prev_visible_agents = visible_agents
             else:
