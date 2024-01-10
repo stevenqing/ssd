@@ -138,13 +138,17 @@ def weigh_and_add_influence_reward(policy, sample_batch, reward_model=None, acti
     # then set it to eval model 
     # use it to predict the counterfactual team reward
     
-    print(np.shape(sample_batch["obs"]),sample_batch.keys())
-    vector_state = sample_batch["obs"][0][-15:]
+    vector_state = sample_batch["obs"][:, -15:]
+    agent_id = sample_batch["obs"][:,-16]
+    # Testing process will no includ agent_index as key of the sample_batch
+    if "agent_index" in sample_batch.keys():
+        agent_id = sample_batch["agent_index"]
+        # print(sample_batch["agent_index"])
     # 625 is the curr_obs shape, which equals to 15*15*3
-    other_action = sample_batch["obs"][625:627]
+    other_action = sample_batch["obs"][0][625:627]
     
 
-    #calculate counterfactual actions
+    # Calculate counterfactual actions
     cf_action_list = []
     range_action = np.arange(0,action_range,1)
     if len(other_action) < 3:
@@ -154,34 +158,36 @@ def weigh_and_add_influence_reward(policy, sample_batch, reward_model=None, acti
     else:
         #TODO:to be implemented for cleanup or harvest(with larger action space and more agents; maybe use sampling method)
         pass
+
+    # Expand to (cf_dim,batch_size,action_number)
+    B = np.shape(vector_state)[0]
+    C = np.shape(cf_action_list)[0]
     
-    cf_action_list = torch.tensor(cf_action_list)
-    vector_state = torch.tensor(vector_state).expand(np.shape(cf_action_list)[0],-1)
-    print(np.shape(vector_state),np.shape(cf_action_list))
+    cf_action_list = torch.unsqueeze(torch.tensor(cf_action_list),dim=1)
+    cf_action_list = cf_action_list.repeat(1,B,1)
     
-    #TODO: to determine the agent's position, so that we could find the right position to cancatenate to the cf_obs_action
-    # cf_vector_obs_action = torch.cat((
-    # predicted_causal_reward = reward_model(sample_batch["counterfactual_obs_action"])
-    # sample_batch["extrinsic_reward"] = sample_batch["rewards"]
-    # sample_batch["rewards"] = sample_batch["rewards"] + predicted_causal_reward
+    vector_state = torch.unsqueeze(torch.tensor(vector_state),dim=0)
+    vector_state = torch.tensor(vector_state).repeat(C,1,1)
+    
+    actual_action = torch.unsqueeze(torch.tensor(sample_batch["actions"]),dim=0)
+    actual_action = torch.tensor(sample_batch["actions"]).repeat(C,1,1).view(C,B,-1)
+    
+    cf_action_total = torch.cat((cf_action_list[:,:,:agent_id[0]], actual_action, cf_action_list[:,:,agent_id[0]:]), dim=2)
+    cf_vector_obs_action = torch.cat((vector_state,cf_action_total),dim=2)
+    
+    # Using reward model to predict the cf rewards
+    predicted_causal_reward = 0
+    for batch_vector in cf_vector_obs_action:
+        batch_vector = batch_vector.to(dtype=torch.float)
+        predicted_causal_reward += reward_model(batch_vector)
+    predicted_causal_reward /= len(cf_vector_obs_action)
+    predicted_causal_reward = torch.sum(predicted_causal_reward).detach().numpy()
+    
+    # Adding predicted causal reward into sample_batch, Not sure it's right, maybe is the model problem. All comes out weird results.
+    sample_batch["extrinsic_reward"] = sample_batch["rewards"]
+    sample_batch["rewards"] = sample_batch["rewards"] + predicted_causal_reward
     return sample_batch
-
-def calculate_cf_action(action_list,action_range):
-    cf_action_list = []
-    range_action = np.arange(0,action_range,1)
-    if len(action_list) < 3:
-        for i in range_action:
-            for j in range_action:
-                cf_action_list.append([i,j])
-    else:
-        #TODO:to be implemented for cleanup or harvest
-        pass
-    return cf_action_list
             
-        
-
-
-
 def agent_name_to_idx(agent_num, self_id):
     """split agent id around the index and return its appropriate position in terms
     of the other agents"""

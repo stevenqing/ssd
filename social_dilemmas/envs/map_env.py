@@ -75,7 +75,7 @@ class MapEnv(MultiAgentEnv):
         return_agent_actions=False,
         use_collective_reward=False,
         inequity_averse_reward=False,
-        use_reward_model=True,
+        use_reward_model=False,
         alpha=0.0,
         beta=0.0,
         store_trajs=False,
@@ -180,6 +180,12 @@ class MapEnv(MultiAgentEnv):
                     low=0,
                     high=1,
                     shape=(self.num_agents - 1,),
+                    dtype=np.uint8,
+                ),
+                "agent_id": Box(
+                    low=0,
+                    high=5,
+                    shape=(1,),
                     dtype=np.uint8,
                 ),
                 "vector_state": Box(
@@ -331,6 +337,7 @@ class MapEnv(MultiAgentEnv):
                     "other_agent_actions": prev_actions,
                     "visible_agents": visible_agents,
                     "prev_visible_agents": agent.prev_visible_agents,
+                    "agent_id": [agent.agent_id[-1]], 
                     "vector_state": vector_state,
                 }
                 agent.prev_visible_agents = visible_agents
@@ -368,7 +375,7 @@ class MapEnv(MultiAgentEnv):
         if self.use_collective_reward:
             collective_reward = sum(rewards.values())
             for agent in rewards.keys():
-                rewards[agent] = collective_reward
+                rewards[agent] += collective_reward
         if self.inequity_averse_reward:
             assert self.num_agents > 1, "Cannot use inequity aversion with only one agent!"
             temp_rewards = rewards.copy()
@@ -426,6 +433,7 @@ class MapEnv(MultiAgentEnv):
                     "other_agent_actions": prev_actions,
                     "visible_agents": visible_agents,
                     "prev_visible_agents": visible_agents,
+                    "agent_id": [agent.agent_id[-1]],
                     "vector_state": init_vector_state,
                 }
                 agent.prev_visible_agents = visible_agents
