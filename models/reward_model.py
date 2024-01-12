@@ -9,7 +9,7 @@ from ray.rllib.utils.annotations import override
 from models.actor_critic_lstm import ActorCriticLSTM
 from models.common_layers import build_conv_layers, build_fc_layers
 from models.moa_lstm import MoaLSTM
-
+from models.causal_reward_model import MaskActivation, CausalModel 
 tf = try_import_tf()
 
 
@@ -27,7 +27,7 @@ class REWARDModel(RecurrentTFModelV2):
         parameters.
         :param name: The model name.
         """
-        super(MOAModel, self).__init__(obs_space, action_space, num_outputs, model_config, name)
+        super(REWARDModel, self).__init__(obs_space, action_space, num_outputs, model_config, name)
 
         self.obs_space = obs_space
 
@@ -100,7 +100,69 @@ class REWARDModel(RecurrentTFModelV2):
         :param model_config: The config dict containing parameters for the convolution type/shape.
         :return: A new Model object containing the convolution.
         """
-        vector_state_dims = obs_space.original_space.spaces["vector_state"].shape
+        original_obs_dims = obs_space.original_space.spaces["curr_obs"].shape
+        inputs = tf.keras.layers.Input(original_obs_dims, name="observations", dtype=tf.uint8)
+
+        # Divide by 255 to transform [0,255] uint8 rgb pixel values to [0,1] float32.
+        last_layer = tf.keras.backend.cast(inputs, tf.float32)
+        last_layer = tf.math.divide(last_layer, 255.0)
+
+        # Build the CNN layer
+        conv_out = build_conv_layers(model_config, last_layer)
+
+        # Build Actor-critic FC layers
+        actor_critic_fc = build_fc_layers(model_config, conv_out, "policy")
+        return tf.keras.Model(inputs, [actor_critic_fc], name="Reward_Encoder_Model")
+
+
+
+
+    # @staticmethod
+    def running_reward_encoder_model(self, obs_space, causal_reward_model):
+        """
+        Running the causal reward predicting part of the REWARD model.
+        Also casts the input uint8 observations to float32 and normalizes them to the range [0,1].
+        :param obs_space: The agent's observation space.
+        :param causal_reward_model: The causal reward model predefined in causal_reward_model.py
+        :return: A new Model object containing the convolution.
+        """
+        
+        vector_state = input_dict["obs"]["vector_state"]
+        agent_id = input_dict["obs"]["agent_id"]
+        other_action = input_dict["obs"]["other_agent_actions"]
+        actual_action = input_dict["obs"]["actions"]
+        
+        cf_action_list = []
+        range_action = np.arange(0,action_range,1)
+        if len(other_action) < 3:
+            for i in range_action:
+                for j in range_action:
+                    cf_action_list.append([i,j])
+        else:
+        #TODO:to be implemented for cleanup or harvest(with larger action space and more agents; maybe use sampling method)
+             pass 
+	
+	# Expand to (cf_dim, batch_size, action_number)
+	B = np.shape(vector_state)[0]
+	C = np.shape(cf_action_list)[0]	
+
+	cf_action_list = tf.unsqueeze(tf.convert_to_tensor(cf_action_list),dim=1)
+	cf_action_list = tf.repeat(cf_action_list, repeats=B, axis=1)
+
+	vector_state = tf.unsqueeze(tf.convert_to_tensor(vector_state),dim=0)
+	vector_state = tf.repeat(vector_state, repeats=C, axis=0)
+
+	actual_action = tf.unsqueeze(tf.convert_to_tensor(actual_action),dim=0)
+	actual_action = tf.reshape(tf.repeat(actual_action, repeats=C, axis=0), (C,B,-1))
+	
+	cf_action_total = tf.concat([cf_action_list[:,:,:agent_id[0]], actual_action, cf_action_list[:,:,agent_id[0]:]],axis=2)
+	cf_vector_obs_action = tf.concat([vector_state,cf_action_total],axis=2)
+
+        inputs = tf.keras.layers.Input(B, name="observations", dtype=tf.uint8)
+
+
+
+	vector_state_dims = obs_space.original_space.spaces["vector_state"].shape
         inputs = tf.keras.layers.Input(vector_state_dims, name="observations", dtype=tf.uint8)
 
         # Divide by 255 to transform [0,255] uint8 rgb pixel values to [0,1] float32.
@@ -129,7 +191,7 @@ class REWARDModel(RecurrentTFModelV2):
         :return: The agent's own action logits and the new model state.
         """
         # Evaluate non-lstm layers
-        actor_critic_fc_output, reward_fc_output = self.reward_encoder_model(input_dict["obs"]["vector_state"])
+        actor_critic_fc_output, reward_fc_output = self.reward_encoder_model(input_dict)
         '''
         rnn_input_dict = {
             "ac_trunk": actor_critic_fc_output,
@@ -229,38 +291,7 @@ class REWARDModel(RecurrentTFModelV2):
 
         # We don't have the current action yet, so the reward for the previous step is calculated.
         # This is corrected for in the function weigh_and_add_influence_reward
-        prev_agent_actions = tf.cast(tf.reshape(input_dict["prev_actions"], [-1, 1]), tf.int32)
-        # Use the agent's actions as indices to select the predicted logits of other agents for
-        # actions that the agent did take, discard the rest.
-        predicted_logits = tf.gather_nd(
-            params=counterfactual_logits, indices=prev_agent_actions, batch_dims=1
-        )
-
-        predicted_logits = tf.reshape(
-            predicted_logits, [-1, self.num_other_agents, self.num_outputs]
-        )
-        predicted_logits = tf.nn.softmax(predicted_logits)
-        predicted_logits = predicted_logits / tf.reduce_sum(
-            predicted_logits, axis=-1, keepdims=True
-        )  # reduce numerical inaccuracies
-
-        # Get marginal predictions where effect of self is marginalized out
-        marginal_logits = self.marginalize_predictions_over_own_actions(
-            prev_action_logits, counterfactual_logits
-        )  # [B, Num agents, Num actions]
-
-        # Compute influence per agent/step ([B, N]) using different metrics
-        if self.influence_divergence_measure == "kl":
-            influence_reward = self.kl_div(predicted_logits, marginal_logits)
-        elif self.influence_divergence_measure == "jsd":
-            mean_probs = 0.5 * (predicted_logits + marginal_logits)
-            influence_reward = 0.5 * self.kl_div(predicted_logits, mean_probs) + 0.5 * self.kl_div(
-                marginal_logits, mean_probs
-            )
-        else:
-            sys.exit("Please specify an influence divergence measure from [kl, jsd]")
-
-        # Zero out influence for steps where the other agent isn't visible.
+        # Introduce the vector_state, agent_id and other agents' actions
         if self.influence_only_when_visible:
             visibility = tf.cast(input_dict["obs"]["prev_visible_agents"], tf.float32)
             influence_reward *= visibility

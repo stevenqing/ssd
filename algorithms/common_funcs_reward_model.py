@@ -137,17 +137,15 @@ def weigh_and_add_influence_reward(policy, sample_batch, reward_model=None, acti
     # first define the reward model
     # then set it to eval model 
     # use it to predict the counterfactual team reward
-   
+    #TODO: change -15 to other parameter with self, in order to suit for the cleanup and harvest env   
     vector_state = sample_batch["obs"][:, -15:]
     agent_id = sample_batch["obs"][:,-16]
     # Testing process will no includ agent_index as key of the sample_batch
     if "agent_index" in sample_batch.keys():
         agent_id = sample_batch["agent_index"]
-        # print(sample_batch["agent_index"])
     # 625 is the curr_obs shape, which equals to 15*15*3
     other_action = sample_batch["obs"][0][625:627]
     
-
     # Calculate counterfactual actions
     cf_action_list = []
     range_action = np.arange(0,action_range,1)
