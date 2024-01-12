@@ -95,6 +95,8 @@ class Agent(object):
             reward = self.reward_this_turn - self.penalty_2
         elif self.agent_id == agent3:
             reward = self.reward_this_turn - self.penalty_3
+        else:
+            reward = self.reward_this_turn
         self.reward_this_turn = 0
         self.penalty_1 = 0
         self.penalty_2 = 0

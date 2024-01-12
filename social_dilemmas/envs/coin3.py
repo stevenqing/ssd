@@ -38,6 +38,7 @@ class Coin3Env(MapEnv):
             beta=beta,
         )
         self.apple_points = []
+        # The initial position of the apples are determined
         for row in range(self.base_map.shape[0]):
             for col in range(self.base_map.shape[1]):
                 if self.base_map[row, col] == b"A":

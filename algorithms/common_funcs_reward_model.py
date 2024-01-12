@@ -137,7 +137,7 @@ def weigh_and_add_influence_reward(policy, sample_batch, reward_model=None, acti
     # first define the reward model
     # then set it to eval model 
     # use it to predict the counterfactual team reward
-    
+   
     vector_state = sample_batch["obs"][:, -15:]
     agent_id = sample_batch["obs"][:,-16]
     # Testing process will no includ agent_index as key of the sample_batch

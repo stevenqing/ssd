@@ -105,9 +105,9 @@ class MapEnv(MultiAgentEnv):
 
         # ModelCatalog.register_custom_model("causal_model", CausalModel)
         #####################################################################
-        self.reward_model = torch.load(self.saved_model_path)
         # self.reward_model = torch.load(self.saved_model_path)
-        self.reward_model.eval()
+        # self.reward_model = torch.load(self.saved_model_path)
+        # self.reward_model.eval()
         self.store_trajs = store_trajs
         self.count = 0
         self.num_agents = num_agents
@@ -141,12 +141,13 @@ class MapEnv(MultiAgentEnv):
         # returns the agent at a desired position if there is one
         self.pos_dict = {}
         self.spawn_points = []  # where agents can appear
-
+        self.vector_state_shape = 0
         self.wall_points = []
         for row in range(self.base_map.shape[0]):
             for col in range(self.base_map.shape[1]):
                 if self.base_map[row, col] == b"P":
                     self.spawn_points.append([row, col])
+                    self.vector_state_shape += 2
                 elif self.base_map[row, col] == b"@":
                     self.wall_points.append([row, col])
         self.setup_agents()
@@ -273,7 +274,8 @@ class MapEnv(MultiAgentEnv):
         for agent_id, action in actions.items():
             agent_action = self.agents[agent_id].action_map(action)
             agent_actions[agent_id] = agent_action
-            store_actions.append(int(action))
+            if self.store_trajs: 
+                store_actions.append(int(action))
 
         # Remove agents from color map
         for agent in self.agents.values():
@@ -281,7 +283,8 @@ class MapEnv(MultiAgentEnv):
             self.single_update_world_color_map(row, col, self.world_map[row, col])
 
         self.update_moves(agent_actions)
-
+        
+        # Construct the vector state
         apple_pos, apple_type = self.count_apples()
         apple_pos = [item for sublist in apple_pos for item in sublist]    
         
@@ -323,9 +326,14 @@ class MapEnv(MultiAgentEnv):
         for agent in self.agents.values():
             agent.full_map = map_with_agents
             rgb_arr = self.color_view(agent)
+            
             # concatenate on the prev_actions to the observations
-            vector_state = positions + apple_pos + apple_type
+            if apple_type == None:
+                vector_state = positions + apple_pos
+            else:
+                vector_state = positions + apple_pos + apple_type
             vector_state = [int(i) for i in vector_state]
+            
             # vector_obs_action = self.get_obs_action(positions,apple_pos,apple_type,store_actions)
             if self.return_agent_actions:
                 prev_actions = np.array(

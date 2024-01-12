@@ -51,12 +51,12 @@ class REWARDModel(RecurrentTFModelV2):
         self._social_influence_reward = None
         self._true_one_hot_actions = None
 
-        self.moa_encoder_model = self.create_moa_encoder_model(obs_space, model_config)
-        self.register_variables(self.moa_encoder_model.variables)
-        self.moa_encoder_model.summary()
+        self.reward_encoder_model = self.create_reward_encoder_model(obs_space, model_config)
+        self.register_variables(self.reward_encoder_model.variables)
+        self.reward_encoder_model.summary()
 
         # now output two heads, one for action selection and one for the prediction of other agents
-        inner_obs_space = self.moa_encoder_model.output_shape[0][-1]
+        inner_obs_space = self.reward_encoder_model.output_shape[0][-1]
 
         cell_size = model_config["custom_options"].get("cell_size")
         self.actions_model = ActorCriticLSTM(
@@ -78,21 +78,21 @@ class REWARDModel(RecurrentTFModelV2):
         ]
         self.moa_weight = model_config["custom_options"]["moa_loss_weight"]
 
-        self.moa_model = MoaLSTM(
+        self.reward_model = RewardLSTM(
             inner_obs_space,
             action_space,
             self.num_other_agents * num_outputs,
             model_config,
-            "moa_model",
+            "reward_model",
             cell_size=cell_size,
         )
         self.register_variables(self.actions_model.rnn_model.variables)
-        self.register_variables(self.moa_model.rnn_model.variables)
+        self.register_variables(self.reward_model.rnn_model.variables)
         self.actions_model.rnn_model.summary()
-        self.moa_model.rnn_model.summary()
+        self.reward_model.rnn_model.summary()
 
     @staticmethod
-    def create_moa_encoder_model(obs_space, model_config):
+    def create_reward_encoder_model(obs_space, model_config):
         """
         Creates the convolutional part of the MOA model.
         Also casts the input uint8 observations to float32 and normalizes them to the range [0,1].
@@ -100,8 +100,8 @@ class REWARDModel(RecurrentTFModelV2):
         :param model_config: The config dict containing parameters for the convolution type/shape.
         :return: A new Model object containing the convolution.
         """
-        original_obs_dims = obs_space.original_space.spaces["curr_obs"].shape
-        inputs = tf.keras.layers.Input(original_obs_dims, name="observations", dtype=tf.uint8)
+        vector_state_dims = obs_space.original_space.spaces["vector_state"].shape
+        inputs = tf.keras.layers.Input(vector_state_dims, name="observations", dtype=tf.uint8)
 
         # Divide by 255 to transform [0,255] uint8 rgb pixel values to [0,1] float32.
         last_layer = tf.keras.backend.cast(inputs, tf.float32)
@@ -114,9 +114,9 @@ class REWARDModel(RecurrentTFModelV2):
         actor_critic_fc = build_fc_layers(model_config, conv_out, "policy")
 
         # Build MOA layers
-        moa_fc = build_fc_layers(model_config, conv_out, "moa")
+        reward_fc = build_fc_layers(model_config, conv_out, "reward")
 
-        return tf.keras.Model(inputs, [actor_critic_fc, moa_fc], name="MOA_Encoder_Model")
+        return tf.keras.Model(inputs, [actor_critic_fc, moa_fc], name="REWARD_Encoder_Model")
 
     @override(ModelV2)
     def forward(self, input_dict, state, seq_lens):
@@ -125,20 +125,20 @@ class REWARDModel(RecurrentTFModelV2):
         sending inputs to forward_rnn(), which evaluates the LSTM parts of the model.
         :param input_dict: The input tensors.
         :param state: The model state.
-        :param seq_lens: LSTM sequence lengths.
+        :param seq_lens:: LSTM sequence lengths.
         :return: The agent's own action logits and the new model state.
         """
         # Evaluate non-lstm layers
-        actor_critic_fc_output, moa_fc_output = self.moa_encoder_model(input_dict["obs"]["curr_obs"])
-
+        actor_critic_fc_output, reward_fc_output = self.reward_encoder_model(input_dict["obs"]["vector_state"])
+        '''
         rnn_input_dict = {
             "ac_trunk": actor_critic_fc_output,
-            "prev_moa_trunk": state[5],
+            "prev_reward_trunk": state[5],
             "other_agent_actions": input_dict["obs"]["other_agent_actions"],
             "visible_agents": input_dict["obs"]["visible_agents"],
             "prev_actions": input_dict["prev_actions"],
         }
-
+        
         # Add time dimension to rnn inputs
         for k, v in rnn_input_dict.items():
             rnn_input_dict[k] = add_time_dimension(v, seq_lens)
@@ -149,11 +149,11 @@ class REWARDModel(RecurrentTFModelV2):
             self._counterfactuals,
             [-1, self._counterfactuals.shape[-2], self._counterfactuals.shape[-1]],
         )
-        new_state.extend([action_logits, moa_fc_output])
-
+        new_state.extend([action_logits, reward_fc_output])
+        '''
         self.compute_influence_reward(input_dict, state[4], counterfactuals)
-
-        return action_logits, new_state
+        
+        return action_logits
 
     def forward_rnn(self, input_dict, state, seq_lens):
         """
@@ -217,10 +217,10 @@ class REWARDModel(RecurrentTFModelV2):
 
     def compute_influence_reward(self, input_dict, prev_action_logits, counterfactual_logits):
         """
-        Compute influence of this agent on other agents.
+        Compute counterfactual reward of other agents.
         :param input_dict: The model input tensors.
         :param prev_action_logits: Logits for the agent's own policy/actions at t-1
-        :param counterfactual_logits: The counterfactual action logits for actions made by other
+        :param counterfactual_logits: The counterfactual obs_action vector for actions made by other
         agents at t.
         """
         # Probability of the next action for all other agents. Shape is [B, N, A].
