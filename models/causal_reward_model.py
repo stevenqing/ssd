@@ -52,9 +52,9 @@ class CausalModel(tf.keras.Model):
             x = layer(x)
         return x
     def get_reg_loss(self):
-	return tf.reduced_mean(tf.abs(self.causal_mask))
+	    return tf.reduced_mean(tf.abs(self.causal_mask))
     
     def get_sparsity(self):
         # Implement your method to calculate sparsity if needed
-	return (tf.abs(self.causal_mask) > self.sh) / tf.size(self.causal_mask)        
+	    return (tf.abs(self.causal_mask) > self.sh) / tf.size(self.causal_mask)        
 
