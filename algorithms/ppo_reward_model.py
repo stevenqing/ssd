@@ -85,7 +85,7 @@ def loss_with_reward_model(policy, model, dist_class, train_batch):
         policy.config["vf_loss_coeff"],
         policy.config["use_gae"],
     ) 
-
+    policy.loss_obj.loss += reward_loss.total_loss
 
     return policy.loss_obj.loss
 

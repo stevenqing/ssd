@@ -182,69 +182,6 @@ class RewardModel(RecurrentTFModelV2):
         return last_layer
 
 
-    # @staticmethod
-    def running_reward_encoder_model(self, obs_space, causal_reward_model):
-        """
-        Running the causal reward predicting part of the REWARD model.
-        Also casts the input uint8 observations to float32 and normalizes them to the range [0,1].
-        :param obs_space: The agent's observation space.
-        :param causal_reward_model: The causal reward model predefined in causal_reward_model.py
-        :return: A new Model object containing the convolution.
-        """
-        vector_state = input_dict['obs']["vector_state"]
-        agent_id = input_dict["obs"]["agent_id"]
-        other_action = input_dict["obs"]["other_agent_actions"]
-        actual_action = input_dict["obs"]["actions"]
-
-        
-        cf_action_list = []
-        range_action = np.arange(0,action_range,1)
-        if len(other_action) < 3:
-            for i in range_action:
-                for j in range_action:
-                    cf_action_list.append([i,j])
-        else:
-        #TODO:to be implemented for cleanup or harvest(with larger action space and more agents; maybe use sampling method)
-             pass 
-	
-        # Expand to (cf_dim, batch_size, action_number)
-        B = np.shape(vector_state)[0]
-        C = np.shape(cf_action_list)[0]	
-
-        cf_action_list = tf.unsqueeze(tf.convert_to_tensor(cf_action_list),dim=1)
-        cf_action_list = tf.repeat(cf_action_list, repeats=B, axis=1)
-
-        vector_state = tf.unsqueeze(tf.convert_to_tensor(vector_state),dim=0)
-        vector_state = tf.repeat(vector_state, repeats=C, axis=0)
-
-        actual_action = tf.unsqueeze(tf.convert_to_tensor(actual_action),dim=0)
-        actual_action = tf.reshape(tf.repeat(actual_action, repeats=C, axis=0), (C,B,-1))
-        
-        cf_action_total = tf.concat([cf_action_list[:,:,:agent_id[0]], actual_action, cf_action_list[:,:,agent_id[0]:]],axis=2)
-        cf_vector_obs_action = tf.concat([vector_state,cf_action_total],axis=2)
-
-        inputs = tf.keras.layers.Input(B, name="observations", dtype=tf.uint8)
-
-
-
-        vector_state_dims = obs_space.original_space.spaces["vector_state"].shape
-        inputs = tf.keras.layers.Input(vector_state_dims, name="observations", dtype=tf.uint8)
-
-        # Divide by 255 to transform [0,255] uint8 rgb pixel values to [0,1] float32.
-        last_layer = tf.keras.backend.cast(inputs, tf.float32)
-        last_layer = tf.math.divide(last_layer, 255.0)
-
-        # Build the CNN layer
-        conv_out = build_conv_layers(model_config, last_layer)
-
-        # Build Actor-critic FC layers
-        actor_critic_fc = build_fc_layers(model_config, conv_out, "policy")
-
-        # Build reward layers
-        reward_fc = build_fc_layers(model_config, conv_out, "reward")
-
-        return tf.keras.Model(inputs, [actor_critic_fc, reward_fc], name="REWARD_Encoder_Model")
-
     @override(ModelV2)
     def forward(self, input_dict, state, seq_lens):
         """
@@ -278,71 +215,11 @@ class RewardModel(RecurrentTFModelV2):
         )
         new_state.extend([action_logits, reward_fc_output])
         '''
-        self.compute_conterfactual_reward(input_dict, state[4], counterfactuals)
-        
-        return action_logits
+        self.compute_causal_reward(input_dict)
+        #TODO: Not sure this is right
+        return actor_critic_fc_output
 
-    def forward_rnn(self, input_dict, state, seq_lens):
-        """
-        Forward pass through the REWARD LSTMs.
-        Implicitly assigns the value function output to self_value_out, and does not return this.
-        :param input_dict: The input tensors.(obs of all agents, actions for all agents)
-        :param state: The model state.
-        :param seq_lens: LSTM sequence lengths.
-        :return: The policy logits and new LSTM states.
-        """
-        # Evaluate the actor-critic model
-        pass_dict = {"curr_obs": input_dict["ac_trunk"]}
-        h1, c1, h2, c2, *_ = state
-        (
-            self._model_out,
-            self._value_out,
-            output_h1,
-            output_c1,
-        ) = self.actions_model.forward_rnn(pass_dict, [h1, c1], seq_lens)
-
-        # Evaluate the REWARD MODEL, and generate reward predictions.
-        prev_reward_trunk = input_dict["prev_reward_trunk"]
-        other_obs = input_dict["other_agent_observations"]
-        agent_action = tf.expand_dims(input_dict["prev_actions"], axis=-1)
-        all_actions = tf.concat([agent_action, other_actions], axis=-1, name="concat_true_actions")
-        self._true_one_hot_actions = self._reshaped_one_hot_actions(all_actions, "forward_one_hot")
-        total_sa_pass_dict = {
-            "curr_total_obs": prev_reward_trunk,
-            "prev_total_actions": self._true_one_hot_actions,
-        }
-
-        # Compute the true reward prediction, used to determine the reward loss.
-        self._reward_pred, output_h2, output_c2 = self.reward_model.forward_rnn(
-            total_sa_pass_dict, [h2, c2], seq_lens
-        ) # check reward_model_lstm
-
-        # Make counterfactual predictions on rewards, used for computing the conterfactual reward.
-        counterfactual_preds = []
-        for i in range(self.num_outputs):
-            # Shape of other_actions is (num_envs, ?, num_other_agents)
-            # To add the counterfactual action to it, other_actions can be padded with the constant
-            # action value.
-            rewards_with_counterfactual = tf.pad(
-                other_actions, paddings=[[0, 0], [0, 0], [1, 0]], mode="CONSTANT", constant_values=i
-            )
-            one_hot_actions = self._reshaped_one_hot_actions(
-                actions_with_counterfactual, "actions_with_counterfactual_one_hot"
-            )
-            pass_dict = {"curr_obs": prev_reward_trunk, "prev_total_actions": one_hot_actions}
-            counterfactual_pred, _, _ = self.reward_model.forward_rnn(pass_dict, [h2, c2], seq_lens)
-            counterfactual_preds.append(tf.expand_dims(counterfactual_pred, axis=-2))
-        self._counterfactuals = tf.concat(
-            counterfactual_preds, axis=-2, name="concat_counterfactuals"
-        )
-
-        # TODO(@evinitsky) move this into ppo_reward by using restore_original_dimensions()
-        self._other_agent_actions = input_dict["other_agent_actions"]
-        self._visibility = input_dict["visible_agents"]
-
-        return self._model_out, [output_h1, output_c1, output_h2, output_c2]
-
-    def compute_conterfactual_reward(self, input_dict, prev_action_logits, counterfactual_logits):
+    def compute_causal_reward(self, input_dict):
         """
         Compute counterfactual reward of other agents.
         :param input_dict: The model input tensors.
@@ -350,18 +227,43 @@ class RewardModel(RecurrentTFModelV2):
         :param counterfactual_logits: The counterfactual obs_action vector for actions made by other
         agents at t.
         """
-        # Probability of the next action for all other agents. Shape is [B, N, A].
-        # This is the predicted probability given the actions that we DID take.
-        # extract out the probability under the actions we actually did take
+        
+        vector_state = input_dict["obs"]["vector_state"]
+        agent_id = input_dict["obs"]["agent_id"]
+        other_action = input_dict["obs"]["other_agent_actions"]
+        actual_action = input_dict["obs"]["actions"]
 
-        # We don't have the current action yet, so the reward for the previous step is calculated.
-        # This is corrected for in the function weigh_and_add_conterfactual_reward
-        # Introduce the vector_state, agent_id and other agents' actions
-        if self.conterfactual_only_when_visible:
-            visibility = tf.cast(input_dict["obs"]["prev_visible_agents"], tf.float32)
-            conterfactual_reward *= visibility
-        conterfactual_reward = tf.reduce_sum(conterfactual_reward, axis=-1)
-        self._social_conterfactual_reward = conterfactual_reward
+        
+        cf_action_list = []
+        range_action = np.arange(0,action_range,1)
+        if len(other_action) < 3:
+            for i in range_action:
+                for j in range_action:
+                    cf_action_list.append([i,j])
+        else:
+        #TODO:to be implemented for cleanup or harvest(with larger action space and more agents; maybe use sampling method)
+             pass 
+	
+        # Expand to (cf_dim, batch_size, action_number)
+        B = np.shape(vector_state)[0]
+        C = np.shape(cf_action_list)[0]	
+
+        cf_action_list = tf.unsqueeze(tf.convert_to_tensor(cf_action_list),dim=1)
+        cf_action_list = tf.repeat(cf_action_list, repeats=B, axis=1)
+
+        vector_state = tf.unsqueeze(tf.convert_to_tensor(vector_state),dim=0)
+        vector_state = tf.repeat(vector_state, repeats=C, axis=0)
+
+        actual_action = tf.unsqueeze(tf.convert_to_tensor(actual_action),dim=0)
+        actual_action = tf.reshape(tf.repeat(actual_action, repeats=C, axis=0), (C,B,-1))
+        
+        cf_action_total = tf.concat([cf_action_list[:,:,:agent_id[0]], actual_action, cf_action_list[:,:,agent_id[0]:]],axis=2)
+        cf_vector_obs_action = tf.concat([vector_state,cf_action_total],axis=2)
+        
+        #TODO: Not sure it's the right way to call the model
+        causal_reward = self.reward_model(cf_vector_obs_action)
+        causal_reward = tf.reduce_sum(causal_reward, axis=-1)
+        self._causal_reward = causal_reward
 
     def marginalize_predictions_over_own_actions(self, prev_action_logits, counterfactual_logits):
         """
@@ -450,7 +352,7 @@ class RewardModel(RecurrentTFModelV2):
         return self._model_out
 
     def social_conterfactual_reward(self):
-        return self._social_conterfactual_reward
+        return self._causal_reward
 
     def predicted_rewards(self):
         """:returns Predicted rewards. NB: Since the agent's own true action is not known when
@@ -458,7 +360,8 @@ class RewardModel(RecurrentTFModelV2):
         the value at n is a prediction made at n-1, about the actions taken at n.
         predicted_rewards[0] contains no sensible value, as this would have to be a prediction made
         at timestep -1, but we start time at 0."""
-        return self._reward_pred
+        #TODO: Need to be checked
+        return self._causal_reward
 
     def visibility(self):
         return tf.reshape(self._visibility, [-1, self.num_other_agents])

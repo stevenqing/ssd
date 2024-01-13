@@ -87,12 +87,13 @@ class REWARDLoss(object):
         )
 
         # Zero out the loss if the other agent isn't visible to this one.
+        '''
         if others_visibility is not None:
             # others_visibility[n] contains agents visible at time n. We start at n=1,
             # so the first and last values have to be removed to maintain equal array size.
             others_visibility = others_visibility[1:-1, :]
             self.ce_per_entry *= tf.cast(others_visibility, tf.float32)
-
+        '''
         # Flatten loss to one value for the entire batch
         self.total_loss = tf.reduce_mean(self.ce_per_entry) * loss_weight
         tf.Print(self.total_loss, [self.total_loss], message="MOA CE loss")
@@ -109,7 +110,7 @@ def setup_reward_model_loss(logits, policy, train_batch):
         others_visibility = train_batch[VISIBILITY]
     else:
         others_visibility = None
-    raise NotImplementedError
+    # raise NotImplementedError
     reward_model_loss = REWARDLoss(
         reward_preds,
         true_rewards,
@@ -138,54 +139,13 @@ def weigh_and_add_influence_reward(policy, sample_batch, reward_model=None, acti
     # first define the reward model
     # then set it to eval model 
     # use it to predict the counterfactual team reward
-    #TODO: change -15 to other parameter with self, in order to suit for the cleanup and harvest env   
-    vector_state = sample_batch["obs"][:, -15:]
-    agent_id = sample_batch["obs"][:,-16]
-    # Testing process will no includ agent_index as key of the sample_batch
-    if "agent_index" in sample_batch.keys():
-        agent_id = sample_batch["agent_index"]
-    # 625 is the curr_obs shape, which equals to 15*15*3
-    other_action = sample_batch["obs"][0][625:627]
-    
-    # Calculate counterfactual actions
-    cf_action_list = []
-    range_action = np.arange(0,action_range,1)
-    if len(other_action) < 3:
-        for i in range_action:
-            for j in range_action:
-                cf_action_list.append([i,j])
-    else:
-        #TODO:to be implemented for cleanup or harvest(with larger action space and more agents; maybe use sampling method)
-        pass
-
-    # Expand to (cf_dim,batch_size,action_number)
-    B = np.shape(vector_state)[0]
-    C = np.shape(cf_action_list)[0]
-    
-    cf_action_list = torch.unsqueeze(torch.tensor(cf_action_list),dim=1)
-    cf_action_list = cf_action_list.repeat(1,B,1)
-    
-    vector_state = torch.unsqueeze(torch.tensor(vector_state),dim=0)
-    vector_state = torch.tensor(vector_state).repeat(C,1,1)
-    
-    actual_action = torch.unsqueeze(torch.tensor(sample_batch["actions"]),dim=0)
-    actual_action = torch.tensor(sample_batch["actions"]).repeat(C,1,1).view(C,B,-1)
-    
-    cf_action_total = torch.cat((cf_action_list[:,:,:agent_id[0]], actual_action, cf_action_list[:,:,agent_id[0]:]), dim=2)
-    cf_vector_obs_action = torch.cat((vector_state,cf_action_total),dim=2)
-    
-    # Using reward model to predict the cf rewards
-    predicted_causal_reward = 0
-    if reward_model is not None:
-        for batch_vector in cf_vector_obs_action:
-            batch_vector = batch_vector.to(dtype=torch.float)
-            predicted_causal_reward += reward_model(batch_vector)
-        predicted_causal_reward /= len(cf_vector_obs_action)
-        predicted_causal_reward = torch.sum(predicted_causal_reward).detach().numpy()
         
-    # Adding predicted causal reward into sample_batch, Not sure it's right, maybe is the model problem. All comes out weird results.
+    # Using reward model to predict the cf rewards
+    predicted_reward = np.concatenate((sample_batch[PREDICTED_REWARD][1:], [0])
+    sample_batch[PREDICTED_REWARD] = predicted_reward
     sample_batch["extrinsic_reward"] = sample_batch["rewards"]
-    sample_batch["rewards"] = sample_batch["rewards"] + predicted_causal_reward
+    sample_batch["rewards"] = sample_batch["rewards"] + predicted_reward
+
     return sample_batch
             
 def agent_name_to_idx(agent_num, self_id):
@@ -253,9 +213,9 @@ def reward_fetches(policy):
         # propagate agent actions through the reward
         # TODO(@evinitsky) remove this once we figure out how to split the obs
         ACTION_LOGITS: policy.model.action_logits(),
-        # OTHERS_ACTIONS: policy.model.other_agent_actions(), 
-        # VISIBILITY: policy.model.visibility(),
-        # REWARD_PREDS: policy.model.predicted_rewards(), # check policy.model.predicted_actions()
+        OTHERS_ACTIONS: policy.model.other_agent_actions(), 
+        VISIBILITY: policy.model.visibility(),
+        REWARD_PREDS: policy.model.predicted_rewards(), # check policy.model.predicted_actions()
     }
 
 
