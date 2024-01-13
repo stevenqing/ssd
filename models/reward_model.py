@@ -8,18 +8,29 @@ from ray.rllib.utils.annotations import override
 
 from models.actor_critic_lstm import ActorCriticLSTM
 from models.common_layers import build_conv_layers, build_fc_layers
-from models.moa_lstm import MoaLSTM
+from models.reward_lstm import rewardLSTM
 from models.causal_reward_model import MaskActivation, CausalModel 
 tf = try_import_tf()
 from ray.rllib.models.tf.misc import normc_initializer
 
+class CAUSAL_MASK(tf.keras.layers.Layer):
+    def __init__(self, input_dim=32,num_agent=32):
+        super(CAUSAL_MASK, self).__init__()
+        w_init = tf.random_normal_initializer()
+        self.w = tf.Variable(
+            initial_value=w_init(shape=(num_agent, input_dim), dtype="float32"),
+            trainable=True,
+        )
+    def call(self, inputs, sh=0.1):
+        mask = tf.where(tf.abs(self.w) > sh, self.w, tf.zeros_like(self.w))
+        return tf.expand_dims(inputs, axis=1) * tf.expand_dims(mask, axis=0)
 
 class RewardModel(RecurrentTFModelV2):
     def __init__(self, obs_space, action_space, num_outputs, model_config, name):
         """
         A model with convolutional layers connected to two distinct sequences of fully connected
         layers. These then each connect to their own respective LSTM, one for an actor-critic policy,
-        and one for modeling the actions of other agents (MOA).
+        and one for modeling the actions of other agents (reward).
         :param obs_space: The agent's observation space.
         :param action_space: The agent's action space.
         :param num_outputs: The amount of actions available to the agent.
@@ -54,11 +65,8 @@ class RewardModel(RecurrentTFModelV2):
 
         self.policy_model, self.reward_model = self.create_model(obs_space, model_config)
         self.register_variables(self.policy_model.variables + self.reward_model.variables)
-        self.policy_model.summary()
-        self.reward_model.summary()
 
-        # now output two heads, one for action selection and one for the prediction of other agents
-        inner_obs_space = self.reward_encoder_model.output_shape[0][-1]
+        inner_obs_space = self.policy_model.output_shape[0]
 
         cell_size = model_config["custom_options"].get("cell_size")
         self.actions_model = ActorCriticLSTM(
@@ -72,30 +80,23 @@ class RewardModel(RecurrentTFModelV2):
 
         # predicts the actions of all the agents besides itself
         # create a new input reader per worker
-        self.train_moa_only_when_visible = model_config["custom_options"][
-            "train_moa_only_when_visible"
+        self.train_reward_only_when_visible = model_config["custom_options"][
+            "train_reward_only_when_visible"
         ]
         self.conterfactual_only_when_visible = model_config["custom_options"][
             "conterfactual_only_when_visible"
         ]
-        self.moa_weight = model_config["custom_options"]["moa_loss_weight"]
+        self.reward_weight = model_config["custom_options"]["reward_loss_weight"]
 
-        self.reward_model = RewardLSTM(
-            inner_obs_space,
-            action_space,
-            self.num_other_agents * num_outputs,
-            model_config,
-            "reward_model",
-            cell_size=cell_size,
-        )
+
         self.register_variables(self.actions_model.rnn_model.variables)
-        self.register_variables(self.reward_model.rnn_model.variables)
+        self.register_variables(self.reward_model.variables)
         self.actions_model.rnn_model.summary()
-        self.reward_model.rnn_model.summary()
+        self.reward_model.summary()
 
     def create_model(self, obs_space, model_config):
         """
-        Creates the convolutional part of the MOA model.
+        Creates the convolutional part of the reward model.
         Also casts the input uint8 observations to float32 and normalizes them to the range [0,1].
         :param obs_space: The agent's observation space.
         :param model_config: The config dict containing parameters for the convolution type/shape.
@@ -129,8 +130,10 @@ class RewardModel(RecurrentTFModelV2):
 
         # causal mask 
         # causal_mask = tf.Variable(tf.ones([num_agents, vector_state_dim + action_dim]), trainable=True, name='causal_mask')
-        causal_mask =  tf.get_variable('causal_mask', [num_agents, vector_state_dim + action_dim], tf.float32,
-                                             initializer=tf.compat.v1.ones_initializer()) # double check trainable
+        # causal_mask =  tf.get_variable('causal_mask', [num_agents, vector_state_dim + action_dim], tf.float32,
+        #                                      initializer=tf.compat.v1.ones_initializer()) # double check trainable
+
+
         # define inputs
         inputs_for_reward = tf.keras.layers.Input(vector_state_dim + action_dim, name="inputs_for_reward", dtype=tf.float32)
     
@@ -138,7 +141,8 @@ class RewardModel(RecurrentTFModelV2):
         # inputs_for_reward: [batch_size, vector_state_dim + action_dim] -> [batch_size, 1, vector_state_dim + action_dim]
         # causal_mask: [num_agents, vector_state_dim + action_dim] -> [1, num_agents, vector_state_dim + action_dim]
         # masked_input: [batch_size, num_agents, vector_state_dim + action_dim]
-        masked_input = tf.expand_dims(inputs_for_reward, axis=1) * tf.expand_dims(causal_mask, axis=0)
+        causal_mask_layer = CAUSAL_MASK(input_dim=vector_state_dim + action_dim, num_agent=num_agents)
+        masked_input = causal_mask_layer(inputs_for_reward)
         # masked_input = tf.reshape(inputs_for_reward, [-1, 1, inputs_for_reward.shape[1]]) * tf.reshape(causal_mask, [1, -1, inputs_for_reward.shape[1]])
         predicted_reward = self.get_reward_predictor(masked_input)
         predicted_reward = tf.squeeze(predicted_reward, axis=-1)
@@ -236,10 +240,10 @@ class RewardModel(RecurrentTFModelV2):
         # Build Actor-critic FC layers
         actor_critic_fc = build_fc_layers(model_config, conv_out, "policy")
 
-        # Build MOA layers
+        # Build reward layers
         reward_fc = build_fc_layers(model_config, conv_out, "reward")
 
-        return tf.keras.Model(inputs, [actor_critic_fc, moa_fc], name="REWARD_Encoder_Model")
+        return tf.keras.Model(inputs, [actor_critic_fc, reward_fc], name="REWARD_Encoder_Model")
 
     @override(ModelV2)
     def forward(self, input_dict, state, seq_lens):
@@ -304,11 +308,11 @@ class RewardModel(RecurrentTFModelV2):
         all_actions = tf.concat([agent_action, other_actions], axis=-1, name="concat_true_actions")
         self._true_one_hot_actions = self._reshaped_one_hot_actions(all_actions, "forward_one_hot")
         total_sa_pass_dict = {
-            "curr_total_obs": prev_moa_trunk,
+            "curr_total_obs": prev_reward_trunk,
             "prev_total_actions": self._true_one_hot_actions,
         }
 
-        # Compute the true reward prediction, used to determine the MOA loss.
+        # Compute the true reward prediction, used to determine the reward loss.
         self._reward_pred, output_h2, output_c2 = self.reward_model.forward_rnn(
             total_sa_pass_dict, [h2, c2], seq_lens
         ) # check reward_model_lstm
@@ -325,14 +329,14 @@ class RewardModel(RecurrentTFModelV2):
             one_hot_actions = self._reshaped_one_hot_actions(
                 actions_with_counterfactual, "actions_with_counterfactual_one_hot"
             )
-            pass_dict = {"curr_obs": prev_moa_trunk, "prev_total_actions": one_hot_actions}
+            pass_dict = {"curr_obs": prev_reward_trunk, "prev_total_actions": one_hot_actions}
             counterfactual_pred, _, _ = self.reward_model.forward_rnn(pass_dict, [h2, c2], seq_lens)
             counterfactual_preds.append(tf.expand_dims(counterfactual_pred, axis=-2))
         self._counterfactuals = tf.concat(
             counterfactual_preds, axis=-2, name="concat_counterfactuals"
         )
 
-        # TODO(@evinitsky) move this into ppo_moa by using restore_original_dimensions()
+        # TODO(@evinitsky) move this into ppo_reward by using restore_original_dimensions()
         self._other_agent_actions = input_dict["other_agent_actions"]
         self._visibility = input_dict["visible_agents"]
 
@@ -464,4 +468,4 @@ class RewardModel(RecurrentTFModelV2):
 
     @override(ModelV2)
     def get_initial_state(self):
-        return self.actions_model.get_initial_state() + self.moa_model.get_initial_state()
+        return self.actions_model.get_initial_state() + self.reward_model.get_initial_state()
