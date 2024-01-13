@@ -108,6 +108,7 @@ class MapEnv(MultiAgentEnv):
         # self.reward_model = torch.load(self.saved_model_path)
         # self.reward_model = torch.load(self.saved_model_path)
         # self.reward_model.eval()
+        self.prev_vector_state = np.array([1, 7, 1, 1, 7, 6, 3, 3, 5, 5, 6, 2, 1, 2, 3]).astype(np.int32)
         self.store_trajs = store_trajs
         self.count = 0
         self.num_agents = num_agents
@@ -188,6 +189,12 @@ class MapEnv(MultiAgentEnv):
                     high=5,
                     shape=(1,),
                     dtype=np.uint8,
+                ),
+                "prev_vector_state": Box(
+                    low=0,
+                    high=100,
+                    shape=(15,), #TODO: settle for coin3, need to change that later
+                    dtype=np.int32,
                 ),
                 "vector_state": Box(
                     low=0,
@@ -346,6 +353,7 @@ class MapEnv(MultiAgentEnv):
                     "visible_agents": visible_agents,
                     "prev_visible_agents": agent.prev_visible_agents,
                     "agent_id": [agent.agent_id[-1]], 
+                    "prev_vector_state": self.prev_vector_state,
                     "vector_state": vector_state,
                 }
                 agent.prev_visible_agents = visible_agents
@@ -395,6 +403,7 @@ class MapEnv(MultiAgentEnv):
             rewards = temp_rewards
 
         dones["__all__"] = np.any(list(dones.values()))
+        self.prev_vector_state = vector_state
         return observations, rewards, dones, infos
     
     def get_obs_action(self, positions, apple_pos, apple_type, store_actions):
@@ -442,6 +451,7 @@ class MapEnv(MultiAgentEnv):
                     "visible_agents": visible_agents,
                     "prev_visible_agents": visible_agents,
                     "agent_id": [agent.agent_id[-1]],
+                    "prev_vector_state": init_vector_state,
                     "vector_state": init_vector_state,
                 }
                 agent.prev_visible_agents = visible_agents

@@ -249,7 +249,7 @@ class RewardModel(RecurrentTFModelV2):
         return self._model_out, [output_h1, output_c1]
     
     def compute_reward(self, input_dict):
-        states, actions = input_dict['obs']['vector_state'], input_dict['prev_actions']
+        states, actions = input_dict['obs']['prev_vector_state'], input_dict['prev_actions']
         state_action = tf.concat([states, actions], axis=1)
         return self.reward_model(state_action)
 
