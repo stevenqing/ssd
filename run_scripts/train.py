@@ -56,7 +56,9 @@ def build_experiment_config_dict(args):
     elif args.model == "reward":
         # from reward_prediction_torch import CausalModel
         # ModelCatalog.register_custom_model(model_name, CausalModel)
-        ModelCatalog.register_custom_model(model_name, BaselineModel)
+        # ModelCatalog.register_custom_model(model_name, BaselineModel)
+        from models.reward_model import RewardModel
+        ModelCatalog.register_custom_model(model_name, RewardModel)
     elif args.model == "baseline":
         ModelCatalog.register_custom_model(model_name, BaselineModel)
     
@@ -64,6 +66,8 @@ def build_experiment_config_dict(args):
     def gen_policy():
         return None, obs_space, act_space, {"custom_model": model_name}
 
+
+    # TODO check if the same policy can be used for all agents
     # Create 1 distinct policy per agent
     policy_graphs = {}
     for i in range(args.num_agents):
@@ -159,7 +163,22 @@ def build_experiment_config_dict(args):
                 "scm_forward_vs_inverse_loss_weight": args.scm_forward_vs_inverse_loss_weight,
             }
         )
-
+    
+    # TODO check 
+    if args.model == "reward":
+        config["model"]["custom_options"].update(
+            {
+                "reg_loss_weight": args.moa_loss_weight,
+                "conterfactual_reward_clip": 10,
+                "conterfactual_reward_weight": args.influence_reward_weight,
+                "conterfactual_reward_schedule_steps": args.influence_reward_schedule_steps,
+                "conterfactual_reward_schedule_weights": args.influence_reward_schedule_weights,
+                "return_agent_actions": True,
+                # "conterfactual_divergence_measure": "kl",
+                "train_reward_only_when_visible": True,
+                "reward_only_when_visible": True,
+            }
+        )
     if args.tune_hparams:
         tune_dict = create_hparam_tune_dict(model=args.model, is_config=True)
         update_nested_dict(config, tune_dict)
@@ -218,6 +237,7 @@ def get_trainer(args, config):
             # trainer = build_a3c_scm_trainer(config)
             raise NotImplementedError
         if args.algorithm == "PPO":
+            # TODO: modify config
             trainer = build_ppo_reward_trainer(config)
         if args.algorithm == "IMPALA":
             # trainer = build_impala_scm_trainer(config)

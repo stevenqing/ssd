@@ -26,7 +26,7 @@ class RewardLSTM(RecurrentTFModelV2):
         :param name: The model name.
         :param cell_size: The amount of LSTM units.
         """
-        super(MoaLSTM, self).__init__(obs_space, action_space, num_outputs, model_config, name)
+        super(RewardLSTM, self).__init__(obs_space, action_space, num_outputs, model_config, name)
 
         self.cell_size = cell_size
 

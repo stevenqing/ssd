@@ -23,11 +23,11 @@ from ray.rllib.policy.tf_policy_template import build_tf_policy
 from ray.rllib.utils import try_import_tf
 
 # introduce the trained model
-import torch
-save_path = '/scratch/prj/inf_du/shuqing/reward_model.pth'
-global reward_model
-reward_model = torch.load(save_path)
-reward_model.eval()
+# import torch
+# save_path = '/scratch/prj/inf_du/shuqing/reward_model.pth'
+# global reward_model
+# reward_model = torch.load(save_path)
+# reward_model.eval()
 
 # TODO 统一reward model的接口
 from algorithms.common_funcs_reward_model import (
@@ -56,8 +56,8 @@ def loss_with_reward_model(policy, model, dist_class, train_batch):
     logits, state = model.from_batch(train_batch)
     action_dist = dist_class(logits, model)
 
-    # reward_loss = setup_reward_loss(logits, policy, train_batch)
-    # policy.reward_loss = reward_loss.total_loss
+    reward_loss = setup_reward_model_loss(train_batch, model)
+    policy.reward_loss, policy.reg_loss = reward_loss.reward_loss, reward_loss.reg_loss
 
     if state:
         max_seq_len = tf.reduce_max(train_batch["seq_lens"])
@@ -99,6 +99,8 @@ def extra_reward_fetches(policy):
     return ppo_fetches
 
 
+
+
 def extra_reward_model_stats(policy, train_batch):
     """
     Add stats that are logged in progress.csv
@@ -108,7 +110,8 @@ def extra_reward_model_stats(policy, train_batch):
     base_stats = {
         **base_stats,
         "var_gnorm": tf.global_norm([x for x in policy.model.trainable_variables()]),
-        # "moa_loss": policy.reward_model_loss,
+        "reward_loss": policy.reward_loss,
+        "reg_loss": policy.reg_loss,
     }
 
     return base_stats
@@ -120,7 +123,8 @@ def postprocess_ppo_reward(policy, sample_batch, other_agent_batches=None, episo
     Then, add the policy logits, VF preds, and advantages to the trajectory.
     :return: Updated trajectory (batch)
     """
-    batch = reward_postprocess_trajectory(policy, sample_batch, reward_model=reward_model)
+    # TODO: double check, remove the reward model now
+    batch = reward_postprocess_trajectory(policy, sample_batch, reward_model=None)
     batch = postprocess_ppo_gae(policy, batch)
     return batch
 
@@ -153,7 +157,7 @@ def build_ppo_reward_trainer(reward_config):
     """
     tf.keras.backend.set_floatx("float32")
 
-    trainer_name = "MOAPPOTrainer"
+    trainer_name = "REWARDPPOTrainer"
 
     reward_ppo_policy = build_tf_policy(
         name="REWARDPPOTFPolicy",

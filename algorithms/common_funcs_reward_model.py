@@ -21,7 +21,7 @@ COUNTERFACTUAL_ACTIONS = "counterfactual_actions"
 POLICY_SCOPE = "func"
 
 # add by ReedZyd
-PREDICTED_REWARD = "predicted_reward"
+CAUSAL_REWARD = "causal_reward"
 
 class InfluenceScheduleMixIn(object):
     def __init__(self, config):
@@ -87,15 +87,16 @@ class REWARDLoss(object):
         )
 
         # Zero out the loss if the other agent isn't visible to this one.
+        '''
         if others_visibility is not None:
             # others_visibility[n] contains agents visible at time n. We start at n=1,
             # so the first and last values have to be removed to maintain equal array size.
             others_visibility = others_visibility[1:-1, :]
             self.ce_per_entry *= tf.cast(others_visibility, tf.float32)
-
+        '''
         # Flatten loss to one value for the entire batch
         self.total_loss = tf.reduce_mean(self.ce_per_entry) * loss_weight
-        tf.Print(self.total_loss, [self.total_loss], message="MOA CE loss")
+        tf.Print(self.total_loss, [self.total_loss], message="REWARD CE loss")
 
 
 def setup_reward_model_loss(logits, policy, train_batch):
@@ -109,6 +110,7 @@ def setup_reward_model_loss(logits, policy, train_batch):
         others_visibility = train_batch[VISIBILITY]
     else:
         others_visibility = None
+    # raise NotImplementedError
     reward_model_loss = REWARDLoss(
         reward_preds,
         true_rewards,
@@ -137,17 +139,16 @@ def weigh_and_add_influence_reward(policy, sample_batch, reward_model=None, acti
     # first define the reward model
     # then set it to eval model 
     # use it to predict the counterfactual team reward
-    
+    '''
+    #TODO: change -15 to other parameter with self, in order to suit for the cleanup and harvest env   
     vector_state = sample_batch["obs"][:, -15:]
     agent_id = sample_batch["obs"][:,-16]
     # Testing process will no includ agent_index as key of the sample_batch
     if "agent_index" in sample_batch.keys():
         agent_id = sample_batch["agent_index"]
-        # print(sample_batch["agent_index"])
     # 625 is the curr_obs shape, which equals to 15*15*3
     other_action = sample_batch["obs"][0][625:627]
     
-
     # Calculate counterfactual actions
     cf_action_list = []
     range_action = np.arange(0,action_range,1)
@@ -177,15 +178,20 @@ def weigh_and_add_influence_reward(policy, sample_batch, reward_model=None, acti
     
     # Using reward model to predict the cf rewards
     predicted_causal_reward = 0
-    for batch_vector in cf_vector_obs_action:
-        batch_vector = batch_vector.to(dtype=torch.float)
-        predicted_causal_reward += reward_model(batch_vector)
-    predicted_causal_reward /= len(cf_vector_obs_action)
-    predicted_causal_reward = torch.sum(predicted_causal_reward).detach().numpy()
-    
+    if reward_model is not None:
+        for batch_vector in cf_vector_obs_action:
+            batch_vector = batch_vector.to(dtype=torch.float)
+            predicted_causal_reward += reward_model(batch_vector)
+        predicted_causal_reward /= len(cf_vector_obs_action)
+        predicted_causal_reward = torch.sum(predicted_causal_reward).detach().numpy()
+    '''
+    #TODO: Not sure how to generate that
+    causal_reward = np.concatenate((sample_batch[CAUSAL_REWARD][1:], [0]))
+
     # Adding predicted causal reward into sample_batch, Not sure it's right, maybe is the model problem. All comes out weird results.
+    sample_batch[CAUSAL_REWARD] = causal_reward
     sample_batch["extrinsic_reward"] = sample_batch["rewards"]
-    sample_batch["rewards"] = sample_batch["rewards"] + predicted_causal_reward
+    sample_batch["rewards"] = sample_batch["rewards"] + causal_reward
     return sample_batch
             
 def agent_name_to_idx(agent_num, self_id):
@@ -253,9 +259,11 @@ def reward_fetches(policy):
         # propagate agent actions through the reward
         # TODO(@evinitsky) remove this once we figure out how to split the obs
         ACTION_LOGITS: policy.model.action_logits(),
-        # OTHERS_ACTIONS: policy.model.other_agent_actions(), 
-        # VISIBILITY: policy.model.visibility(),
-        # REWARD_PREDS: policy.model.predicted_rewards(), # check policy.model.predicted_actions()
+        OTHERS_ACTIONS: policy.model.other_agent_actions(), 
+        #TODO: check the visibility range
+        VISIBILITY: policy.model.visibility(),
+        CAUSAL_REWARD: policy.model.causal_reward(),
+        REWARD_PREDS: policy.model.predicted_rewards(), # check policy.model.predicted_actions()
     }
 
 
@@ -319,5 +327,5 @@ def get_reward_mixins():
 
 def validate_reward_config(config):
     config = config["model"]["custom_options"]
-    if config["influence_reward_weight"] < 0:
-        raise ValueError("Influence reward weight must be >= 0.")
+    if config["conterfactual_reward_weight"] < 0:
+        raise ValueError("Conterfactual reward weight must be >= 0.")

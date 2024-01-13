@@ -8,37 +8,49 @@ from ray.rllib.utils.annotations import override
 
 from models.actor_critic_lstm import ActorCriticLSTM
 from models.common_layers import build_conv_layers, build_fc_layers
-from models.moa_lstm import MoaLSTM
-
+from models.reward_lstm import rewardLSTM
+from models.causal_reward_model import MaskActivation, CausalModel 
 tf = try_import_tf()
+from ray.rllib.models.tf.misc import normc_initializer
 
+class CAUSAL_MASK(tf.keras.layers.Layer):
+    def __init__(self, input_dim=32,num_agent=32):
+        super(CAUSAL_MASK, self).__init__()
+        w_init = tf.random_normal_initializer()
+        self.w = tf.Variable(
+            initial_value=w_init(shape=(num_agent, input_dim), dtype="float32"),
+            trainable=True,
+        )
+    def call(self, inputs, sh=0.1):
+        mask = tf.where(tf.abs(self.w) > sh, self.w, tf.zeros_like(self.w))
+        return tf.expand_dims(inputs, axis=1) * tf.expand_dims(mask, axis=0)
 
-class REWARDModel(RecurrentTFModelV2):
+class RewardModel(RecurrentTFModelV2):
     def __init__(self, obs_space, action_space, num_outputs, model_config, name):
         """
         A model with convolutional layers connected to two distinct sequences of fully connected
         layers. These then each connect to their own respective LSTM, one for an actor-critic policy,
-        and one for modeling the actions of other agents (MOA).
+        and one for modeling the actions of other agents (reward).
         :param obs_space: The agent's observation space.
         :param action_space: The agent's action space.
         :param num_outputs: The amount of actions available to the agent.
         :param model_config: The model config dict. Contains settings dictating layer sizes/amounts,
-        amount of other agents, divergence measure used for social influence, and other experiment
+        amount of other agents, divergence measure used for social conterfactual, and other experiment
         parameters.
         :param name: The model name.
         """
-        super(MOAModel, self).__init__(obs_space, action_space, num_outputs, model_config, name)
+        super(RewardModel, self).__init__(obs_space, action_space, num_outputs, model_config, name)
 
-        self.obs_space = obs_space
+        self.obs_space = obs_space # (697, )
 
         # The inputs of the shared trunk. We will concatenate the observation space with
         # shared info about the visibility of agents.
         # Currently we assume all the agents have equally sized action spaces.
         self.num_outputs = num_outputs
         self.num_other_agents = model_config["custom_options"]["num_other_agents"]
-        self.influence_divergence_measure = model_config["custom_options"][
-            "influence_divergence_measure"
-        ]
+        # self.conterfactual_divergence_measure = model_config["custom_options"][
+        #     "conterfactual_divergence_measure"
+        # ]
 
         # Declare variables that will later be used as loss fetches
         # It's
@@ -48,15 +60,22 @@ class REWARDModel(RecurrentTFModelV2):
         self._counterfactuals = None
         self._other_agent_actions = None
         self._visibility = None
-        self._social_influence_reward = None
+        self._social_conterfactual_reward = None
         self._true_one_hot_actions = None
 
+<<<<<<< HEAD
         self.moa_encoder_model = self.create_moa_encoder_model(obs_space, model_config)
         self.register_variables(self.moa_encoder_model.variables)
         self.moa_encoder_model.summary()
 
         # now output two heads, one for action selection and one for the prediction of other agents
         inner_obs_space = self.moa_encoder_model.output_shape[0][-1]
+=======
+        self.policy_model, self.reward_model = self.create_model(obs_space, model_config)
+        self.register_variables(self.policy_model.variables + self.reward_model.variables)
+
+        inner_obs_space = self.policy_model.output_shape[0]
+>>>>>>> b82fe6df9bcfbc18347cc1b34bbaa66af7a763c4
 
         cell_size = model_config["custom_options"].get("cell_size")
         self.actions_model = ActorCriticLSTM(
@@ -70,14 +89,16 @@ class REWARDModel(RecurrentTFModelV2):
 
         # predicts the actions of all the agents besides itself
         # create a new input reader per worker
-        self.train_moa_only_when_visible = model_config["custom_options"][
-            "train_moa_only_when_visible"
+        self.train_reward_only_when_visible = model_config["custom_options"][
+            "train_reward_only_when_visible"
         ]
-        self.influence_only_when_visible = model_config["custom_options"][
-            "influence_only_when_visible"
+        self.conterfactual_only_when_visible = model_config["custom_options"][
+            "conterfactual_only_when_visible"
         ]
-        self.moa_weight = model_config["custom_options"]["moa_loss_weight"]
+        self.reward_weight = model_config["custom_options"]["reward_loss_weight"]
 
+
+<<<<<<< HEAD
         self.moa_model = MoaLSTM(
             inner_obs_space,
             action_space,
@@ -93,13 +114,30 @@ class REWARDModel(RecurrentTFModelV2):
 
     @staticmethod
     def create_moa_encoder_model(obs_space, model_config):
+=======
+        self.register_variables(self.actions_model.rnn_model.variables)
+        self.register_variables(self.reward_model.variables)
+        self.actions_model.rnn_model.summary()
+        self.reward_model.summary()
+
+    def create_model(self, obs_space, model_config):
+>>>>>>> b82fe6df9bcfbc18347cc1b34bbaa66af7a763c4
         """
-        Creates the convolutional part of the MOA model.
+        Creates the convolutional part of the reward model.
         Also casts the input uint8 observations to float32 and normalizes them to the range [0,1].
         :param obs_space: The agent's observation space.
         :param model_config: The config dict containing parameters for the convolution type/shape.
         :return: A new Model object containing the convolution.
         """
+        original_obs_dims = obs_space.original_space.spaces["curr_obs"].shape
+        inputs = tf.keras.layers.Input(original_obs_dims, name="observations", dtype=tf.uint8)
+        # agent_id_shape = obs_space.original_space["agent_id"].shape
+        # (num_other_agents, action_range)
+        other_action_shape = obs_space.original_space["other_agent_actions"].shape 
+        # actual_action_shape = obs_space.original_space["actions"].shape
+
+        # ==================== RGB encoder for policy ==================== #
+        # RGB
         original_obs_dims = obs_space.original_space.spaces["curr_obs"].shape
         inputs = tf.keras.layers.Input(original_obs_dims, name="observations", dtype=tf.uint8)
 
@@ -113,10 +151,66 @@ class REWARDModel(RecurrentTFModelV2):
         # Build Actor-critic FC layers
         actor_critic_fc = build_fc_layers(model_config, conv_out, "policy")
 
-        # Build MOA layers
-        moa_fc = build_fc_layers(model_config, conv_out, "moa")
+        # ==================== vector encoder for reward model ==================== #
+        # vector_state
+        # joint obs space
+        vector_state_dim = obs_space.original_space.spaces["vector_state"].shape[0]
+        num_agents = action_dim = other_action_shape[0] + 1
 
-        return tf.keras.Model(inputs, [actor_critic_fc, moa_fc], name="MOA_Encoder_Model")
+        # causal mask 
+        # causal_mask = tf.Variable(tf.ones([num_agents, vector_state_dim + action_dim]), trainable=True, name='causal_mask')
+        # causal_mask =  tf.get_variable('causal_mask', [num_agents, vector_state_dim + action_dim], tf.float32,
+        #                                      initializer=tf.compat.v1.ones_initializer()) # double check trainable
+
+
+        # define inputs
+        inputs_for_reward = tf.keras.layers.Input(vector_state_dim + action_dim, name="inputs_for_reward", dtype=tf.float32)
+    
+        # causal mask times input 
+        # inputs_for_reward: [batch_size, vector_state_dim + action_dim] -> [batch_size, 1, vector_state_dim + action_dim]
+        # causal_mask: [num_agents, vector_state_dim + action_dim] -> [1, num_agents, vector_state_dim + action_dim]
+        # masked_input: [batch_size, num_agents, vector_state_dim + action_dim]
+        causal_mask_layer = CAUSAL_MASK(input_dim=vector_state_dim + action_dim, num_agent=num_agents)
+        masked_input = causal_mask_layer(inputs_for_reward)
+        # masked_input = tf.reshape(inputs_for_reward, [-1, 1, inputs_for_reward.shape[1]]) * tf.reshape(causal_mask, [1, -1, inputs_for_reward.shape[1]])
+        predicted_reward = self.get_reward_predictor(masked_input)
+        predicted_reward = tf.squeeze(predicted_reward, axis=-1)
+
+        return tf.keras.Model(inputs, [actor_critic_fc], name="Policy_Model"), tf.keras.Model(inputs_for_reward, predicted_reward, name="Reward_Predictor_Model")
+
+    @staticmethod
+    def get_reward_predictor(masked_input=None, emb_size=64):
+        # layer 1
+        last_layer = tf.keras.layers.Dense(
+                emb_size,
+                name="fc_{}_{}".format(1, 'reward'),
+                activation='relu',
+                kernel_initializer=normc_initializer(1.0),
+            )(masked_input)
+        # layer 2
+        last_layer = tf.keras.layers.Dense(
+                    units=emb_size * 2, # output size for each agent's reward
+                    name="fc_{}_{}".format(2, 'reward'),
+                    activation='relu', # double check activation function, -4 to 4
+                    kernel_initializer=normc_initializer(1.0),
+                )(last_layer)
+        # layer 3
+        last_layer = tf.keras.layers.Dense(
+                    units=emb_size, # output size for each agent's reward
+                    name="fc_{}_{}".format(3, 'reward'),
+                    activation='relu', # double check activation function, -4 to 4
+                    kernel_initializer=normc_initializer(1.0),
+                )(last_layer)
+        # layer 4
+        last_layer = tf.keras.layers.Dense(
+                    units=1, # output size for each agent's reward
+                    name="fc_{}_{}".format(4, 'reward'),
+                    activation=None, # double check activation function, -4 to 4
+                    kernel_initializer=normc_initializer(1.0),
+                )(last_layer)
+        return last_layer
+
+
 
     @override(ModelV2)
     def forward(self, input_dict, state, seq_lens):
@@ -129,176 +223,52 @@ class REWARDModel(RecurrentTFModelV2):
         :return: The agent's own action logits and the new model state.
         """
         # Evaluate non-lstm layers
-        actor_critic_fc_output, moa_fc_output = self.moa_encoder_model(input_dict["obs"]["curr_obs"])
+        actor_critic_fc_output, reward_fc_output = self.reward_encoder_model(input_dict)
+        # self.compute_causal_reward(input_dict, state[4], counterfactuals)
+        #TODO: Not sure we should put the actor_critic_fc_output in here, maybe should be action_logits        
+        return actor_critic_fc_output, reward_fc_output
 
-        rnn_input_dict = {
-            "ac_trunk": actor_critic_fc_output,
-            "prev_moa_trunk": state[5],
-            "other_agent_actions": input_dict["obs"]["other_agent_actions"],
-            "visible_agents": input_dict["obs"]["visible_agents"],
-            "prev_actions": input_dict["prev_actions"],
-        }
-
-        # Add time dimension to rnn inputs
-        for k, v in rnn_input_dict.items():
-            rnn_input_dict[k] = add_time_dimension(v, seq_lens)
-
-        output, new_state = self.forward_rnn(rnn_input_dict, state, seq_lens)
-        action_logits = tf.reshape(output, [-1, self.num_outputs])
-        counterfactuals = tf.reshape(
-            self._counterfactuals,
-            [-1, self._counterfactuals.shape[-2], self._counterfactuals.shape[-1]],
-        )
-        new_state.extend([action_logits, moa_fc_output])
-
-        self.compute_influence_reward(input_dict, state[4], counterfactuals)
-
-        return action_logits, new_state
-
-    def forward_rnn(self, input_dict, state, seq_lens):
+    def compute_causal_reward(self, input_dict,  counterfactual_logits):
         """
-        Forward pass through the REWARD LSTMs.
-        Implicitly assigns the value function output to self_value_out, and does not return this.
-        :param input_dict: The input tensors.(obs of all agents, actions for all agents)
-        :param state: The model state.
-        :param seq_lens: LSTM sequence lengths.
-        :return: The policy logits and new LSTM states.
-        """
-        # Evaluate the actor-critic model
-        pass_dict = {"curr_obs": input_dict["ac_trunk"]}
-        h1, c1, h2, c2, *_ = state
-        (
-            self._model_out,
-            self._value_out,
-            output_h1,
-            output_c1,
-        ) = self.actions_model.forward_rnn(pass_dict, [h1, c1], seq_lens)
-
-        # Evaluate the REWARD MODEL, and generate reward predictions.
-        prev_reward_trunk = input_dict["prev_reward_trunk"]
-        other_obs = input_dict["other_agent_observations"]
-        agent_action = tf.expand_dims(input_dict["prev_actions"], axis=-1)
-        all_actions = tf.concat([agent_action, other_actions], axis=-1, name="concat_true_actions")
-        self._true_one_hot_actions = self._reshaped_one_hot_actions(all_actions, "forward_one_hot")
-        total_sa_pass_dict = {
-            "curr_total_obs": prev_moa_trunk,
-            "prev_total_actions": self._true_one_hot_actions,
-        }
-
-        # Compute the true reward prediction, used to determine the MOA loss.
-        self._reward_pred, output_h2, output_c2 = self.reward_model.forward_rnn(
-            total_sa_pass_dict, [h2, c2], seq_lens
-        ) # check reward_model_lstm
-
-        # Make counterfactual predictions on rewards, used for computing the influence reward.
-        counterfactual_preds = []
-        for i in range(self.num_outputs):
-            # Shape of other_actions is (num_envs, ?, num_other_agents)
-            # To add the counterfactual action to it, other_actions can be padded with the constant
-            # action value.
-            rewards_with_counterfactual = tf.pad(
-                other_actions, paddings=[[0, 0], [0, 0], [1, 0]], mode="CONSTANT", constant_values=i
-            )
-            one_hot_actions = self._reshaped_one_hot_actions(
-                actions_with_counterfactual, "actions_with_counterfactual_one_hot"
-            )
-            pass_dict = {"curr_obs": prev_moa_trunk, "prev_total_actions": one_hot_actions}
-            counterfactual_pred, _, _ = self.reward_model.forward_rnn(pass_dict, [h2, c2], seq_lens)
-            counterfactual_preds.append(tf.expand_dims(counterfactual_pred, axis=-2))
-        self._counterfactuals = tf.concat(
-            counterfactual_preds, axis=-2, name="concat_counterfactuals"
-        )
-
-        # TODO(@evinitsky) move this into ppo_moa by using restore_original_dimensions()
-        self._other_agent_actions = input_dict["other_agent_actions"]
-        self._visibility = input_dict["visible_agents"]
-
-        return self._model_out, [output_h1, output_c1, output_h2, output_c2]
-
-    def compute_influence_reward(self, input_dict, prev_action_logits, counterfactual_logits):
-        """
-        Compute influence of this agent on other agents.
+        Compute causal_reward.
         :param input_dict: The model input tensors.
-        :param prev_action_logits: Logits for the agent's own policy/actions at t-1
-        :param counterfactual_logits: The counterfactual action logits for actions made by other
-        agents at t.
         """
-        # Probability of the next action for all other agents. Shape is [B, N, A].
-        # This is the predicted probability given the actions that we DID take.
-        # extract out the probability under the actions we actually did take
+        
+        vector_state = input_dict["obs"]["vector_state"]
+        agent_id = input_dict["obs"]["agent_id"]
+        other_action = input_dict["obs"]["other_agent_actions"]
+        actual_action = input_dict["obs"]["actions"]
 
-        # We don't have the current action yet, so the reward for the previous step is calculated.
-        # This is corrected for in the function weigh_and_add_influence_reward
-        prev_agent_actions = tf.cast(tf.reshape(input_dict["prev_actions"], [-1, 1]), tf.int32)
-        # Use the agent's actions as indices to select the predicted logits of other agents for
-        # actions that the agent did take, discard the rest.
-        predicted_logits = tf.gather_nd(
-            params=counterfactual_logits, indices=prev_agent_actions, batch_dims=1
-        )
-
-        predicted_logits = tf.reshape(
-            predicted_logits, [-1, self.num_other_agents, self.num_outputs]
-        )
-        predicted_logits = tf.nn.softmax(predicted_logits)
-        predicted_logits = predicted_logits / tf.reduce_sum(
-            predicted_logits, axis=-1, keepdims=True
-        )  # reduce numerical inaccuracies
-
-        # Get marginal predictions where effect of self is marginalized out
-        marginal_logits = self.marginalize_predictions_over_own_actions(
-            prev_action_logits, counterfactual_logits
-        )  # [B, Num agents, Num actions]
-
-        # Compute influence per agent/step ([B, N]) using different metrics
-        if self.influence_divergence_measure == "kl":
-            influence_reward = self.kl_div(predicted_logits, marginal_logits)
-        elif self.influence_divergence_measure == "jsd":
-            mean_probs = 0.5 * (predicted_logits + marginal_logits)
-            influence_reward = 0.5 * self.kl_div(predicted_logits, mean_probs) + 0.5 * self.kl_div(
-                marginal_logits, mean_probs
-            )
+        
+        cf_action_list = []
+        range_action = np.arange(0,action_range,1)
+        if len(other_action) < 3:
+            for i in range_action:
+                for j in range_action:
+                    cf_action_list.append([i,j])
         else:
-            sys.exit("Please specify an influence divergence measure from [kl, jsd]")
+        #TODO:to be implemented for cleanup or harvest(with larger action space and more agents; maybe use sampling method)
+             pass 
+	
+        # Expand to (cf_dim, batch_size, action_number)
+        B = np.shape(vector_state)[0]
+        C = np.shape(cf_action_list)[0]	
 
-        # Zero out influence for steps where the other agent isn't visible.
-        if self.influence_only_when_visible:
-            visibility = tf.cast(input_dict["obs"]["prev_visible_agents"], tf.float32)
-            influence_reward *= visibility
-        influence_reward = tf.reduce_sum(influence_reward, axis=-1)
-        self._social_influence_reward = influence_reward
+        cf_action_list = tf.unsqueeze(tf.convert_to_tensor(cf_action_list),dim=1)
+        cf_action_list = tf.repeat(cf_action_list, repeats=B, axis=1)
 
-    def marginalize_predictions_over_own_actions(self, prev_action_logits, counterfactual_logits):
-        """
-        Calculates marginal policies for all other agents.
-        :param prev_action_logits: The agent's own policy logits at time t-1 .
-        :param counterfactual_logits: The counterfactual action predictions made at time t-1 for
-        other agents' actions at t.
-        :return: The marginal policies for all other agents.
-        """
-        # Probability of each action in original trajectory
-        logits = tf.nn.softmax(prev_action_logits)
+        vector_state = tf.unsqueeze(tf.convert_to_tensor(vector_state),dim=0)
+        vector_state = tf.repeat(vector_state, repeats=C, axis=0)
 
-        # Normalize to reduce numerical inaccuracies
-        logits = logits / tf.reduce_sum(logits, axis=-1, keepdims=True)
-
-        # Indexing is currently [B, Agent actions, num_other_agents * other_agent_logits]
-        # Change to [B, Agent actions, num other agents, other agent logits]
-        counterfactual_logits = tf.reshape(
-            counterfactual_logits,
-            [-1, self.num_outputs, self.num_other_agents, self.num_outputs],
-        )
-
-        counterfactual_logits = tf.nn.softmax(counterfactual_logits)
-        # Change shape to broadcast probability of each action over counterfactual actions
-        logits = tf.reshape(logits, [-1, self.num_outputs, 1, 1])
-        normalized_counterfactual_logits = logits * counterfactual_logits
-        # Remove counterfactual action dimension
-        marginal_probs = tf.reduce_sum(normalized_counterfactual_logits, axis=-3)
-
-        # Normalize to reduce numerical inaccuracies
-        marginal_probs = marginal_probs / tf.reduce_sum(marginal_probs, axis=-1, keepdims=True)
-
-        return marginal_probs
+        actual_action = tf.unsqueeze(tf.convert_to_tensor(actual_action),dim=0)
+        actual_action = tf.reshape(tf.repeat(actual_action, repeats=C, axis=0), (C,B,-1))
+        
+        cf_action_total = tf.concat([cf_action_list[:,:,:agent_id[0]], actual_action, cf_action_list[:,:,agent_id[0]:]],axis=2)
+        cf_vector_obs_action = tf.concat([vector_state,cf_action_total],axis=2)
+        #TODO: Not sure how to implement the causal reward here
+        causal_reward = REWARDModel()
+        causal_reward = tf.reduce_sum(causal_reward, axis=-1)
+        self._causal_reward = causal_reward
 
     @staticmethod
     def kl_div(x, y):
@@ -353,8 +323,8 @@ class REWARDModel(RecurrentTFModelV2):
     def action_logits(self):
         return self._model_out
 
-    def social_influence_reward(self):
-        return self._social_influence_reward
+    def causal_reward(self):
+        return self._causal_reward
 
     def predicted_rewards(self):
         """:returns Predicted rewards. NB: Since the agent's own true action is not known when
@@ -372,4 +342,4 @@ class REWARDModel(RecurrentTFModelV2):
 
     @override(ModelV2)
     def get_initial_state(self):
-        return self.actions_model.get_initial_state() + self.moa_model.get_initial_state()
+        return self.actions_model.get_initial_state() + self.reward_model.get_initial_state()
