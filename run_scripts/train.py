@@ -168,7 +168,8 @@ def build_experiment_config_dict(args):
     if args.model == "reward":
         config["model"]["custom_options"].update(
             {
-                "reg_loss_weight": args.moa_loss_weight,
+                "reward_loss_weight": args.reward_loss_weight,
+                "reg_loss_weight": args.reg_loss_weight,
                 "conterfactual_reward_clip": 10,
                 "conterfactual_reward_weight": args.influence_reward_weight,
                 "conterfactual_reward_schedule_steps": args.influence_reward_schedule_steps,

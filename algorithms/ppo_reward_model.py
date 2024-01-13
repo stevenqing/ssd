@@ -11,7 +11,6 @@ from ray.rllib.agents.ppo.ppo_tf_policy import (
     clip_gradients,
     kl_and_loss_stats,
     postprocess_ppo_gae,
-    ppo_surrogate_loss,
     setup_config,
     vf_preds_fetches,
 )
@@ -32,7 +31,7 @@ from ray.rllib.utils import try_import_tf
 # TODO 统一reward model的接口
 from algorithms.common_funcs_reward_model import (
     EXTRINSIC_REWARD,
-    PREDICTED_REWARD,
+    CONTERFACTUAL_REWARD,
     REWARDResetConfigMixin,
     build_model,
     get_reward_mixins,
@@ -56,7 +55,7 @@ def loss_with_reward_model(policy, model, dist_class, train_batch):
     logits, state = model.from_batch(train_batch)
     action_dist = dist_class(logits, model)
 
-    reward_loss = setup_reward_model_loss(train_batch, model)
+    reward_loss = setup_reward_model_loss(model, train_batch)
     policy.reward_loss, policy.reg_loss = reward_loss.reward_loss, reward_loss.reg_loss
 
     if state:
@@ -110,8 +109,13 @@ def extra_reward_model_stats(policy, train_batch):
     base_stats = {
         **base_stats,
         "var_gnorm": tf.global_norm([x for x in policy.model.trainable_variables()]),
+        "cur_conterfactual_reward_weight": tf.cast(
+            policy.cur_conterfactual_reward_weight_tensor, tf.float32
+        ),
         "reward_loss": policy.reward_loss,
         "reg_loss": policy.reg_loss,
+        EXTRINSIC_REWARD: tf.reduce_mean(train_batch[SampleBatch.REWARDS]),
+        CONTERFACTUAL_REWARD: train_batch[CONTERFACTUAL_REWARD],
     }
 
     return base_stats
@@ -119,12 +123,11 @@ def extra_reward_model_stats(policy, train_batch):
 
 def postprocess_ppo_reward(policy, sample_batch, other_agent_batches=None, episode=None):
     """
-    Add the influence reward to the trajectory.
+    Add the conterfactual reward to the trajectory.
     Then, add the policy logits, VF preds, and advantages to the trajectory.
     :return: Updated trajectory (batch)
     """
-    # TODO: double check, remove the reward model now
-    batch = reward_postprocess_trajectory(policy, sample_batch, reward_model=None)
+    batch = reward_postprocess_trajectory(sample_batch)
     batch = postprocess_ppo_gae(policy, batch)
     return batch
 
@@ -163,6 +166,7 @@ def build_ppo_reward_trainer(reward_config):
         name="REWARDPPOTFPolicy",
         get_default_config=lambda: reward_config,
         loss_fn=loss_with_reward_model,
+        make_model=build_model,
         stats_fn=extra_reward_model_stats,
         extra_action_fetches_fn=extra_reward_fetches,
         postprocess_fn=postprocess_ppo_reward,

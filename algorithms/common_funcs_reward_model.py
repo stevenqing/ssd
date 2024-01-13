@@ -21,7 +21,8 @@ COUNTERFACTUAL_ACTIONS = "counterfactual_actions"
 POLICY_SCOPE = "func"
 
 # add by ReedZyd
-PREDICTED_REWARD = "predicted_reward"
+PREDICTED_REWARD = "predicted_reward" # predicted rewards for reward model learning
+CONTERFACTUAL_REWARD = "conterfactual_reward" # conterfactual rewards for policy learning
 
 class InfluenceScheduleMixIn(object):
     def __init__(self, config):
@@ -99,10 +100,10 @@ class REWARDLoss(object):
         tf.Print(self.total_loss, [self.total_loss], message="MOA CE loss")
 
 
-def setup_reward_model_loss(logits, policy, train_batch):
+def setup_reward_model_loss(policy, train_batch):
     # Instantiate the prediction loss
-    reward_preds = train_batch['predicted_reward'] # need to reconsider in here, checking featches
-    true_rewards = train_batch['extrinsic_reward']
+    reward_preds = train_batch[PREDICTED_REWARD] # need to reconsider in here, checking featches
+    true_rewards = train_batch[EXTRINSIC_REWARD]
     # 0/1 multiplier array representing whether each agent is visible to
     # the current agent.
     if policy.train_moa_only_when_visible:
@@ -120,32 +121,13 @@ def setup_reward_model_loss(logits, policy, train_batch):
     return reward_model_loss
 
 
-def reward_postprocess_trajectory(policy, sample_batch, reward_model=None, other_agent_batches=None, episode=None):
-    # Weigh social influence reward and add to batch.
-    sample_batch = weigh_and_add_influence_reward(policy, sample_batch, reward_model=reward_model)
-
-    return sample_batch
-
-
-def weigh_and_add_influence_reward(policy, sample_batch, reward_model=None, action_range=4):
-    # Since the reward calculation is delayed by 1 step, sample_batch[SOCIAL_INFLUENCE_REWARD][0]
-    # contains the reward for timestep -1, which does not exist. Hence we shift the array.
-    # Then, pad with a 0-value at the end to make the influence rewards align with sample_batch.
-    # This leaks some information about the episode end though.
-
-    # Clip and weigh influence reward
-
-    # Add to trajectory
-    # first define the reward model
-    # then set it to eval model 
-    # use it to predict the counterfactual team reward
-        
-    # Using reward model to predict the cf rewards
-    predicted_reward = np.concatenate((sample_batch[PREDICTED_REWARD][1:], [0]))
-    sample_batch[PREDICTED_REWARD] = predicted_reward
-    sample_batch["extrinsic_reward"] = sample_batch["rewards"]
-    sample_batch["rewards"] = sample_batch["rewards"] + predicted_reward
-
+def reward_postprocess_trajectory(sample_batch):
+    # add conterfactual reward and add to batch.
+    # TODO check if the timestep for reward can match the timestep for state
+    # TODO add weight to the conterfactural reward
+    conterfactual_reward = sample_batch[CONTERFACTUAL_REWARD]
+    sample_batch[EXTRINSIC_REWARD] = sample_batch["rewards"]
+    sample_batch["rewards"] = sample_batch["rewards"] + conterfactual_reward
     return sample_batch
             
 def agent_name_to_idx(agent_num, self_id):
@@ -215,7 +197,8 @@ def reward_fetches(policy):
         ACTION_LOGITS: policy.model.action_logits(),
         OTHERS_ACTIONS: policy.model.other_agent_actions(), 
         VISIBILITY: policy.model.visibility(),
-        REWARD_PREDS: policy.model.predicted_rewards(), # check policy.model.predicted_actions()
+        PREDICTED_REWARD: policy.model.get_predicted_reward(),
+        CONTERFACTUAL_REWARD: policy.model.get_conterfactual_reward(), # check policy.model.predicted_actions()
     }
 
 

@@ -12,6 +12,8 @@ from models.common_layers import build_conv_layers, build_fc_layers
 from models.causal_reward_model import MaskActivation, CausalModel 
 tf = try_import_tf()
 from ray.rllib.models.tf.misc import normc_initializer
+import numpy as np
+
 
 class CAUSAL_MASK(tf.keras.layers.Layer):
     def __init__(self, input_dim=32,num_agent=32):
@@ -66,7 +68,7 @@ class RewardModel(RecurrentTFModelV2):
         self.policy_model, self.reward_model = self.create_model(obs_space, model_config)
         self.register_variables(self.policy_model.variables + self.reward_model.variables)
 
-        inner_obs_space = self.policy_model.output_shape[0]
+        inner_obs_space = self.policy_model.output_shape[1]
 
         cell_size = model_config["custom_options"].get("cell_size")
         print(inner_obs_space, action_space, num_outputs, model_config, cell_size)
@@ -82,10 +84,10 @@ class RewardModel(RecurrentTFModelV2):
         # predicts the actions of all the agents besides itself
         # create a new input reader per worker
         self.train_reward_only_when_visible = model_config["custom_options"][
-            "train_reward_only_when_visible"
+            "reward_only_when_visible"
         ]
         self.conterfactual_only_when_visible = model_config["custom_options"][
-            "conterfactual_only_when_visible"
+            "reward_only_when_visible"
         ]
         self.reward_weight = model_config["custom_options"]["reward_loss_weight"]
 
@@ -184,7 +186,7 @@ class RewardModel(RecurrentTFModelV2):
 
 
     @override(ModelV2)
-    def forward(self, input_dict, state, seq_lens):
+    def forward(self, input_dict, state, seq_lens, training_causal_model=False):
         """
         First evaluate non-LSTM parts of model. Then add a time dimension to the batch before
         sending inputs to forward_rnn(), which evaluates the LSTM parts of the model.
@@ -194,11 +196,10 @@ class RewardModel(RecurrentTFModelV2):
         :return: The agent's own action logits and the new model state.
         """
         # Evaluate non-lstm layers
-        actor_critic_fc_output, reward_fc_output = self.reward_encoder_model(input_dict)
-        '''
+        actor_critic_fc_output = self.policy_model(input_dict["obs"]["curr_obs"])
         rnn_input_dict = {
             "ac_trunk": actor_critic_fc_output,
-            "prev_reward_trunk": state[5],
+            # "prev_reward_trunk": state[5],
             "other_agent_actions": input_dict["obs"]["other_agent_actions"],
             "visible_agents": input_dict["obs"]["visible_agents"],
             "prev_actions": input_dict["prev_actions"],
@@ -210,17 +211,48 @@ class RewardModel(RecurrentTFModelV2):
 
         output, new_state = self.forward_rnn(rnn_input_dict, state, seq_lens)
         action_logits = tf.reshape(output, [-1, self.num_outputs])
-        counterfactuals = tf.reshape(
-            self._counterfactuals,
-            [-1, self._counterfactuals.shape[-2], self._counterfactuals.shape[-1]],
-        )
-        new_state.extend([action_logits, reward_fc_output])
-        '''
-        self.compute_causal_reward(input_dict)
-        #TODO: Not sure this is right
-        return actor_critic_fc_output
 
-    def compute_causal_reward(self, input_dict):
+        self._predicted_reward =  self.compute_reward(input_dict)
+        # TODO using conterfactual reward 
+        self._counterfactual_rewards = input_dict['prev_rewards']
+
+        return action_logits, new_state
+    def forward_rnn(self, input_dict, state, seq_lens):
+        """
+        Forward pass through the MOA LSTMs.
+        Implicitly assigns the value function output to self_value_out, and does not return this.
+        :param input_dict: The input tensors.
+        :param state: The model state.
+        :param seq_lens: LSTM sequence lengths.
+        :return: The policy logits and new LSTM states.
+        """
+        # Evaluate the actor-critic model
+        pass_dict = {"curr_obs": input_dict["ac_trunk"]}
+        h1, c1, *_ = state
+        (
+            self._model_out,
+            self._value_out,
+            output_h1,
+            output_c1,
+        ) = self.actions_model.forward_rnn(pass_dict, [h1, c1], seq_lens)
+
+        # TODO(@evinitsky) move this into ppo_moa by using restore_original_dimensions()
+        self._other_agent_actions = input_dict["other_agent_actions"]
+        self._visibility = input_dict["visible_agents"]
+
+        return self._model_out, [output_h1, output_c1]
+    
+    def compute_reward(self, input_dict):
+        states, actions = input_dict['obs']['vector_state'], input_dict['prev_actions']
+        state_action = tf.concat([states, actions], axis=1)
+        return self.reward_model(state_action)
+
+    def get_predicted_reward(self, ):
+        return self._predicted_reward
+    
+    def get_predict_reward(self, ):
+        return self._counterfactual_rewards
+    def compute_conterfactual_reward(self, input_dict):
         """
         Compute counterfactual reward of other agents.
         :param input_dict: The model input tensors.
@@ -230,13 +262,11 @@ class RewardModel(RecurrentTFModelV2):
         """
         
         vector_state = input_dict["obs"]["vector_state"]
-        agent_id = input_dict["obs"]["agent_id"]
         other_action = input_dict["obs"]["other_agent_actions"]
-        actual_action = input_dict["obs"]["actions"]
 
-        
+
         cf_action_list = []
-        range_action = np.arange(0,action_range,1)
+        range_action = np.arange(0,len(other_action))
         if len(other_action) < 3:
             for i in range_action:
                 for j in range_action:
@@ -261,10 +291,9 @@ class RewardModel(RecurrentTFModelV2):
         cf_action_total = tf.concat([cf_action_list[:,:,:agent_id[0]], actual_action, cf_action_list[:,:,agent_id[0]:]],axis=2)
         cf_vector_obs_action = tf.concat([vector_state,cf_action_total],axis=2)
         
-        #TODO: Not sure it's the right way to call the model
-        causal_reward = self.reward_model(cf_vector_obs_action)
-        causal_reward = tf.reduce_sum(causal_reward, axis=-1)
-        self._causal_reward = causal_reward
+        conterfactual_reward = self.reward_model(cf_vector_obs_action)
+
+        return conterfactual_reward
 
     def marginalize_predictions_over_own_actions(self, prev_action_logits, counterfactual_logits):
         """
@@ -372,4 +401,4 @@ class RewardModel(RecurrentTFModelV2):
 
     @override(ModelV2)
     def get_initial_state(self):
-        return self.actions_model.get_initial_state() + self.reward_model.get_initial_state()
+        return self.actions_model.get_initial_state() # + self.reward_model.get_initial_state()

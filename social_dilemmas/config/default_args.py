@@ -214,6 +214,44 @@ def add_default_args(parser):
         " --influence_reward_weight * interpolated_value",
     )
 
+   # Reward parameters
+    parser.add_argument(
+        "--reward_loss_weight",
+        type=float,
+        default=1.0,
+        help="Loss weight of the moa network",
+    )
+    parser.add_argument(
+        "--reg_loss_weight",
+        type=float,
+        default=1e-5,
+        help="Loss weight of the moa network",
+    )
+
+    parser.add_argument(
+        "--conterfactual_reward_weight",
+        type=float,
+        default=0.001,
+        help="The moa reward weight.",
+    )
+    parser.add_argument(
+        "--conterfactual_reward_schedule_steps",
+        nargs="+",
+        type=int,
+        default=None,
+        help="Amounts of environment steps at which the moa reward has a value specified in"
+        "--conterfactual_reward_schedule_weights",
+    )
+    parser.add_argument(
+        "--conterfactual_reward_schedule_weights",
+        nargs="+",
+        type=float,
+        default=None,
+        help="Values for the moa reward schedule. Linearly interpolates using "
+        "--conterfactual_reward_schedule_steps. The final value is"
+        " --conterfactual_reward_weight * interpolated_value",
+    )
+
     # SCM parameters
     parser.add_argument(
         "--scm_loss_weight",
