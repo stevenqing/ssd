@@ -8,7 +8,7 @@ from ray.rllib.utils.annotations import override
 
 from models.actor_critic_lstm import ActorCriticLSTM
 from models.common_layers import build_conv_layers, build_fc_layers
-from models.reward_lstm import rewardLSTM
+# from models.reward_lstm import rewardLSTM
 from models.causal_reward_model import MaskActivation, CausalModel 
 tf = try_import_tf()
 from ray.rllib.models.tf.misc import normc_initializer
@@ -69,6 +69,7 @@ class RewardModel(RecurrentTFModelV2):
         inner_obs_space = self.policy_model.output_shape[0]
 
         cell_size = model_config["custom_options"].get("cell_size")
+        print(inner_obs_space, action_space, num_outputs, model_config, cell_size)
         self.actions_model = ActorCriticLSTM(
             inner_obs_space,
             action_space,

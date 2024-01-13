@@ -141,7 +141,7 @@ def weigh_and_add_influence_reward(policy, sample_batch, reward_model=None, acti
     # use it to predict the counterfactual team reward
         
     # Using reward model to predict the cf rewards
-    predicted_reward = np.concatenate((sample_batch[PREDICTED_REWARD][1:], [0])
+    predicted_reward = np.concatenate((sample_batch[PREDICTED_REWARD][1:], [0]))
     sample_batch[PREDICTED_REWARD] = predicted_reward
     sample_batch["extrinsic_reward"] = sample_batch["rewards"]
     sample_batch["rewards"] = sample_batch["rewards"] + predicted_reward
