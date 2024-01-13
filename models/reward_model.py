@@ -26,7 +26,10 @@ class CAUSAL_MASK(tf.keras.layers.Layer):
     def call(self, inputs, sh=0.1):
         mask = tf.where(tf.abs(self.w) > sh, self.w, tf.zeros_like(self.w))
         return tf.expand_dims(inputs, axis=1) * tf.expand_dims(mask, axis=0)
-
+    def get_reg_loss(self, sh=0.1):
+        mask = tf.where(tf.abs(self.w) > sh, tf.ones_like(self.w), tf.zeros_like(self.w))
+        return tf.reduce_mean(mask)
+    
 class RewardModel(RecurrentTFModelV2):
     def __init__(self, obs_space, action_space, num_outputs, model_config, name):
         """
@@ -89,7 +92,8 @@ class RewardModel(RecurrentTFModelV2):
         self.conterfactual_only_when_visible = model_config["custom_options"][
             "reward_only_when_visible"
         ]
-        self.reward_weight = model_config["custom_options"]["reward_loss_weight"]
+        self.reward_loss_weight = model_config["custom_options"]["reward_loss_weight"]
+        self.reg_loss_weight = model_config["custom_options"]["reg_loss_weight"]
 
 
         self.register_variables(self.actions_model.rnn_model.variables)
@@ -144,8 +148,8 @@ class RewardModel(RecurrentTFModelV2):
         # inputs_for_reward: [batch_size, vector_state_dim + action_dim] -> [batch_size, 1, vector_state_dim + action_dim]
         # causal_mask: [num_agents, vector_state_dim + action_dim] -> [1, num_agents, vector_state_dim + action_dim]
         # masked_input: [batch_size, num_agents, vector_state_dim + action_dim]
-        causal_mask_layer = CAUSAL_MASK(input_dim=vector_state_dim + action_dim, num_agent=num_agents)
-        masked_input = causal_mask_layer(inputs_for_reward)
+        self.causal_mask_layer = CAUSAL_MASK(input_dim=vector_state_dim + action_dim, num_agent=num_agents)
+        masked_input = self.causal_mask_layer(inputs_for_reward)
         # masked_input = tf.reshape(inputs_for_reward, [-1, 1, inputs_for_reward.shape[1]]) * tf.reshape(causal_mask, [1, -1, inputs_for_reward.shape[1]])
         predicted_reward = self.get_reward_predictor(masked_input)
         predicted_reward = tf.squeeze(predicted_reward, axis=-1)
@@ -184,9 +188,10 @@ class RewardModel(RecurrentTFModelV2):
                 )(last_layer)
         return last_layer
 
-
+    def get_reg_loss(self, ):
+        return self._reg_loss
     @override(ModelV2)
-    def forward(self, input_dict, state, seq_lens, training_causal_model=False):
+    def forward(self, input_dict, state, seq_lens, training=True):
         """
         First evaluate non-LSTM parts of model. Then add a time dimension to the batch before
         sending inputs to forward_rnn(), which evaluates the LSTM parts of the model.
@@ -212,10 +217,11 @@ class RewardModel(RecurrentTFModelV2):
         output, new_state = self.forward_rnn(rnn_input_dict, state, seq_lens)
         action_logits = tf.reshape(output, [-1, self.num_outputs])
 
-        self._predicted_reward =  self.compute_reward(input_dict)
-        # TODO using conterfactual reward 
-        self._counterfactual_rewards = input_dict['prev_rewards']
-
+        if training:
+            # TODO using conterfactual reward & computing rewards
+            self._predicted_reward =  input_dict['prev_rewards'] #self.compute_reward(input_dict)
+            self._counterfactual_rewards = input_dict['prev_rewards']
+            self._reg_loss = self.causal_mask_layer.get_reg_loss()
         return action_logits, new_state
     def forward_rnn(self, input_dict, state, seq_lens):
         """
@@ -250,7 +256,7 @@ class RewardModel(RecurrentTFModelV2):
     def get_predicted_reward(self, ):
         return self._predicted_reward
     
-    def get_predict_reward(self, ):
+    def get_conterfactual_reward(self, ):
         return self._counterfactual_rewards
     def compute_conterfactual_reward(self, input_dict):
         """

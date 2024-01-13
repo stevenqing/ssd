@@ -66,7 +66,7 @@ class InfluenceScheduleMixIn(object):
 
 
 class REWARDLoss(object):
-    def __init__(self, reward_preds, true_rewards, loss_weight=1.0, others_visibility=None):
+    def __init__(self, policy, reward_preds, true_rewards, loss_weight=1.0, others_visibility=None):
         """Train Reward prediction model with supervised cross entropy loss on a 
            trajectory.
            The model is trying to predict others' reward at timestep t+1 given all 
@@ -75,29 +75,29 @@ class REWARDLoss(object):
             reward_preds: [B,N,1]
             true_rewards: [B,N,1]
         Returns:
-            A scalar loss tensor (cross-entropy loss).
+            MSE loss
+            reg loss
         """
         # Pred_logits[n] contains the prediction made at n-1 for actions taken at n, and a prediction
         # for t=0 cannot have been made at timestep -1, as the simulation starts at timestep 0.
         # Thus we remove the first prediction, as this value contains no sensible data.
         # NB: This means we start at n=1.
 
-        # Compute softmax cross entropy
-        self.ce_per_entry = tf.nn.sparse_softmax_cross_entropy_with_logits(
-            labels=true_rewards, logits=reward_preds
-        )
-
+        # Compute MSE
+        self.mse_per_entry = tf.losses.mean_squared_error(
+                        labels=true_rewards, predictions=reward_preds)
         # Zero out the loss if the other agent isn't visible to this one.
-        '''
-        if others_visibility is not None:
-            # others_visibility[n] contains agents visible at time n. We start at n=1,
-            # so the first and last values have to be removed to maintain equal array size.
-            others_visibility = others_visibility[1:-1, :]
-            self.ce_per_entry *= tf.cast(others_visibility, tf.float32)
-        '''
+
+        # if others_visibility is not None:
+        #     # others_visibility[n] contains agents visible at time n. We start at n=1,
+        #     # so the first and last values have to be removed to maintain equal array size.
+        #     others_visibility = others_visibility[1:-1, :]
+        #     self.ce_per_entry *= tf.cast(others_visibility, tf.float32)
         # Flatten loss to one value for the entire batch
-        self.total_loss = tf.reduce_mean(self.ce_per_entry) * loss_weight
-        tf.Print(self.total_loss, [self.total_loss], message="MOA CE loss")
+        self.mse_loss = tf.reduce_mean(self.mse_per_entry) * loss_weight[0]
+        self.reg_loss = policy.get_reg_loss * loss_weight[1]
+        tf.Print(self.mse_loss, [self.mse_loss], message="Reward MSE loss")
+        tf.Print(self.reg_loss, [self.reg_loss], message="Sparsity loss")
 
 
 def setup_reward_model_loss(policy, train_batch):
@@ -106,7 +106,7 @@ def setup_reward_model_loss(policy, train_batch):
     true_rewards = train_batch[EXTRINSIC_REWARD]
     # 0/1 multiplier array representing whether each agent is visible to
     # the current agent.
-    if policy.train_moa_only_when_visible:
+    if policy.train_reward_only_when_visible:
         # if VISIBILITY in train_batch:
         others_visibility = train_batch[VISIBILITY]
     else:
@@ -115,7 +115,7 @@ def setup_reward_model_loss(policy, train_batch):
     reward_model_loss = REWARDLoss(
         reward_preds,
         true_rewards,
-        loss_weight=policy.moa_loss_weight, # not sure if it's good
+        loss_weight=[policy.reward_loss_weight, policy.reg_loss_weight], # not sure if it's good
         others_visibility=others_visibility,
     )
     return reward_model_loss
