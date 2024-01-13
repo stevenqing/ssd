@@ -56,7 +56,7 @@ def loss_with_reward_model(policy, model, dist_class, train_batch):
     action_dist = dist_class(logits, model)
 
     reward_loss = setup_reward_model_loss(model, train_batch)
-    policy.reward_loss, policy.reg_loss = reward_loss.reward_loss, reward_loss.reg_loss
+    policy.reward_loss, policy.reg_loss = reward_loss.mse_loss, reward_loss.reg_loss
 
     if state:
         max_seq_len = tf.reduce_max(train_batch["seq_lens"])
@@ -84,7 +84,7 @@ def loss_with_reward_model(policy, model, dist_class, train_batch):
         policy.config["vf_loss_coeff"],
         policy.config["use_gae"],
     ) 
-    policy.loss_obj.loss += reward_loss.total_loss
+    policy.loss_obj.loss += policy.reward_loss + policy.reg_loss
 
     return policy.loss_obj.loss
 
@@ -109,9 +109,9 @@ def extra_reward_model_stats(policy, train_batch):
     base_stats = {
         **base_stats,
         "var_gnorm": tf.global_norm([x for x in policy.model.trainable_variables()]),
-        "cur_conterfactual_reward_weight": tf.cast(
-            policy.cur_conterfactual_reward_weight_tensor, tf.float32
-        ),
+        # "cur_conterfactual_reward_weight": tf.cast(
+        #     policy.cur_conterfactual_reward_weight_tensor, tf.float32
+        # ),
         "reward_loss": policy.reward_loss,
         "reg_loss": policy.reg_loss,
         EXTRINSIC_REWARD: tf.reduce_mean(train_batch[SampleBatch.REWARDS]),

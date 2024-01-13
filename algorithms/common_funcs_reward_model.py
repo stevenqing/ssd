@@ -95,7 +95,7 @@ class REWARDLoss(object):
         #     self.ce_per_entry *= tf.cast(others_visibility, tf.float32)
         # Flatten loss to one value for the entire batch
         self.mse_loss = tf.reduce_mean(self.mse_per_entry) * loss_weight[0]
-        self.reg_loss = policy.get_reg_loss * loss_weight[1]
+        self.reg_loss = policy.get_reg_loss() * loss_weight[1]
         tf.Print(self.mse_loss, [self.mse_loss], message="Reward MSE loss")
         tf.Print(self.reg_loss, [self.reg_loss], message="Sparsity loss")
 
@@ -113,6 +113,7 @@ def setup_reward_model_loss(policy, train_batch):
         others_visibility = None
     # raise NotImplementedError
     reward_model_loss = REWARDLoss(
+        policy, 
         reward_preds,
         true_rewards,
         loss_weight=[policy.reward_loss_weight, policy.reg_loss_weight], # not sure if it's good
