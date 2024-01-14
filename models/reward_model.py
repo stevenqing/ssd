@@ -74,7 +74,7 @@ class RewardModel(RecurrentTFModelV2):
         inner_obs_space = self.policy_model.output_shape[1]
 
         cell_size = model_config["custom_options"].get("cell_size")
-        print(inner_obs_space, action_space, num_outputs, model_config, cell_size)
+        # print(inner_obs_space, action_space, num_outputs, model_config, cell_size)
         self.actions_model = ActorCriticLSTM(
             inner_obs_space,
             action_space,
@@ -98,8 +98,8 @@ class RewardModel(RecurrentTFModelV2):
 
         self.register_variables(self.actions_model.rnn_model.variables)
         self.register_variables(self.reward_model.variables)
-        self.actions_model.rnn_model.summary()
-        self.reward_model.summary()
+        # self.actions_model.rnn_model.summary()
+        # self.reward_model.summary()
 
     def create_model(self, obs_space, model_config):
         """

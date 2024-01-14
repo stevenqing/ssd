@@ -127,7 +127,7 @@ def reward_postprocess_trajectory(sample_batch):
     # TODO check if the timestep for reward can match the timestep for state
     # TODO add weight to the conterfactural reward
     conterfactual_reward = sample_batch[CONTERFACTUAL_REWARD]
-    print(sample_batch.keys())
+    # print(sample_batch.keys())
     sample_batch[EXTRINSIC_REWARD] = sample_batch["rewards"]
     sample_batch["rewards"] = sample_batch["rewards"] + conterfactual_reward
     return sample_batch
