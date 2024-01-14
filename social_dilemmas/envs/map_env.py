@@ -24,6 +24,15 @@ _MAP_ENV_ACTIONS = {
 }  # Counter clockwise rotation matrix
 # Positive Theta is in the counterclockwise direction
 
+
+COIN_MAP_ENV_ACTIONS = {
+    "MOVE_LEFT": [0, -1],  # Move left
+    "MOVE_RIGHT": [0, 1],  # Move right
+    "MOVE_UP": [-1, 0],  # Move up
+    "MOVE_DOWN": [1, 0],  # Move down
+}  # Counter clockwise rotation matrix
+# Positive Theta is in the counterclockwise direction
+
 ORIENTATIONS = {"LEFT": [0, -1], "RIGHT": [0, 1], "UP": [-1, 0], "DOWN": [1, 0]}
 
 DEFAULT_COLOURS = {
@@ -79,6 +88,8 @@ class MapEnv(MultiAgentEnv):
         alpha=0.0,
         beta=0.0,
         store_trajs=False,
+        coin_env=True,
+        sample_number=10,
     ):
         """
 
@@ -109,6 +120,7 @@ class MapEnv(MultiAgentEnv):
         # self.reward_model = torch.load(self.saved_model_path)
         # self.reward_model.eval()
         self.prev_vector_state = np.array([1, 7, 1, 1, 7, 6, 3, 3, 5, 5, 6, 2, 1, 2, 3]).astype(np.int32)
+        self.sample_number = sample_number
         self.store_trajs = store_trajs
         self.count = 0
         self.num_agents = num_agents
@@ -121,8 +133,11 @@ class MapEnv(MultiAgentEnv):
         self.inequity_averse_reward = inequity_averse_reward
         self.alpha = alpha
         self.beta = beta
-        self.all_actions = _MAP_ENV_ACTIONS.copy()
-        self.all_actions.update(extra_actions)
+        if coin_env:
+            self.all_actions = COIN_MAP_ENV_ACTIONS.copy()
+        else:
+            self.all_actions = _MAP_ENV_ACTIONS.copy()    
+            self.all_actions.update(extra_actions)
         # Map without agents or beams
         self.world_map = np.full(
             (len(self.base_map), len(self.base_map[0])), fill_value=b" ", dtype="c"
@@ -172,6 +187,18 @@ class MapEnv(MultiAgentEnv):
                     shape=(self.num_agents - 1,),
                     dtype=np.uint8,
                 ),
+                "all_actions": Box(
+                    low=0,
+                    high=len(self.all_actions),
+                    shape=(self.num_agents,),
+                    dtype=np.uint8,
+                ),
+                "cf_actions": Box(
+                    low=0,
+                    high=len(self.all_actions),
+                    shape=(len(self.all_actions) * (self.num_agents-1), self.num_agents),
+                    dtype=np.uint8,
+                ),
                 "visible_agents": Box(
                     low=0,
                     high=1,
@@ -194,6 +221,12 @@ class MapEnv(MultiAgentEnv):
                     low=0,
                     high=100,
                     shape=(15,), #TODO: settle for coin3, need to change that later
+                    dtype=np.int32,
+                ),
+                "action_range": Box(
+                    low=0,
+                    high=10,
+                    shape=(len(self.all_actions),), 
                     dtype=np.int32,
                 ),
                 "vector_state": Box(
@@ -346,14 +379,21 @@ class MapEnv(MultiAgentEnv):
                 prev_actions = np.array(
                     [actions[key] for key in sorted(actions.keys()) if key != agent.agent_id]
                 ).astype(np.uint8)
+                all_actions = np.array(
+                    [actions[key] for key in sorted(actions.keys())]
+                ).astype(np.uint8)
+                agent_actions = np.array([actions[key] for key in sorted(actions.keys()) if key == agent.agent_id]).astype(np.uint8)
+                cf_actions = self.get_cf_actions(prev_actions,agent_actions,agent.agent_id)
                 visible_agents = self.find_visible_agents(agent.agent_id)
                 observations[agent.agent_id] = {
                     "curr_obs": rgb_arr,
                     "other_agent_actions": prev_actions,
+                    "all_actions": all_actions,
+                    "cf_actions": cf_actions,
                     "visible_agents": visible_agents,
                     "prev_visible_agents": agent.prev_visible_agents,
-                    "agent_id": [agent.agent_id[-1]], 
                     "prev_vector_state": self.prev_vector_state,
+                    "action_range": len(self.all_actions),
                     "vector_state": vector_state,
                 }
                 agent.prev_visible_agents = visible_agents
@@ -406,14 +446,22 @@ class MapEnv(MultiAgentEnv):
         self.prev_vector_state = vector_state
         return observations, rewards, dones, infos
     
-    def get_obs_action(self, positions, apple_pos, apple_type, store_actions):
-        vector_state = positions + apple_pos + apple_type
-        vector_state = [int(i) for i in vector_state]
-        obs_action = vector_state + store_actions
-        obs_action = torch.FloatTensor(obs_action)
-        obs_action = torch.reshape(obs_action,(1,-1))
-        obs_action = obs_action.numpy()
-        return obs_action
+
+
+    def get_cf_actions(self, prev_actions, agent_actions, agent_id):
+        agent_id = int(agent_id[-1])
+        repeat_number = len(self.all_actions) * (self.num_agents-1)
+        actual_action = np.repeat(agent_actions,repeat_number)
+        cf_actions_list = []
+        #TODO: Only for 3 agents! 
+        for n in range(self.num_agents-1):
+            for i in range(len(self.all_actions)):
+                if n == 0:
+                    cf_actions_list.append([prev_actions[n],i])
+                else:
+                    cf_actions_list.append([i,prev_actions[n]])
+        cf_actions_total = tf.concat([cf_actions_list[:,:agent_id], actual_action, cf_actions_list[:,agent_id:]],axis=1)
+        return cf_actions_total
     
     def reset(self):
         """Reset the environment.
@@ -448,10 +496,12 @@ class MapEnv(MultiAgentEnv):
                 observations[agent.agent_id] = {
                     "curr_obs": rgb_arr,
                     "other_agent_actions": prev_actions,
+                    "all_actions": np.array([4 for _ in range(self.num_agents)]).astype(np.uint8),
+                    "cf_actions": np.array([4 for _ in range(self.num_agents)]).astype(np.uint8),
                     "visible_agents": visible_agents,
                     "prev_visible_agents": visible_agents,
-                    "agent_id": [agent.agent_id[-1]],
                     "prev_vector_state": init_vector_state,
+                    "action_range": len(self.all_actions),
                     "vector_state": init_vector_state,
                 }
                 agent.prev_visible_agents = visible_agents
