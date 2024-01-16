@@ -123,6 +123,7 @@ class MapEnv(MultiAgentEnv):
         self.store_trajs = store_trajs
         self.count = 0
         self.num_agents = num_agents
+        self.agent_id_matrix = np.eye(self.num_agents,dtype=int).astype(np.uint8)
         self.prev_vector_state = np.array([1, 7, 1, 1, 7, 6, 3, 3, 5, 5, 6, 2, 1, 2, 3, 1, 0, 0]).astype(np.int32)
         self.prev_vector_state = np.expand_dims(self.prev_vector_state,axis=0)
         self.prev_vector_state = np.repeat(self.prev_vector_state,self.num_agents,axis=0)
@@ -219,18 +220,18 @@ class MapEnv(MultiAgentEnv):
                     shape=(self.num_agents - 1,),
                     dtype=np.uint8,
                 ),
+                "agent_id_matrix": Box(
+                    low=0,
+                    high=1,
+                    shape=(self.num_agents,self.num_agents), #TODO: settle for coin3, need to change that later
+                    dtype=np.int32,
+                ),
                 "prev_vector_state": Box(
                     low=0,
                     high=100,
                     shape=(18,), #TODO: settle for coin3, need to change that later
                     dtype=np.int32,
                 ),
-                # "action_range": Box(
-                #     low=0,
-                #     high=10,
-                #     shape=(len(self.all_actions),), 
-                #     dtype=np.uint8,
-                # ),
                 "vector_state": Box(
                     low=0,
                     high=100,
@@ -408,8 +409,8 @@ class MapEnv(MultiAgentEnv):
                     "cf_actions": cf_actions,
                     "visible_agents": visible_agents,
                     "prev_visible_agents": agent.prev_visible_agents,
+                    "agent_id_matrix": self.agent_id_matrix,
                     "prev_vector_state": self.prev_vector_state[int(agent.agent_id[-1])],
-                    # "action_range": np.array(len(self.all_actions)).astype(np.uint8),
                     "vector_state": vector_state,
                 }
                 agent.prev_visible_agents = visible_agents
@@ -518,6 +519,7 @@ class MapEnv(MultiAgentEnv):
                     "cf_actions": np.array([[4 for _ in range(self.num_agents)] for _ in range(len(self.all_actions) * (self.num_agents-1))]).astype(np.uint8),
                     "visible_agents": visible_agents,
                     "prev_visible_agents": visible_agents,
+                    "agent_id_matrix": self.agent_id_matrix,
                     "prev_vector_state": init_vector_state,
                     # "action_range": np.array([len(self.all_actions)]).astype(np.uint8),
                     "vector_state": init_vector_state,

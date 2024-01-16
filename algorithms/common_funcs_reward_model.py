@@ -87,7 +87,7 @@ class REWARDLoss(object):
         self.mse_per_entry = tf.losses.mean_squared_error(
                         labels=true_rewards, predictions=reward_preds)
         # Zero out the loss if the other agent isn't visible to this one.
-
+        # print(true_rewards,reward_preds)
         # if others_visibility is not None:
         #     # others_visibility[n] contains agents visible at time n. We start at n=1,
         #     # so the first and last values have to be removed to maintain equal array size.
@@ -128,9 +128,9 @@ def reward_postprocess_trajectory(sample_batch):
     # TODO check if the timestep for reward can match the timestep for state
     # TODO add weight to the conterfactural reward
     conterfactual_reward = sample_batch[CONTERFACTUAL_REWARD]
-    # print(sample_batch.keys())
+    # print(sample_batch[CONTERFACTUAL_REWARD])
     sample_batch[EXTRINSIC_REWARD] = sample_batch["rewards"]
-    sample_batch["rewards"] = sample_batch["rewards"] + conterfactual_reward
+    sample_batch["rewards"] = sample_batch["rewards"] + np.sum(conterfactual_reward,axis=1)
     return sample_batch
             
 def agent_name_to_idx(agent_num, self_id):
