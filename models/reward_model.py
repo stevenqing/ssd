@@ -262,7 +262,7 @@ class RewardModel(RecurrentTFModelV2):
         states, actions = input_dict['obs']['prev_vector_state'], input_dict['obs']['all_actions']
         # actions = tf.expand_dims(actions,0)
         state_action = tf.concat([states, actions], axis=1)
-        return tf.reduce_sum(self.reward_model(state_action),axis=1)
+        return self.reward_model(state_action)
 
     def get_predicted_reward(self, ):
         return self._predicted_reward

@@ -119,11 +119,13 @@ class MapEnv(MultiAgentEnv):
         # self.reward_model = torch.load(self.saved_model_path)
         # self.reward_model = torch.load(self.saved_model_path)
         # self.reward_model.eval()
-        self.prev_vector_state = np.array([1, 7, 1, 1, 7, 6, 3, 3, 5, 5, 6, 2, 1, 2, 3]).astype(np.int32)
         self.sample_number = sample_number
         self.store_trajs = store_trajs
         self.count = 0
         self.num_agents = num_agents
+        self.prev_vector_state = np.array([1, 7, 1, 1, 7, 6, 3, 3, 5, 5, 6, 2, 1, 2, 3, 1, 0, 0]).astype(np.int32)
+        self.prev_vector_state = np.expand_dims(self.prev_vector_state,axis=0)
+        self.prev_vector_state = np.repeat(self.prev_vector_state,self.num_agents,axis=0)
         self.use_reward_model = use_reward_model
         self.base_map = self.ascii_to_numpy(ascii_map)
         self.view_len = view_len
@@ -187,6 +189,12 @@ class MapEnv(MultiAgentEnv):
                     shape=(self.num_agents - 1,),
                     dtype=np.uint8,
                 ),
+                "all_rewards": Box(
+                    low=-2,
+                    high=1,
+                    shape=(self.num_agents,),
+                    dtype=np.int8,
+                ),
                 "all_actions": Box(
                     low=0,
                     high=len(self.all_actions),
@@ -214,8 +222,8 @@ class MapEnv(MultiAgentEnv):
                 "prev_vector_state": Box(
                     low=0,
                     high=100,
-                    shape=(15,), #TODO: settle for coin3, need to change that later
-                    dtype=np.uint8,
+                    shape=(18,), #TODO: settle for coin3, need to change that later
+                    dtype=np.int32,
                 ),
                 # "action_range": Box(
                 #     low=0,
@@ -226,8 +234,8 @@ class MapEnv(MultiAgentEnv):
                 "vector_state": Box(
                     low=0,
                     high=100,
-                    shape=(15,), #TODO: settle for coin3, need to change that later
-                    dtype=np.uint8,
+                    shape=(18,), #TODO: settle for coin3, need to change that later
+                    dtype=np.int32,
                 ),
                 }
         obs_space = Dict(obs_space)
@@ -345,6 +353,8 @@ class MapEnv(MultiAgentEnv):
             positions.append(agent.pos)
             # Firing beams have priority over agents and should cover them
             # to avoid conflicts in b"C"
+            
+
             if self.num_agents > 3:
                 if self.world_map[row, col] not in [b"F", b"C"]:
                     self.single_update_world_color_map(row, col, agent.get_char_id())
@@ -353,10 +363,16 @@ class MapEnv(MultiAgentEnv):
         
         store_trajs = {'vector_states':[],'actions':[],'rewards':[]}
         store_rewards = []
+        prev_vector_states = {}
+        all_rewards = []
         observations = {}
         rewards = {}
         dones = {}
         infos = {}
+        for agent in self.agents.values():
+            rewards[agent.agent_id] = agent.compute_reward()
+            all_rewards.append(rewards[agent.agent_id])
+        
         for agent in self.agents.values():
             agent.full_map = map_with_agents
             rgb_arr = self.color_view(agent)
@@ -368,7 +384,12 @@ class MapEnv(MultiAgentEnv):
                 vector_state = positions + apple_pos + apple_type
             vector_state = [int(i) for i in vector_state]
             
-            # vector_obs_action = self.get_obs_action(positions,apple_pos,apple_type,store_actions)
+            agent_type = np.zeros(self.num_agents)
+            agent_type[int(agent.agent_id[-1])] = 1
+            agent_type = [int(a) for a in agent_type]
+            
+            vector_state = np.concatenate((vector_state,agent_type))
+            vector_state = np.array(vector_state).astype(np.int32)
             if self.return_agent_actions:
                 prev_actions = np.array(
                     [actions[key] for key in sorted(actions.keys()) if key != agent.agent_id]
@@ -382,18 +403,19 @@ class MapEnv(MultiAgentEnv):
                 observations[agent.agent_id] = {
                     "curr_obs": rgb_arr,
                     "other_agent_actions": prev_actions,
+                    "all_rewards": all_rewards,
                     "all_actions": all_actions,
                     "cf_actions": cf_actions,
                     "visible_agents": visible_agents,
                     "prev_visible_agents": agent.prev_visible_agents,
-                    "prev_vector_state": self.prev_vector_state,
+                    "prev_vector_state": self.prev_vector_state[int(agent.agent_id[-1])],
                     # "action_range": np.array(len(self.all_actions)).astype(np.uint8),
                     "vector_state": vector_state,
                 }
                 agent.prev_visible_agents = visible_agents
+                self.prev_vector_state[int(agent.agent_id[-1])] = vector_state
             else:
                 observations[agent.agent_id] = {"curr_obs": rgb_arr,"vector_state": vector_state}
-            rewards[agent.agent_id] = agent.compute_reward()
             store_rewards.append(rewards[agent.agent_id])
             dones[agent.agent_id] = agent.get_done()
             infos[agent.agent_id] = {}
@@ -437,7 +459,6 @@ class MapEnv(MultiAgentEnv):
             rewards = temp_rewards
 
         dones["__all__"] = np.any(list(dones.values()))
-        self.prev_vector_state = vector_state
         return observations, rewards, dones, infos
     
 
@@ -488,10 +509,11 @@ class MapEnv(MultiAgentEnv):
                 # No previous actions so just pass in "wait" action
                 prev_actions = np.array([4 for _ in range(self.num_agents - 1)]).astype(np.uint8)
                 visible_agents = self.find_visible_agents(agent.agent_id)
-                init_vector_state = np.array([1, 7, 1, 1, 7, 6, 3, 3, 5, 5, 6, 2, 1, 2, 3]).astype(np.uint8)
+                init_vector_state = np.array([1, 7, 1, 1, 7, 6, 3, 3, 5, 5, 6, 2, 1, 2, 3, 1, 0, 0]).astype(np.uint8)
                 observations[agent.agent_id] = {
                     "curr_obs": rgb_arr,
                     "other_agent_actions": prev_actions,
+                    "all_rewards": np.array([0 for _ in range(self.num_agents)]).astype(np.int8),
                     "all_actions": np.array([4 for _ in range(self.num_agents)]).astype(np.uint8),
                     "cf_actions": np.array([[4 for _ in range(self.num_agents)] for _ in range(len(self.all_actions) * (self.num_agents-1))]).astype(np.uint8),
                     "visible_agents": visible_agents,

@@ -5,9 +5,9 @@ python train.py \
 --model reward \
 --algorithm PPO \
 --num_agents 3 \
---num_workers 1 \
+--num_workers 128 \
 --rollout_fragment_length 1000 \
---num_envs_per_worker 1 \
+--num_envs_per_worker 12 \
 --stop_at_timesteps_total $((300 * 10 ** 6)) \
 --memory $((160 * 10 ** 9)) \
 --cpus_per_worker 1 \
