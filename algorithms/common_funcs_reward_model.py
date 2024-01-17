@@ -131,6 +131,7 @@ def reward_postprocess_trajectory(sample_batch):
     # print(sample_batch[CONTERFACTUAL_REWARD])
     sample_batch[EXTRINSIC_REWARD] = sample_batch["rewards"]
     sample_batch["rewards"] = sample_batch["rewards"] + np.sum(conterfactual_reward,axis=1)
+
     return sample_batch
             
 def agent_name_to_idx(agent_num, self_id):

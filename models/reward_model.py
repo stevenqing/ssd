@@ -133,7 +133,7 @@ class RewardModel(RecurrentTFModelV2):
         # vector_state
         # joint obs space
         vector_state_dim = obs_space.original_space.spaces["vector_state"].shape[0]
-        num_agents = action_dim = other_action_shape[0] + 1
+        self.num_agents = num_agents = action_dim = other_action_shape[0] + 1
 
         # causal mask 
         # causal_mask = tf.Variable(tf.ones([num_agents, vector_state_dim + action_dim]), trainable=True, name='causal_mask')
@@ -143,7 +143,8 @@ class RewardModel(RecurrentTFModelV2):
 
         # define inputs
         inputs_for_reward = tf.keras.layers.Input(vector_state_dim + action_dim, name="inputs_for_reward", dtype=tf.float32)
-    
+        agent_id_matrix = tf.keras.layers.Input((num_agents, num_agents), name="inputs_id", dtype=tf.float32)
+
         # causal mask times input 
         # inputs_for_reward: [batch_size, vector_state_dim + action_dim] -> [batch_size, 1, vector_state_dim + action_dim]
         # causal_mask: [num_agents, vector_state_dim + action_dim] -> [1, num_agents, vector_state_dim + action_dim]
@@ -151,20 +152,22 @@ class RewardModel(RecurrentTFModelV2):
         self.causal_mask_layer = CAUSAL_MASK(input_dim=vector_state_dim + action_dim, num_agent=num_agents)
         masked_input = self.causal_mask_layer(inputs_for_reward)
         # print(masked_input)
+        # masked_input = tf.concat([masked_input, agent_id_matrix], axis=-1)
+        masked_input = tf.keras.layers.Concatenate(axis=-1)([masked_input, agent_id_matrix])
         predicted_reward = self.get_reward_predictor(masked_input)
         predicted_reward = tf.squeeze(predicted_reward, axis=-1)
 
-        return tf.keras.Model(inputs, [actor_critic_fc], name="Policy_Model"), tf.keras.Model(inputs_for_reward, predicted_reward, name="Reward_Predictor_Model")
+        return tf.keras.Model(inputs, [actor_critic_fc], name="Policy_Model"), tf.keras.Model([inputs_for_reward, agent_id_matrix], predicted_reward, name="Reward_Predictor_Model")
 
     @staticmethod
-    def get_reward_predictor(masked_input=None, emb_size=64):
+    def get_reward_predictor(masked_input_with_id, emb_size=64):
         # layer 1
         last_layer = tf.keras.layers.Dense(
                 emb_size,
                 name="fc_{}_{}".format(1, 'reward'),
                 activation='relu',
                 kernel_initializer=normc_initializer(1.0),
-            )(masked_input)
+            )(masked_input_with_id)
         # layer 2
         last_layer = tf.keras.layers.Dense(
                     units=emb_size * 2, # output size for each agent's reward
@@ -259,25 +262,24 @@ class RewardModel(RecurrentTFModelV2):
         return self._model_out, [output_h1, output_c1]
     
     def compute_reward(self, input_dict):
-        states, actions, agent_id_matrix = input_dict['obs']['prev_vector_state'], input_dict['obs']['all_actions'], input_dict['obs']['agent_id_matrix']
-        negative_index = -int(agent_id_matrix.shape[-1])
-        agent_id_matrix = tf.transpose(agent_id_matrix,perm=[1,0,2])
+        states, actions = input_dict['obs']['prev_vector_state'], input_dict['obs']['all_actions']
+        # agent_id_matrix = tf.transpose(agent_id_matrix,perm=[1,0,2])
 
-        states = tf.expand_dims(states,axis=0)
-        actions = tf.expand_dims(actions,axis=0)
+        # states = tf.expand_dims(states,axis=0)
+        # actions = tf.expand_dims(actions,axis=0)
 
-        all_vector_state = tf.repeat(states,agent_id_matrix.shape[-1],axis=0)
-        actions = tf.repeat(actions,agent_id_matrix.shape[-1],axis=0)
+        # all_vector_state = tf.repeat(states,agent_id_matrix.shape[-1],axis=0)
+        # actions = tf.repeat(actions,agent_id_matrix.shape[-1],axis=0)
 
-        all_vector_state = tf.concat((all_vector_state[:,:,:negative_index],agent_id_matrix),axis=-1)
+        # all_vector_state = tf.concat((all_vector_state[:,:,:negative_index],agent_id_matrix),axis=-1)
 
-        state_action = tf.concat((all_vector_state, actions), axis=-1)
-        if state_action.shape[1] > 0:
-            state_action = tf.squeeze(state_action,axis=1)
-        predicted_reward = self.reward_model(state_action)
-        predicted_reward = tf.squeeze(predicted_reward) 
-        predicted_reward = tf.reshape(predicted_reward[:,0],shape=[-1,predicted_reward.shape[0]]) # (-1,reward_number)
-        print(predicted_reward)
+        # state_action = tf.concat((all_vector_state, actions), axis=-1)
+        # if state_action.shape[1] > 0:
+        #     state_action = tf.squeeze(state_action,axis=1)
+        state_action = tf.concat((states, actions), axis=-1)
+
+        predicted_reward = self.reward_model({'inputs_for_reward': state_action, 
+                                                'inputs_id': input_dict['obs']['agent_id_matrix']})
         return predicted_reward
 
     def get_predicted_reward(self, ):
@@ -298,8 +300,6 @@ class RewardModel(RecurrentTFModelV2):
         vector_state = input_dict["obs"]["vector_state"]
         agent_id_matrix = input_dict["obs"]["agent_id_matrix"]
         cf_actions = input_dict["obs"]["cf_actions"]
-        action_range = agent_id_matrix.shape[-1]
-        agent_num = cf_actions.shape[-1]
 
         vector_state = tf.expand_dims(vector_state,axis=1)
         all_vector_state = tf.repeat(vector_state,cf_actions.shape[-1],axis=1)
