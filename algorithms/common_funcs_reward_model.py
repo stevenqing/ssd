@@ -84,8 +84,11 @@ class REWARDLoss(object):
         # NB: This means we start at n=1.
 
         # Compute MSE
+        # loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False)
+        # self.mse_per_entry = loss_fn(
+        #                 true_rewards, tf.one_hot(reward_preds,depth=reward_preds.shape[-1]))
         self.mse_per_entry = tf.losses.mean_squared_error(
-                        labels=true_rewards, predictions=reward_preds)
+                       labels=true_rewards, predictions=reward_preds)
         # Zero out the loss if the other agent isn't visible to this one.
         # print(true_rewards,reward_preds)
         # if others_visibility is not None:
@@ -93,6 +96,7 @@ class REWARDLoss(object):
         #     # so the first and last values have to be removed to maintain equal array size.
         #     others_visibility = others_visibility[1:-1, :]
         #     self.ce_per_entry *= tf.cast(others_visibility, tf.float32)
+
         # Flatten loss to one value for the entire batch
         self.mse_loss = tf.reduce_mean(self.mse_per_entry) * loss_weight[0]
         self.reg_loss = policy.get_reg_loss() * loss_weight[1]
@@ -104,7 +108,7 @@ def setup_reward_model_loss(policy, train_batch):
     # Instantiate the prediction loss
     reward_preds = train_batch[PREDICTED_REWARD] # need to reconsider in here, checking featches
     # true_rewards = train_batch[EXTRINSIC_REWARD]
-    true_rewards = train_batch['obs'][:,677:680]
+    true_rewards = train_batch['obs'][:,675:678]
     # 0/1 multiplier array representing whether each agent is visible to
     # the current agent.
     if policy.train_reward_only_when_visible:

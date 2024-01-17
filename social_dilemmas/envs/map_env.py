@@ -182,17 +182,17 @@ class MapEnv(MultiAgentEnv):
             # Append the actions of other agents
             obs_space = {
                 **obs_space,
-                "other_agent_actions": Box(
-                    low=0,
-                    high=len(self.all_actions),
-                    shape=(self.num_agents - 1,),
-                    dtype=np.uint8,
-                ),
                 "all_rewards": Box(
                     low=-2,
                     high=1,
                     shape=(self.num_agents,),
                     dtype=np.int8,
+                ),
+                "other_agent_actions": Box(
+                    low=0,
+                    high=len(self.all_actions),
+                    shape=(self.num_agents - 1,),
+                    dtype=np.uint8,
                 ),
                 "all_actions": Box(
                     low=0,
@@ -362,7 +362,6 @@ class MapEnv(MultiAgentEnv):
         
         store_trajs = {'vector_states':[],'actions':[],'rewards':[]}
         store_rewards = []
-        prev_vector_states = {}
         all_rewards = []
         observations = {}
         rewards = {}
@@ -370,12 +369,12 @@ class MapEnv(MultiAgentEnv):
         infos = {}
         for agent in self.agents.values():
             rewards[agent.agent_id] = agent.compute_reward()
-            all_rewards.append(rewards[agent.agent_id])
+            
         
         for agent in self.agents.values():
             agent.full_map = map_with_agents
             rgb_arr = self.color_view(agent)
-            
+            all_rewards.append(rewards[agent.agent_id])
             # concatenate on the prev_actions to the observations
             if apple_type == None:
                 vector_state = positions + apple_pos
@@ -386,7 +385,7 @@ class MapEnv(MultiAgentEnv):
             agent_type = np.zeros(self.num_agents)
             agent_type[int(agent.agent_id[-1])] = 1
             agent_type = [int(a) for a in agent_type]
-            
+
             # vector_state = np.concatenate((vector_state,agent_type))
             # vector_state = np.array(vector_state).astype(np.int32)
             if self.return_agent_actions:
@@ -401,8 +400,8 @@ class MapEnv(MultiAgentEnv):
                 visible_agents = self.find_visible_agents(agent.agent_id)
                 observations[agent.agent_id] = {
                     "curr_obs": rgb_arr,
-                    "other_agent_actions": prev_actions,
                     "all_rewards": all_rewards,
+                    "other_agent_actions": prev_actions,
                     "all_actions": all_actions,
                     "cf_actions": cf_actions,
                     "visible_agents": visible_agents,
@@ -511,8 +510,8 @@ class MapEnv(MultiAgentEnv):
                 init_vector_state = np.array([1, 7, 1, 1, 7, 6, 3, 3, 5, 5, 6, 2, 1, 2, 3]).astype(np.uint8)
                 observations[agent.agent_id] = {
                     "curr_obs": rgb_arr,
-                    "other_agent_actions": prev_actions,
                     "all_rewards": np.array([0 for _ in range(self.num_agents)]).astype(np.int8),
+                    "other_agent_actions": prev_actions,
                     "all_actions": np.array([4 for _ in range(self.num_agents)]).astype(np.uint8),
                     "cf_actions": np.array([[4 for _ in range(self.num_agents)] for _ in range(len(self.all_actions) * (self.num_agents-1))]).astype(np.uint8),
                     "visible_agents": visible_agents,
