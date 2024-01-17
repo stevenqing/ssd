@@ -154,13 +154,13 @@ class RewardModel(RecurrentTFModelV2):
         # print(masked_input)
         # masked_input = tf.concat([masked_input, agent_id_matrix], axis=-1)
         masked_input = tf.keras.layers.Concatenate(axis=-1)([masked_input, agent_id_matrix])
-        predicted_reward = self.get_reward_predictor(masked_input)
+        predicted_reward = self.get_reward_predictor(masked_input,flag_discretize=True)
         predicted_reward = tf.squeeze(predicted_reward, axis=-1)
 
         return tf.keras.Model(inputs, [actor_critic_fc], name="Policy_Model"), tf.keras.Model([inputs_for_reward, agent_id_matrix], predicted_reward, name="Reward_Predictor_Model")
 
     @staticmethod
-    def get_reward_predictor(masked_input_with_id, emb_size=64):
+    def get_reward_predictor(masked_input_with_id, emb_size=64, flag_discretize=False, reward_range=5):
         # layer 1
         last_layer = tf.keras.layers.Dense(
                 emb_size,
@@ -189,6 +189,16 @@ class RewardModel(RecurrentTFModelV2):
                     activation=None, # double check activation function, -4 to 4
                     kernel_initializer=normc_initializer(1.0),
                 )(last_layer)
+        if flag_discretize:
+            softmax_output = tf.keras.layers.Dense(
+                    units=reward_range, 
+                    name="fc_{}_{}".format(4, 'softmax'),
+                    activation='softmax',
+                    kernel_initializer=normc_initializer(1.0),
+                )(last_layer)
+            last_layer = tf.math.argmax(softmax_output, axis=-1)
+            last_layer = tf.expand_dims(last_layer,axis=-1)
+            last_layer = last_layer-3
         return last_layer
 
     def get_reg_loss(self, ):
@@ -301,39 +311,41 @@ class RewardModel(RecurrentTFModelV2):
         agent_id_matrix = input_dict["obs"]["agent_id_matrix"]
         cf_actions = input_dict["obs"]["cf_actions"]
 
-        vector_state = tf.expand_dims(vector_state,axis=1)
-        all_vector_state = tf.repeat(vector_state,cf_actions.shape[-1],axis=1)
+        cf_number = cf_actions.shape[1]
+        agent_num = agent_id_matrix.shape[-1]
         
-        all_vector_state = tf.concat((all_vector_state[:,:,:15],agent_id_matrix),axis=-1)
+        # enabling the cf action 
+        all_vector_state = tf.expand_dims(vector_state,axis=0)
+        all_vector_state = tf.repeat(all_vector_state, cf_number, axis=0)
 
-        all_cf_reward = []
-        cf_actions = tf.convert_to_tensor(cf_actions)
-        cf_actions = tf.reshape(cf_actions, shape=(cf_actions.shape[1], -1, cf_actions.shape[-1]))
-        for i in range(cf_actions.shape[-1]):
-            vector_state = all_vector_state[:,i]
-            # vector_state = tf.convert_to_tensor(vector_state)
+        cf_actions = tf.transpose(cf_actions,perm=[1,0,2])
+        
+        all_vector_state_action = tf.concat((all_vector_state,cf_actions),axis=-1)
+
+        cf_agent_id_matrix = tf.expand_dims(agent_id_matrix,axis=0)
+        cf_agent_id_matrix = tf.repeat(cf_agent_id_matrix,cf_number,axis=0)
+
+        
+        random_index = tf.random.uniform(shape=(sample_number,), maxval=cf_number, dtype=tf.int32)
+        cf_vector_obs_action = tf.gather(all_vector_state_action, random_index)
+        cf_agent_id_matrix = tf.gather(cf_agent_id_matrix,random_index)
+
+        for i in range(sample_number):
+            inputs_for_reward = cf_vector_obs_action[i]
+            inputs_id = cf_agent_id_matrix[i]
+            predicted_cf_reward = self.reward_model({'inputs_for_reward': inputs_for_reward, 
+                                                'inputs_id': inputs_id})
+            predicted_cf_reward = tf.expand_dims(predicted_cf_reward,axis=0)
+            if i == 0:
+                cf_reward = predicted_cf_reward
+            else:
+                cf_reward = tf.concat((cf_reward,predicted_cf_reward),axis=0)
             
-            vector_state = tf.expand_dims(vector_state,dim=0)
-            vector_state = tf.repeat(vector_state, repeats=cf_actions.shape[0], axis=0)
-            
-            cf_vector_obs_action = tf.concat([vector_state,cf_actions],axis=-1)
+        # cf_total_reward = self.reward_model({'inputs_for_reward': cf_vector_obs_action, 
+        #                                         'inputs_id': cf_agent_id_matrix})
+        cf_reward = tf.reduce_mean(cf_reward,axis=0)
 
-            random_index = tf.random.uniform(shape=(sample_number,), maxval=cf_vector_obs_action.shape[0], dtype=tf.int32)
-            cf_vector_obs_action = tf.gather(cf_vector_obs_action, random_index)
-
-            cf_reward = []
-            for n in range(sample_number):
-                cf_reward.append(self.reward_model(cf_vector_obs_action[n]))
-            
-            counterfactual_reward = sum(cf_reward)/sample_number
-            all_cf_reward.append(tf.reduce_mean(counterfactual_reward))
-
-        all_cf_reward = tf.convert_to_tensor(all_cf_reward)
-        all_cf_reward = tf.reshape(all_cf_reward,shape=[-1,all_cf_reward.shape[0]])
-        # counterfactual_reward = tf.reduce_sum(counterfactual_reward,axis=1)
-        # all_cf_reward = tf.reshape(all_cf_reward,shape=(-1,all_cf_reward))
-
-        return all_cf_reward
+        return cf_reward
 
     def marginalize_predictions_over_own_actions(self, prev_action_logits, counterfactual_logits):
         """
