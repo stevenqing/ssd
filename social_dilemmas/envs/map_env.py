@@ -229,13 +229,13 @@ class MapEnv(MultiAgentEnv):
                 "prev_vector_state": Box(
                     low=0,
                     high=100,
-                    shape=(18,), #TODO: settle for coin3, need to change that later
+                    shape=(15,), #TODO: settle for coin3, need to change that later
                     dtype=np.int32,
                 ),
                 "vector_state": Box(
                     low=0,
                     high=100,
-                    shape=(18,), #TODO: settle for coin3, need to change that later
+                    shape=(15,), #TODO: settle for coin3, need to change that later
                     dtype=np.int32,
                 ),
                 }
