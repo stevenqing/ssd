@@ -273,6 +273,7 @@ class RewardModel(RecurrentTFModelV2):
         return self._model_out, [output_h1, output_c1]
     
     def compute_reward(self, input_dict):
+        #TODO: Double check the input_dict['obs']['all_actions'](checked should be all right)
         states, actions = input_dict['obs']['prev_vector_state'], input_dict['obs']['all_actions']
         # agent_id_matrix = tf.transpose(agent_id_matrix,perm=[1,0,2])
 
@@ -286,7 +287,7 @@ class RewardModel(RecurrentTFModelV2):
 
         # state_action = tf.concat((all_vector_state, actions), axis=-1)
         # if state_action.shape[1] > 0:
-        #     state_action = tf.squeeze(state_action,axis=1)
+         #     state_action = tf.squeeze(state_action,axis=1)
         state_action = tf.concat((states, actions), axis=-1)
 
         predicted_reward = self.reward_model({'inputs_for_reward': state_action, 

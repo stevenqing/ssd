@@ -176,18 +176,18 @@ class MapEnv(MultiAgentEnv):
                 high=255,
                 shape=(2 * self.view_len + 1, 2 * self.view_len + 1, 3),
                 dtype=np.uint8,
-            )
+            ),
+            "all_rewards": Box(
+                low=-4,
+                high=1,
+                shape=(self.num_agents,),
+                dtype=np.int8,
+                ),
         }
         if self.return_agent_actions:
             # Append the actions of other agents
             obs_space = {
                 **obs_space,
-                "all_rewards": Box(
-                    low=-4,
-                    high=1,
-                    shape=(self.num_agents,),
-                    dtype=np.int8,
-                ),
                 "other_agent_actions": Box(
                     low=0,
                     high=len(self.all_actions),
