@@ -267,29 +267,30 @@ class Coin3Agent(Agent):
 
     def consume(self, char):
         """Defines how an agent interacts with the char it is standing on"""
+
         agent1 = "agent-" + str(0)
         agent2 = "agent-" + str(1)
         agent3 = "agent-" + str(2)
         if char == b"A":
             self.reward_this_turn += 1
             if self.agent_id == agent2:
-                self.penalty_2 = 2
+                self.penalty_1 += 2
             elif self.agent_id == agent3:
-                self.penalty_3 = 2
+                self.penalty_1 += 2
             return b" "
         elif char == b"B":
             self.reward_this_turn += 1
             if self.agent_id == agent1:
-                self.penalty_1 = 2
+                self.penalty_2 += 2
             elif self.agent_id == agent3:
-                self.penalty_3 = 2
+                self.penalty_2 += 2
             return b" "
         elif char == b"C":
             self.reward_this_turn += 1
             if self.agent_id == agent1:
-                self.penalty_1 = 2
+                self.penalty_3 += 2
             elif self.agent_id == agent2:
-                self.penalty_2 = 2
+                self.penalty_3 += 2
             return b" "
         else:
             return char
