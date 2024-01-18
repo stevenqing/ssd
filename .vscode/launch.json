@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "python": "/home/shuqingshi/miniconda3/envs/melting-ssd/bin/python",
+            "python": "/home/zyd/anaconda3/envs/ssd/bin/python",
             "justMyCode": false
         },
         {
@@ -19,7 +19,7 @@
             "request": "launch",
             "program": "run_scripts/train.py",
             "console": "integratedTerminal",
-            "python": "/home/shuqingshi/miniconda3/envs/melting-ssd/bin/python",
+            "python": "/home/zyd/anaconda3/envs/ssd/bin/python",
             "justMyCode": false,
             "args": [
                 "--env",
