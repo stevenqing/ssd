@@ -155,7 +155,7 @@ class RewardModel(RecurrentTFModelV2):
         # print(masked_input)
         # masked_input = tf.concat([masked_input, agent_id_matrix], axis=-1)
         masked_input = tf.keras.layers.Concatenate(axis=-1)([masked_input, agent_id_matrix])
-        predicted_reward = self.get_reward_predictor(masked_input,flag_discretize=True)
+        predicted_reward = self.get_reward_predictor(masked_input,flag_discretize=False)
         predicted_reward = tf.squeeze(predicted_reward, axis=-1)
 
         return tf.keras.Model(inputs, [actor_critic_fc], name="Policy_Model"), tf.keras.Model([inputs_for_reward, agent_id_matrix], predicted_reward, name="Reward_Predictor_Model")
@@ -185,7 +185,7 @@ class RewardModel(RecurrentTFModelV2):
                 )(last_layer)
         # layer 4
         last_layer = tf.keras.layers.Dense(
-                    units=1, # output size for each agent's reward
+                    units=1 if not flag_discretize else 5, # output size for each agent's reward
                     name="fc_{}_{}".format(4, 'reward'),
                     activation=None, # double check activation function, -4 to 4
                     kernel_initializer=normc_initializer(1.0),
@@ -196,8 +196,9 @@ class RewardModel(RecurrentTFModelV2):
             def gumbel_softmax(logits, temperature=1.0): # TODO: double check temperature
                 gumbel_noise = -tf.math.log(-tf.math.log(tf.random.uniform(tf.shape(logits), 0, 1)))
                 y = logits + gumbel_noise
-                return tf.nn.softmax(y / temperature)
+                return tf.nn.softmax(y / temperature, axis=-1)
             last_layer = tf.keras.layers.Lambda(lambda x: gumbel_softmax(x, 1.0))(last_layer)
+        
         return last_layer
 
     def get_reg_loss(self, ):
