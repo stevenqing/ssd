@@ -27,8 +27,9 @@ class CAUSAL_MASK(tf.keras.layers.Layer):
         mask = tf.where(tf.abs(self.w) > sh, self.w, tf.zeros_like(self.w))
         return tf.expand_dims(inputs, axis=1) * tf.expand_dims(mask, axis=0)
     def get_reg_loss(self, sh=0.1):
-        mask = tf.where(tf.abs(self.w) > sh, tf.ones_like(self.w), tf.zeros_like(self.w))
-        return tf.reduce_mean(mask)
+        return tf.reduce_mean(tf.abs(self.w))
+    def get_sparsity(self, sh=0.1):
+        return tf.reduce_mean(tf.cast(tf.abs(self.w) > sh, tf.float32))
     
 class RewardModel(RecurrentTFModelV2):
     def __init__(self, obs_space, action_space, num_outputs, model_config, name):
@@ -190,15 +191,13 @@ class RewardModel(RecurrentTFModelV2):
                     kernel_initializer=normc_initializer(1.0),
                 )(last_layer)
         if flag_discretize:
-            softmax_output = tf.keras.layers.Dense(
-                    units=reward_range, 
-                    name="fc_{}_{}".format(4, 'softmax'),
-                    activation='softmax',
-                    kernel_initializer=normc_initializer(1.0),
-                )(last_layer)
-            last_layer = tf.math.argmax(softmax_output, axis=-1)
-            last_layer = tf.expand_dims(last_layer,axis=-1)
-            last_layer = last_layer-3
+            
+            # apply gumble softmax
+            def gumbel_softmax(logits, temperature=1.0): # TODO: double check temperature
+                gumbel_noise = -tf.math.log(-tf.math.log(tf.random.uniform(tf.shape(logits), 0, 1)))
+                y = logits + gumbel_noise
+                return tf.nn.softmax(y / temperature)
+            last_layer = tf.keras.layers.Lambda(lambda x: gumbel_softmax(x, 1.0))(last_layer)
         return last_layer
 
     def get_reg_loss(self, ):
@@ -237,6 +236,7 @@ class RewardModel(RecurrentTFModelV2):
             self._predicted_reward = self.compute_reward(input_dict)
             self._counterfactual_rewards = self.compute_conterfactual_reward(input_dict)
             self._reg_loss = self.causal_mask_layer.get_reg_loss()
+            self._sparsity = self.causal_mask_layer.get_sparsity()
         return action_logits, new_state
     def forward_rnn(self, input_dict, state, seq_lens):
         """
@@ -318,8 +318,11 @@ class RewardModel(RecurrentTFModelV2):
         all_vector_state = tf.expand_dims(vector_state,axis=0)
         all_vector_state = tf.repeat(all_vector_state, cf_number, axis=0)
 
-        cf_actions = tf.transpose(cf_actions,perm=[1,0,2])
+        cf_actions = tf.transpose(cf_actions,perm=[1,0,2]) # 16, None, 3
         
+        # all_vector_state: 16, None, 15
+        # cf_actions: 16, None, 3
+        # all_vector_state_action: 16, None, 18
         all_vector_state_action = tf.concat((all_vector_state,cf_actions),axis=-1)
 
         cf_agent_id_matrix = tf.expand_dims(agent_id_matrix,axis=0)
