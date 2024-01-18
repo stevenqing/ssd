@@ -183,7 +183,7 @@ class MapEnv(MultiAgentEnv):
             obs_space = {
                 **obs_space,
                 "all_rewards": Box(
-                    low=-2,
+                    low=-4,
                     high=1,
                     shape=(self.num_agents,),
                     dtype=np.int8,
