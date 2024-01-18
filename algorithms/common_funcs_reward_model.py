@@ -24,6 +24,7 @@ POLICY_SCOPE = "func"
 PREDICTED_REWARD = "predicted_reward" # predicted rewards for reward model learning
 CONTERFACTUAL_REWARD = "conterfactual_reward" # conterfactual rewards for policy learning
 TRUE_REWARD = 'true_reward' # true rewards for reward model learning
+
 class InfluenceScheduleMixIn(object):
     def __init__(self, config):
         config = config["model"]["custom_options"]
@@ -63,7 +64,8 @@ class InfluenceScheduleMixIn(object):
             self.influence_reward_schedule_weights,
         )
         return weight * self.baseline_influence_reward_weight
-
+    
+CONTERFACTUAL_REWARD
 
 class REWARDLoss(object):
     def __init__(self, policy, reward_preds, true_rewards, loss_weight=1.0, others_visibility=None):
@@ -128,11 +130,14 @@ def setup_reward_model_loss(policy, train_batch):
     return reward_model_loss
 
 
-def reward_postprocess_trajectory(sample_batch):
+
+
+def reward_postprocess_trajectory(policy,sample_batch):
     # add conterfactual reward and add to batch.
     # TODO check if the timestep for reward can match the timestep for state
     # TODO add weight to the conterfactural reward
-    conterfactual_reward = sample_batch[CONTERFACTUAL_REWARD]
+    cur_cf_reward_weight = policy.compute_influence_reward_weight()
+    conterfactual_reward = sample_batch[CONTERFACTUAL_REWARD] * cur_cf_reward_weight
     # print(sample_batch[CONTERFACTUAL_REWARD])
     sample_batch[EXTRINSIC_REWARD] = sample_batch["rewards"]
     sample_batch["rewards"] = sample_batch["rewards"] + np.sum(conterfactual_reward,axis=1)

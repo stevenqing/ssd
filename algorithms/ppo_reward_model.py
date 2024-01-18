@@ -127,7 +127,7 @@ def postprocess_ppo_reward(policy, sample_batch, other_agent_batches=None, episo
     Then, add the policy logits, VF preds, and advantages to the trajectory.
     :return: Updated trajectory (batch)
     """
-    batch = reward_postprocess_trajectory(sample_batch)
+    batch = reward_postprocess_trajectory(policy,sample_batch)
     batch = postprocess_ppo_gae(policy, batch)
     return batch
 
