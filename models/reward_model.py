@@ -57,9 +57,9 @@ class RewardModel(RecurrentTFModelV2):
         # self.conterfactual_divergence_measure = model_config["custom_options"][
         #     "conterfactual_divergence_measure"
         # ]
-
+        # Declare whether to use causal mask
+        self.use_causal_mask = False
         # Declare variables that will later be used as loss fetches
-        # It's
         self._model_out = None
         self._value_out = None
         self._action_pred = None
@@ -68,7 +68,6 @@ class RewardModel(RecurrentTFModelV2):
         self._visibility = None
         self._social_conterfactual_reward = None
         self._true_one_hot_actions = None
-
         self.policy_model, self.reward_model = self.create_model(obs_space, model_config)
         self.register_variables(self.policy_model.variables + self.reward_model.variables)
 
@@ -150,46 +149,63 @@ class RewardModel(RecurrentTFModelV2):
         # inputs_for_reward: [batch_size, vector_state_dim + action_dim] -> [batch_size, 1, vector_state_dim + action_dim]
         # causal_mask: [num_agents, vector_state_dim + action_dim] -> [1, num_agents, vector_state_dim + action_dim]
         # masked_input: [batch_size, num_agents, vector_state_dim + action_dim]
-        self.causal_mask_layer = CAUSAL_MASK(input_dim=vector_state_dim + action_dim, num_agent=num_agents)
-        masked_input = self.causal_mask_layer(inputs_for_reward)
-        # print(masked_input)
-        # masked_input = tf.concat([masked_input, agent_id_matrix], axis=-1)
-        masked_input = tf.keras.layers.Concatenate(axis=-1)([masked_input, agent_id_matrix])
-        predicted_reward = self.get_reward_predictor(masked_input,flag_discretize=False)
+        if self.use_causal_mask:
+            self.causal_mask_layer = CAUSAL_MASK(input_dim=vector_state_dim + action_dim, num_agent=num_agents)
+            masked_input = self.causal_mask_layer(inputs_for_reward)
+            predicted_input = tf.keras.layers.Concatenate(axis=-1)([masked_input, agent_id_matrix])
+        else:
+            reward_input = tf.expand_dims(inputs_for_reward,axis=1)
+            reward_input = tf.repeat(reward_input,agent_id_matrix.shape[-1],axis=1)
+            predicted_input = tf.concat((reward_input,agent_id_matrix),axis=-1)
+        predicted_reward = self.get_reward_predictor(predicted_input,custom_activation=True,flag_discretize=False)
         predicted_reward = tf.squeeze(predicted_reward, axis=-1)
 
         return tf.keras.Model(inputs, [actor_critic_fc], name="Policy_Model"), tf.keras.Model([inputs_for_reward, agent_id_matrix], predicted_reward, name="Reward_Predictor_Model")
 
+
+    
     @staticmethod
-    def get_reward_predictor(masked_input_with_id, emb_size=64, flag_discretize=False, reward_range=5):
+    def get_reward_predictor(masked_input_with_id, emb_size=64, flag_discretize=False, custom_activation=True, reward_range=5):
         # layer 1
         last_layer = tf.keras.layers.Dense(
                 emb_size,
                 name="fc_{}_{}".format(1, 'reward'),
-                activation='relu',
+                activation='sigmoid',
                 kernel_initializer=normc_initializer(1.0),
             )(masked_input_with_id)
         # layer 2
         last_layer = tf.keras.layers.Dense(
                     units=emb_size * 2, # output size for each agent's reward
                     name="fc_{}_{}".format(2, 'reward'),
-                    activation='relu', # double check activation function, -4 to 4
+                    activation='sigmoid', # double check activation function, -4 to 4
                     kernel_initializer=normc_initializer(1.0),
                 )(last_layer)
         # layer 3
         last_layer = tf.keras.layers.Dense(
                     units=emb_size, # output size for each agent's reward
                     name="fc_{}_{}".format(3, 'reward'),
-                    activation='relu', # double check activation function, -4 to 4
+                    activation='sigmoid', # double check activation function, -4 to 4
                     kernel_initializer=normc_initializer(1.0),
                 )(last_layer)
+        if custom_activation:
+            def custom_activation_function(x):
+                sigmoid = tf.keras.activations.sigmoid(x)
+                return 5 * sigmoid - 4
+            # layer 4
+            last_layer = tf.keras.layers.Dense(
+                            units=1 if not flag_discretize else 5, # output size for each agent's reward
+                            name="fc_{}_{}".format(4, 'reward'),
+                            activation=custom_activation_function, # double check activation function, -4 to 4
+                            kernel_initializer=normc_initializer(1.0),
+                        )(last_layer)
+        else:
         # layer 4
-        last_layer = tf.keras.layers.Dense(
-                    units=1 if not flag_discretize else 5, # output size for each agent's reward
-                    name="fc_{}_{}".format(4, 'reward'),
-                    activation=None, # double check activation function, -4 to 4
-                    kernel_initializer=normc_initializer(1.0),
-                )(last_layer)
+            last_layer = tf.keras.layers.Dense(
+                            units=1 if not flag_discretize else 5, # output size for each agent's reward
+                            name="fc_{}_{}".format(4, 'reward'),
+                            activation=None, # double check activation function, -4 to 4
+                            kernel_initializer=normc_initializer(1.0),
+                        )(last_layer)
         if flag_discretize:
             
             # apply gumble softmax
@@ -237,9 +253,11 @@ class RewardModel(RecurrentTFModelV2):
             self._predicted_reward = self.compute_reward(input_dict)
             self._true_reward = input_dict['obs']['prev_rewards']
             self._counterfactual_rewards = self.compute_conterfactual_reward(input_dict)
-            self._reg_loss = self.causal_mask_layer.get_reg_loss()
-            self._sparsity = self.causal_mask_layer.get_sparsity()
+            if self.use_causal_mask:
+                self._reg_loss = self.causal_mask_layer.get_reg_loss()
+                self._sparsity = self.causal_mask_layer.get_sparsity()
         return action_logits, new_state
+    
     def forward_rnn(self, input_dict, state, seq_lens):
         """
         Forward pass through the MOA LSTMs.

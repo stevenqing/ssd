@@ -89,8 +89,14 @@ class REWARDLoss(object):
         # loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False)
         # self.mse_per_entry = loss_fn(
         #                 true_rewards, tf.one_hot(reward_preds,depth=reward_preds.shape[-1]))
-        self.mse_per_entry = tf.losses.mean_squared_error(
-                       labels=true_rewards, predictions=reward_preds)
+        # self.mse_per_entry = tf.losses.mean_squared_error(
+        #                labels=true_rewards, predictions=reward_preds)
+        mse = tf.keras.losses.MeanSquaredError()
+        self.mse_per_entry = mse(
+                        true_rewards, reward_preds)
+
+
+
         # Zero out the loss if the other agent isn't visible to this one.
         # print(true_rewards,reward_preds)
         # if others_visibility is not None:
@@ -101,9 +107,12 @@ class REWARDLoss(object):
 
         # Flatten loss to one value for the entire batch
         self.mse_loss = tf.reduce_mean(self.mse_per_entry) * loss_weight[0]
-        self.reg_loss = policy.get_reg_loss() * loss_weight[1]
-        tf.Print(self.mse_loss, [self.mse_loss], message="Reward MSE loss")
-        tf.Print(self.reg_loss, [self.reg_loss], message="Sparsity loss")
+        if policy.use_causal_mask:
+            self.reg_loss = policy.get_reg_loss() * loss_weight[1]
+        # tf.Print(self.mse_loss, [self.mse_loss], message="Reward MSE loss")
+        # tf.Print(self.reg_loss, [self.reg_loss], message="Sparsity loss")
+
+
 
 
 def setup_reward_model_loss(policy, train_batch):
@@ -112,6 +121,8 @@ def setup_reward_model_loss(policy, train_batch):
     # true_rewards = train_batch[EXTRINSIC_REWARD]
     # true_rewards = train_batch['obs'][:,12:15]
     true_rewards = train_batch[TRUE_REWARD]
+    true_rewards = tf.cast(true_rewards, tf.int32)
+    true_rewards = tf.where(true_rewards > 127, true_rewards - 256, true_rewards)
     # 0/1 multiplier array representing whether each agent is visible to
     # the current agent.
     if policy.train_reward_only_when_visible:
@@ -163,43 +174,6 @@ def get_agent_visibility_multiplier(trajectory, num_other_agents, agent_ids):
     return visibility
 
 
-def extract_last_actions_from_episodes(episodes, batch_type=False, own_actions=None):
-    """Pulls every other agent's previous actions out of structured data.
-    Args:
-        episodes: the structured data type. Typically a dict of episode
-            objects.
-        batch_type: if True, the structured data is a dict of tuples,
-            where the second tuple element is the relevant dict containing
-            previous actions.
-        own_actions: an array of the agents own actions. If provided, will
-            be the first column of the created action matrix.
-    Returns: a real valued array of size [batch, num_other_agents] (meaning
-        each agents' actions goes down one column, each row is a timestep)
-    """
-    if episodes is None:
-        print("Why are there no episodes?")
-        import ipdb
-
-        ipdb.set_trace()
-
-    # Need to sort agent IDs so same agent is consistently in
-    # same part of input space.
-    agent_ids = sorted(episodes.keys())
-    prev_actions = []
-
-    for agent_id in agent_ids:
-        if batch_type:
-            prev_actions.append(episodes[agent_id][1]["actions"])
-        else:
-            prev_actions.append([e.prev_action for e in episodes[agent_id]])
-
-    all_actions = np.transpose(np.array(prev_actions))
-
-    # Attach agents own actions as column 1
-    if own_actions is not None:
-        all_actions = np.hstack((own_actions, all_actions))
-
-    return all_actions
 
 
 def reward_fetches(policy):

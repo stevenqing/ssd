@@ -56,7 +56,11 @@ def loss_with_reward_model(policy, model, dist_class, train_batch):
     action_dist = dist_class(logits, model)
 
     reward_loss = setup_reward_model_loss(model, train_batch)
-    policy.reward_loss, policy.reg_loss = reward_loss.mse_loss, reward_loss.reg_loss
+    if model.use_causal_mask:
+        policy.reward_loss, policy.reg_loss = reward_loss.mse_loss, reward_loss.reg_loss
+    else:
+        policy.reward_loss = reward_loss.mse_loss
+        policy.reg_loss = tf.zeros([1])
 
     if state:
         max_seq_len = tf.reduce_max(train_batch["seq_lens"])

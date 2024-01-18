@@ -247,7 +247,7 @@ class MapEnv(MultiAgentEnv):
         # Change dtype so that ray can put all observations into one flat batch
         # with the correct dtype.
         # See DictFlatteningPreprocessor in ray/rllib/models/preprocessors.py.
-        obs_space.dtype = np.uint8
+        obs_space.dtype = np.int8
         return obs_space
 
     def custom_reset(self):
@@ -314,7 +314,6 @@ class MapEnv(MultiAgentEnv):
         dones: dict indicating whether each agent is done
         info: dict to pass extra info to gym
         """
-        self.count += 1
         self.beam_pos = []
         agent_actions = {}
         store_actions = []
