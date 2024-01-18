@@ -235,7 +235,7 @@ class RewardModel(RecurrentTFModelV2):
             # self._predicted_reward =  input_dict['prev_rewards'] 
             # self._counterfactual_rewards = input_dict['prev_rewards']
             self._predicted_reward = self.compute_reward(input_dict)
-            self._true_reward = input_dict['obs']['all_rewards']
+            self._true_reward = input_dict['obs']['prev_rewards']
             self._counterfactual_rewards = self.compute_conterfactual_reward(input_dict)
             self._reg_loss = self.causal_mask_layer.get_reg_loss()
             self._sparsity = self.causal_mask_layer.get_sparsity()

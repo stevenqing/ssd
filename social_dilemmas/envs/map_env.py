@@ -236,6 +236,12 @@ class MapEnv(MultiAgentEnv):
                     shape=(15,), #TODO: settle for coin3, need to change that later
                     dtype=np.int32,
                 ),
+                "prev_rewards":  Box(
+                low=-4,
+                high=1,
+                shape=(self.num_agents,),
+                dtype=np.int8,
+                ),   
                 }
         obs_space = Dict(obs_space)
         # Change dtype so that ray can put all observations into one flat batch
@@ -420,9 +426,11 @@ class MapEnv(MultiAgentEnv):
                     "agent_id_matrix": self.agent_id_matrix,
                     "prev_vector_state": self.prev_vector_state,
                     "vector_state": vector_state,
+                    "prev_rewards": self.prev_rewards,
                 }
                 agent.prev_visible_agents = visible_agents
                 self.prev_vector_state = vector_state
+                self.prev_rewards = all_rewards
             else:
                 observations[agent.agent_id] = {"curr_obs": rgb_arr,"vector_state": vector_state}
             store_rewards.append(rewards[agent.agent_id])
@@ -531,8 +539,10 @@ class MapEnv(MultiAgentEnv):
                     "prev_vector_state": init_vector_state,
                     # "action_range": np.array([len(self.all_actions)]).astype(np.uint8),
                     "vector_state": init_vector_state,
+                    "prev_rewards": np.array([0 for _ in range(self.num_agents)]).astype(np.int8),
                 }
                 agent.prev_visible_agents = visible_agents
+                self.prev_rewards = np.array([0 for _ in range(self.num_agents)]).astype(np.int8)
             else:
                 observations[agent.agent_id] = {"curr_obs": rgb_arr}
         return observations
