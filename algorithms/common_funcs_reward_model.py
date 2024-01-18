@@ -23,7 +23,7 @@ POLICY_SCOPE = "func"
 # add by ReedZyd
 PREDICTED_REWARD = "predicted_reward" # predicted rewards for reward model learning
 CONTERFACTUAL_REWARD = "conterfactual_reward" # conterfactual rewards for policy learning
-
+TRUE_REWARD = 'true_reward' # true rewards for reward model learning
 class InfluenceScheduleMixIn(object):
     def __init__(self, config):
         config = config["model"]["custom_options"]
@@ -108,7 +108,8 @@ def setup_reward_model_loss(policy, train_batch):
     # Instantiate the prediction loss
     reward_preds = train_batch[PREDICTED_REWARD] # need to reconsider in here, checking featches
     # true_rewards = train_batch[EXTRINSIC_REWARD]
-    true_rewards = train_batch['obs'][:,12:15]
+    # true_rewards = train_batch['obs'][:,12:15]
+    true_rewards = train_batch[TRUE_REWARD]
     # 0/1 multiplier array representing whether each agent is visible to
     # the current agent.
     if policy.train_reward_only_when_visible:
@@ -206,6 +207,7 @@ def reward_fetches(policy):
         OTHERS_ACTIONS: policy.model.other_agent_actions(), 
         VISIBILITY: policy.model.visibility(),
         PREDICTED_REWARD: policy.model.get_predicted_reward(),
+        TRUE_REWARD: policy.model.get_true_reward(),
         CONTERFACTUAL_REWARD: policy.model.get_conterfactual_reward(), # check policy.model.predicted_actions()
     }
 
