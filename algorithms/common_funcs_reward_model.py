@@ -108,7 +108,7 @@ def setup_reward_model_loss(policy, train_batch):
     # Instantiate the prediction loss
     reward_preds = train_batch[PREDICTED_REWARD] # need to reconsider in here, checking featches
     # true_rewards = train_batch[EXTRINSIC_REWARD]
-    true_rewards = train_batch['obs'][:,675:678]
+    true_rewards = train_batch['obs'][:,12:15]
     # 0/1 multiplier array representing whether each agent is visible to
     # the current agent.
     if policy.train_reward_only_when_visible:
