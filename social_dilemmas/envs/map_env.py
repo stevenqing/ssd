@@ -367,10 +367,21 @@ class MapEnv(MultiAgentEnv):
         rewards = {}
         dones = {}
         infos = {}
+
+        # Add penalty to the agents
+        penalty_1,penalty_2,penalty_3 = 0,0,0
         for agent in self.agents.values():
+            penalty_1 += agent.penalty_1
+            penalty_2 += agent.penalty_2
+            penalty_3 += agent.penalty_3
+
+        # Calculate the rewards of each agent
+        for agent in self.agents.values():
+            agent.penalty_1 = penalty_1
+            agent.penalty_2 = penalty_2
+            agent.penalty_3 = penalty_3
             rewards[agent.agent_id] = agent.compute_reward()
             
-        
         for agent in self.agents.values():
             agent.full_map = map_with_agents
             rgb_arr = self.color_view(agent)
