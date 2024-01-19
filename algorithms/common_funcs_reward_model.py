@@ -24,7 +24,8 @@ POLICY_SCOPE = "func"
 PREDICTED_REWARD = "predicted_reward" # predicted rewards for reward model learning
 CONTERFACTUAL_REWARD = "conterfactual_reward" # conterfactual rewards for policy learning
 TRUE_REWARD = 'true_reward' # true rewards for reward model learning
-
+MAPING_REWARD_FROM_CLASS_TO_VALUE = lambda x: x - 4
+MAPING_REWARD_FROM_VALUE_TO_CLASS = lambda x: x + 4
 class InfluenceScheduleMixIn(object):
     def __init__(self, config):
         config = config["model"]["custom_options"]
@@ -65,7 +66,6 @@ class InfluenceScheduleMixIn(object):
         )
         return weight * self.baseline_influence_reward_weight
     
-CONTERFACTUAL_REWARD
 
 class REWARDLoss(object):
     def __init__(self, policy, reward_preds, true_rewards, loss_weight=1.0, others_visibility=None):
@@ -115,6 +115,48 @@ class REWARDLoss(object):
 
 
 
+class REWARDLossForClassification(object):
+    def __init__(self, policy, reward_preds, true_rewards, loss_weight=1.0, others_visibility=None):
+        """Train Reward prediction model with supervised cross entropy loss on a 
+           trajectory.
+           The model is trying to predict others' reward at timestep t+1 given all 
+           states and actions at timestep t.
+        Inputs:
+            reward_preds: [B,N_agent,N_class]
+            true_rewards: [B,N_agent]
+        Returns:
+            MSE loss
+            reg loss
+        """
+        # Pred_logits[n] contains the prediction made at n-1 for actions taken at n, and a prediction
+        # for t=0 cannot have been made at timestep -1, as the simulation starts at timestep 0.
+        # Thus we remove the first prediction, as this value contains no sensible data.
+        # NB: This means we start at n=1.
+
+        classification_per_entry = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True, reduction='none')
+        self.mse_per_entry = classification_per_entry(
+                        true_rewards, reward_preds)
+
+
+
+        # Zero out the loss if the other agent isn't visible to this one.
+        # print(true_rewards,reward_preds)
+        # if others_visibility is not None:
+        #     # others_visibility[n] contains agents visible at time n. We start at n=1,
+        #     # so the first and last values have to be removed to maintain equal array size.
+        #     others_visibility = others_visibility[1:-1, :]
+        #     self.ce_per_entry *= tf.cast(others_visibility, tf.float32)
+
+        # Flatten loss to one value for the entire batch
+        self.classification_loss = tf.reduce_mean(self.mse_per_entry) * loss_weight[0]
+        if policy.use_causal_mask:
+            self.reg_loss = policy.get_reg_loss() * loss_weight[1]
+        # tf.Print(self.mse_loss, [self.mse_loss], message="Reward MSE loss")
+        # tf.Print(self.reg_loss, [self.reg_loss], message="Sparsity loss")
+
+
+
+
 def setup_reward_model_loss(policy, train_batch):
     # Instantiate the prediction loss
     reward_preds = train_batch[PREDICTED_REWARD] # need to reconsider in here, checking featches
@@ -141,6 +183,35 @@ def setup_reward_model_loss(policy, train_batch):
     return reward_model_loss
 
 
+def setup_reward_model_classification_loss(policy, train_batch):
+    # Instantiate the prediction loss
+    reward_preds = train_batch[PREDICTED_REWARD] # need to reconsider in here, checking featches
+    # true_rewards = train_batch[EXTRINSIC_REWARD]
+    # true_rewards = train_batch['obs'][:,12:15]
+    true_rewards = train_batch[TRUE_REWARD]
+    true_rewards = tf.cast(true_rewards, tf.int32)
+    true_rewards = tf.where(true_rewards > 127, true_rewards - 256, true_rewards)
+    
+    # map the reward from value to class
+    true_rewards_class = MAPING_REWARD_FROM_VALUE_TO_CLASS(true_rewards)
+    # 0/1 multiplier array representing whether each agent is visible to
+    # the current agent.
+    if policy.train_reward_only_when_visible:
+        # if VISIBILITY in train_batch:
+        others_visibility = train_batch[VISIBILITY]
+    else:
+        others_visibility = None
+    # raise NotImplementedError
+    reward_model_loss = REWARDLossForClassification(
+        policy, 
+        reward_preds,
+        true_rewards_class,
+        loss_weight=[policy.reward_loss_weight, policy.reg_loss_weight], # not sure if it's good
+        others_visibility=others_visibility,
+    )
+    return reward_model_loss
+
+
 
 
 def reward_postprocess_trajectory(policy,sample_batch):
@@ -148,10 +219,15 @@ def reward_postprocess_trajectory(policy,sample_batch):
     # TODO check if the timestep for reward can match the timestep for state
     # TODO add weight to the conterfactural reward
     cur_cf_reward_weight = policy.compute_influence_reward_weight()
-    conterfactual_reward = sample_batch[CONTERFACTUAL_REWARD] * cur_cf_reward_weight
+
+    conterfactual_reward = sample_batch[CONTERFACTUAL_REWARD] 
+    if policy.model.discrete_rewards:
+        conterfactual_reward = MAPING_REWARD_FROM_CLASS_TO_VALUE(conterfactual_reward) # 1, sample_size, N_agents
+        # mean along the first axis, which is the sample size
+    conterfactual_reward = np.mean(conterfactual_reward,axis=1) # 1, N_agents
     # print(sample_batch[CONTERFACTUAL_REWARD])
     sample_batch[EXTRINSIC_REWARD] = sample_batch["rewards"]
-    sample_batch["rewards"] = sample_batch["rewards"] + np.sum(conterfactual_reward,axis=1)
+    sample_batch["rewards"] = sample_batch["rewards"] + np.sum(conterfactual_reward,axis=1) * cur_cf_reward_weight
 
     return sample_batch
             

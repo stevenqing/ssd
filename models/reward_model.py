@@ -57,8 +57,13 @@ class RewardModel(RecurrentTFModelV2):
         # self.conterfactual_divergence_measure = model_config["custom_options"][
         #     "conterfactual_divergence_measure"
         # ]
+
+
+        # add by ReedZyd
+        self.discrete_rewards = True
+        
         # Declare whether to use causal mask
-        self.use_causal_mask = False
+        self.use_causal_mask = True
         # Declare variables that will later be used as loss fetches
         self._model_out = None
         self._value_out = None
@@ -157,15 +162,16 @@ class RewardModel(RecurrentTFModelV2):
             reward_input = tf.expand_dims(inputs_for_reward,axis=1)
             reward_input = tf.repeat(reward_input,agent_id_matrix.shape[-1],axis=1)
             predicted_input = tf.concat((reward_input,agent_id_matrix),axis=-1)
-        predicted_reward = self.get_reward_predictor(predicted_input,custom_activation=True,flag_discretize=False)
-        predicted_reward = tf.squeeze(predicted_reward, axis=-1)
+        # ! by ReedZyd: Currently, always set flag_discretize to False
+        predicted_reward = self.get_reward_predictor(predicted_input,custom_activation=False,flag_discretize=False) 
+        if not self.discrete_rewards:
+            predicted_reward = tf.squeeze(predicted_reward, axis=-1)
 
         return tf.keras.Model(inputs, [actor_critic_fc], name="Policy_Model"), tf.keras.Model([inputs_for_reward, agent_id_matrix], predicted_reward, name="Reward_Predictor_Model")
 
 
     
-    @staticmethod
-    def get_reward_predictor(masked_input_with_id, emb_size=64, flag_discretize=False, custom_activation=True, reward_range=5):
+    def get_reward_predictor(self, masked_input_with_id, emb_size=64, flag_discretize=False, custom_activation=True, reward_range=5):
         # layer 1
         last_layer = tf.keras.layers.Dense(
                 emb_size,
@@ -201,7 +207,10 @@ class RewardModel(RecurrentTFModelV2):
         else:
         # layer 4
             last_layer = tf.keras.layers.Dense(
-                            units=1 if not flag_discretize else 5, # output size for each agent's reward
+                            # output size for each agent's reward
+                            # ! by ReedZyd: discrete size only suitable for Coin3 env
+                            # TODO: make it compatiable and using a general flag to control if use discrete rewards and the reward range
+                            units=1 if not self.discrete_rewards else 6, 
                             name="fc_{}_{}".format(4, 'reward'),
                             activation=None, # double check activation function, -4 to 4
                             kernel_initializer=normc_initializer(1.0),
@@ -356,21 +365,43 @@ class RewardModel(RecurrentTFModelV2):
         cf_vector_obs_action = tf.gather(all_vector_state_action, random_index)
         cf_agent_id_matrix = tf.gather(cf_agent_id_matrix,random_index)
 
-        for i in range(sample_number):
-            inputs_for_reward = cf_vector_obs_action[i]
-            inputs_id = cf_agent_id_matrix[i]
-            predicted_cf_reward = self.reward_model({'inputs_for_reward': inputs_for_reward, 
-                                                'inputs_id': inputs_id})
-            predicted_cf_reward = tf.expand_dims(predicted_cf_reward,axis=0)
-            if i == 0:
-                cf_reward = predicted_cf_reward
-            else:
-                cf_reward = tf.concat((cf_reward,predicted_cf_reward),axis=0)
-            
+        # for i in range(sample_number):
+        #     inputs_for_reward = cf_vector_obs_action[i]
+        #     inputs_id = cf_agent_id_matrix[i]
+
+        #     # None, N_agent
+        #     predicted_cf_reward = self.reward_model({'inputs_for_reward': inputs_for_reward, 
+        #                                         'inputs_id': inputs_id})
+        #     predicted_cf_reward = tf.expand_dims(predicted_cf_reward,axis=0)
+        #     if i == 0:
+        #         cf_reward = predicted_cf_reward
+        #     else:
+        #         cf_reward = tf.concat((cf_reward,predicted_cf_reward),axis=0)
+        # for i in range(sample_number):
+        #     inputs_for_reward = cf_vector_obs_action[i]
+        #     inputs_id = cf_agent_id_matrix[i]
+
+        #     # None, N_agent
+        #     predicted_cf_reward = self.reward_model({'inputs_for_reward': inputs_for_reward, 
+        #                                         'inputs_id': inputs_id})
+        #     predicted_cf_reward = tf.expand_dims(predicted_cf_reward,axis=0)
+        #     if i == 0:
+        #         cf_reward = predicted_cf_reward
+        #     else:
+        #         cf_reward = tf.concat((cf_reward,predicted_cf_reward),axis=0)
+
+        # concatenate all the cf reward
+        predicted_cf_reward = self.reward_model({'inputs_for_reward': tf.concat([cf_vector_obs_action[i] for i in range(cf_vector_obs_action.shape[0])], 0), 
+                                                'inputs_id': tf.concat([cf_agent_id_matrix[i] for i in range(cf_agent_id_matrix.shape[0])], 0)})
+        
+        # reshape to batch_size, cf_sample_size, N_agents, *
+        predicted_cf_reward = tf.stack(tf.split(predicted_cf_reward, sample_number), axis=1)
+
         # cf_total_reward = self.reward_model({'inputs_for_reward': cf_vector_obs_action, 
         #                                         'inputs_id': cf_agent_id_matrix})
-        cf_reward = tf.reduce_mean(cf_reward,axis=0)
-
+        if self.discrete_rewards:
+            # get argmax
+            cf_reward = tf.argmax(predicted_cf_reward,axis=-1)
         return cf_reward
 
     def marginalize_predictions_over_own_actions(self, prev_action_logits, counterfactual_logits):

@@ -38,6 +38,7 @@ from algorithms.common_funcs_reward_model import (
     reward_fetches,
     reward_postprocess_trajectory,
     setup_reward_model_loss,
+    setup_reward_model_classification_loss,
     setup_reward_mixins,
     validate_reward_config,
 )
@@ -55,11 +56,17 @@ def loss_with_reward_model(policy, model, dist_class, train_batch):
     logits, state = model.from_batch(train_batch)
     action_dist = dist_class(logits, model)
 
-    reward_loss = setup_reward_model_loss(model, train_batch)
-    if model.use_causal_mask:
-        policy.reward_loss, policy.reg_loss = reward_loss.mse_loss, reward_loss.reg_loss
+    if model.discrete_rewards:
+        reward_loss = setup_reward_model_classification_loss(model, train_batch)
+        prediction_loss = reward_loss.classification_loss
+
     else:
-        policy.reward_loss = reward_loss.mse_loss
+        reward_loss = setup_reward_model_loss(model, train_batch)
+        prediction_loss = reward_loss.mse_loss
+    policy.reward_loss = prediction_loss
+    if model.use_causal_mask:
+        policy.reg_loss = reward_loss.reg_loss
+    else:
         policy.reg_loss = tf.zeros([1])
 
     if state:
@@ -119,7 +126,7 @@ def extra_reward_model_stats(policy, train_batch):
         "reward_loss": policy.reward_loss,
         "reg_loss": policy.reg_loss,
         EXTRINSIC_REWARD: tf.reduce_mean(train_batch[SampleBatch.REWARDS]),
-        CONTERFACTUAL_REWARD: train_batch[CONTERFACTUAL_REWARD],
+        CONTERFACTUAL_REWARD: tf.reduce_mean(train_batch[CONTERFACTUAL_REWARD]),
     }
 
     return base_stats
