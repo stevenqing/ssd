@@ -74,7 +74,8 @@ class RewardModel(RecurrentTFModelV2):
         self._social_conterfactual_reward = None
         self._true_one_hot_actions = None
         self.policy_model, self.reward_model = self.create_model(obs_space, model_config)
-        self.register_variables(self.policy_model.variables + self.reward_model.variables)
+        self.register_variables(self.policy_model.variables)
+        self.register_variables(self.reward_model.variables)
 
         inner_obs_space = self.policy_model.output_shape[1]
 
@@ -102,7 +103,6 @@ class RewardModel(RecurrentTFModelV2):
 
 
         self.register_variables(self.actions_model.rnn_model.variables)
-        self.register_variables(self.reward_model.variables)
         # self.actions_model.rnn_model.summary()
         # self.reward_model.summary()
 
