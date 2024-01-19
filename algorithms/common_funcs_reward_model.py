@@ -5,7 +5,7 @@ from ray.rllib.utils import try_import_tf
 from ray.rllib.utils.annotations import override
 import torch
 from algorithms.common_funcs_baseline import BaselineResetConfigMixin
-
+from scipy.stats import pearsonr
 tf = try_import_tf()
 
 MOA_PREDS = "moa_preds"
@@ -109,8 +109,7 @@ class REWARDLoss(object):
         self.mse_loss = tf.reduce_mean(self.mse_per_entry) * loss_weight[0]
         if policy.use_causal_mask:
             self.reg_loss = policy.get_reg_loss() * loss_weight[1]
-        # tf.Print(self.mse_loss, [self.mse_loss], message="Reward MSE loss")
-        # tf.Print(self.reg_loss, [self.reg_loss], message="Sparsity loss")
+
 
 
 
@@ -151,6 +150,27 @@ class REWARDLossForClassification(object):
         self.classification_loss = tf.reduce_mean(self.mse_per_entry) * loss_weight[0]
         if policy.use_causal_mask:
             self.reg_loss = policy.get_reg_loss() * loss_weight[1]
+        correlation_reward_preds = tf.arg_max(reward_preds,dimension=-1)
+        correlation_reward_preds = MAPING_REWARD_FROM_CLASS_TO_VALUE(correlation_reward_preds)
+        self.correlation_factor = self.get_rank_correlation(true_rewards,correlation_reward_preds)
+        self.pred_reward = reward_preds
+        # tf.Print(self.mse_loss, [self.mse_loss], message="Reward MSE loss")
+        # tf.Print(self.reg_loss, [self.reg_loss], message="Sparsity loss")
+            
+
+    def get_rank_correlation(self, x, y):
+        y = tf.cast(y,tf.float32)
+        x = tf.cast(x,tf.float32)
+        mean_x = tf.reduce_mean(x, axis=0)
+        mean_y = tf.reduce_mean(y, axis=0)
+        # xm = x - mean_x
+        # ym = y - mean_y
+        r_num = tf.reduce_sum(mean_x * mean_y, axis=0)
+        r_den = tf.sqrt(tf.reduce_sum(tf.square(mean_x), axis=0) * tf.reduce_sum(tf.square(mean_y), axis=0))
+        r = r_num / (r_den + 1e-12)  
+        return r
+
+
         # tf.Print(self.mse_loss, [self.mse_loss], message="Reward MSE loss")
         # tf.Print(self.reg_loss, [self.reg_loss], message="Sparsity loss")
 
@@ -216,7 +236,7 @@ def setup_reward_model_classification_loss(policy, train_batch):
 
 def reward_postprocess_trajectory(policy,sample_batch):
     # add conterfactual reward and add to batch.
-    # TODO check if the timestep for reward can match the timestep for state
+    # TODO check if the timestep for reward can match the timestep for statecorrelation
     # TODO add weight to the conterfactural reward
     cur_cf_reward_weight = policy.compute_influence_reward_weight()
 

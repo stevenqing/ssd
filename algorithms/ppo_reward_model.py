@@ -59,7 +59,6 @@ def loss_with_reward_model(policy, model, dist_class, train_batch):
     if model.discrete_rewards:
         reward_loss = setup_reward_model_classification_loss(model, train_batch)
         prediction_loss = reward_loss.classification_loss
-
     else:
         reward_loss = setup_reward_model_loss(model, train_batch)
         prediction_loss = reward_loss.mse_loss
@@ -68,7 +67,9 @@ def loss_with_reward_model(policy, model, dist_class, train_batch):
         policy.reg_loss = reward_loss.reg_loss
     else:
         policy.reg_loss = tf.zeros([1])
-
+    # some metric we want to focus
+    policy.correlation_factor = reward_loss.correlation_factor
+    policy.pred_reward = reward_loss.pred_reward
     if state:
         max_seq_len = tf.reduce_max(train_batch["seq_lens"])
         mask = tf.sequence_mask(train_batch["seq_lens"], max_seq_len)
@@ -125,6 +126,8 @@ def extra_reward_model_stats(policy, train_batch):
         # ),
         "reward_loss": policy.reward_loss,
         "reg_loss": policy.reg_loss,
+        "correlation_factor": policy.correlation_factor,
+        "pred_reward": policy.pred_reward,
         EXTRINSIC_REWARD: tf.reduce_mean(train_batch[SampleBatch.REWARDS]),
         CONTERFACTUAL_REWARD: tf.reduce_mean(train_batch[CONTERFACTUAL_REWARD]),
     }
