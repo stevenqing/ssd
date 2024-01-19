@@ -209,9 +209,7 @@ def setup_reward_model_classification_loss(policy, train_batch):
     # true_rewards = train_batch[EXTRINSIC_REWARD]
     # true_rewards = train_batch['obs'][:,12:15]
     true_rewards = train_batch[TRUE_REWARD]
-    true_rewards = tf.cast(true_rewards, tf.int32)
-    true_rewards = tf.where(true_rewards > 127, true_rewards - 256, true_rewards)
-    
+
     # map the reward from value to class
     true_rewards_class = MAPING_REWARD_FROM_VALUE_TO_CLASS(true_rewards)
     # 0/1 multiplier array representing whether each agent is visible to
