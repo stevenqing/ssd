@@ -108,9 +108,13 @@ class LBF10Env(MapEnv):
                     current_apples.append([row, col])
         if len(current_apples) <= 2:
             round_agent_pos = self.round_pos(agent_positions)
-            while [row, col] not in round_agent_pos and [row, col] not in current_apples:
+            current_apples_round_pos = self.round_pos(current_apples)
+            row = random.randint(1,np.shape(self.world_map)[0]-1)
+            col = random.randint(1,np.shape(self.world_map)[1]-1)
+            while [row, col] not in round_agent_pos and [row, col] not in current_apples_round_pos:
                 row = random.randint(1,np.shape(self.world_map)[0]-1)
                 col = random.randint(1,np.shape(self.world_map)[1]-1)
+                break
             spawn_prob = 0.1
             rand_num = np.random.choice([1,0.1],p=[0.9,0.1])
             if rand_num == spawn_prob:
@@ -124,9 +128,15 @@ class LBF10Env(MapEnv):
         return new_apple_points
 
     def round_pos(self,pos):
-        round_pos = []
-        [row,col] = pos[0]
-        round_pos = [[row,col],[row+1,col],[row-1,col],[row,col+1],[row,col-1],[row,col+1]]
+        if np.shape(np.shape(pos)[0]) == 1:
+            round_pos = []
+            [row,col] = pos[0]
+            round_pos = [[row,col],[row+1,col],[row-1,col],[row,col+1],[row,col-1],[row,col+1]]
+        else:
+            round_pos = []
+            for p in pos:
+                round_pos_p = np.array([[row,col],[row+1,col],[row-1,col],[row,col+1],[row,col-1],[row,col+1]])
+                round_pos = np.concat((round_pos,round_pos_p),axis=0)
         return round_pos
 
     def count_apples(self):

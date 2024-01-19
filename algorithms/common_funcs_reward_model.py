@@ -150,10 +150,11 @@ class REWARDLossForClassification(object):
         self.classification_loss = tf.reduce_mean(self.mse_per_entry) * loss_weight[0]
         if policy.use_causal_mask:
             self.reg_loss = policy.get_reg_loss() * loss_weight[1]
-        correlation_reward_preds = tf.arg_max(reward_preds,dimension=-1)
-        correlation_reward_preds = MAPING_REWARD_FROM_CLASS_TO_VALUE(correlation_reward_preds)
-        self.correlation_factor = self.get_rank_correlation(true_rewards,correlation_reward_preds)
-        self.pred_reward = reward_preds
+        # correlation_reward_preds = tf.reduce_mean(reward_preds,axis=-1)
+        # correlation_reward_preds = MAPING_REWARD_FROM_CLASS_TO_VALUE(correlation_reward_preds)
+        # self.correlation_factor = self.get_rank_correlation(true_rewards,correlation_reward_preds)
+        self.pred_reward = tf.argmax(reward_preds,-1)
+        self.true_reward = true_rewards
         # tf.Print(self.mse_loss, [self.mse_loss], message="Reward MSE loss")
         # tf.Print(self.reg_loss, [self.reg_loss], message="Sparsity loss")
             
@@ -209,7 +210,8 @@ def setup_reward_model_classification_loss(policy, train_batch):
     # true_rewards = train_batch[EXTRINSIC_REWARD]
     # true_rewards = train_batch['obs'][:,12:15]
     true_rewards = train_batch[TRUE_REWARD]
-
+    true_rewards = tf.cast(true_rewards, tf.int32)
+    true_rewards = tf.where(true_rewards > 127, true_rewards - 256, true_rewards)
     # map the reward from value to class
     true_rewards_class = MAPING_REWARD_FROM_VALUE_TO_CLASS(true_rewards)
     # 0/1 multiplier array representing whether each agent is visible to
