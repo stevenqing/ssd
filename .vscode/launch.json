@@ -23,9 +23,9 @@
             "justMyCode": false,
             "args": [
                 "--env",
-                "coin3",
+                "lbf10",
                 "--model",
-                "reward",
+                "baseline",
                 "--algorithm",
                 "PPO",
                 "--num_agents",

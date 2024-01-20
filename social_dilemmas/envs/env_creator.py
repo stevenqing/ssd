@@ -3,6 +3,7 @@ from social_dilemmas.envs.harvest import HarvestEnv
 from social_dilemmas.envs.switch import SwitchEnv
 from social_dilemmas.envs.coin import CoinEnv
 from social_dilemmas.envs.coin3 import Coin3Env
+from social_dilemmas.envs.lbf10 import LBF10Env
 def get_env_creator(
     env,
     num_agents,
@@ -47,6 +48,17 @@ def get_env_creator(
                 use_reward_model=use_reward_model,
                 alpha=alpha,
                 beta=beta,
+            )
+    elif env == "lbf10":
+        def env_creator(_):
+            return LBF10Env(
+                num_agents=num_agents,
+                return_agent_actions=True,
+                use_collective_reward=use_collective_reward,
+                inequity_averse_reward=inequity_averse_reward,
+                alpha=alpha,
+                beta=beta,
+                env_name='LBF10'
             )
 
     elif env == "cleanup":

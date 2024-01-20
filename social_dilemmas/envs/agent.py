@@ -3,6 +3,7 @@
 import numpy as np
 import utility_funcs as util
 import random
+# from lbf10 import round_pos
 
 # basic moves every agent should do
 BASE_ACTIONS = {
@@ -90,11 +91,11 @@ class Agent(object):
         agent2 = "agent-" + str(1)
         agent3 = "agent-" + str(2)
         if self.agent_id == agent1:
-            reward = self.reward_this_turn - self.penalty_1
+            reward = self.reward_this_turn + self.penalty_1
         elif self.agent_id == agent2:
-            reward = self.reward_this_turn - self.penalty_2
+            reward = self.reward_this_turn + self.penalty_2
         elif self.agent_id == agent3:
-            reward = self.reward_this_turn - self.penalty_3
+            reward = self.reward_this_turn + self.penalty_3
         else:
             reward = self.reward_this_turn
         self.reward_this_turn = 0
@@ -220,17 +221,28 @@ class LBF10Agent(Agent):
         self.view_len = view_len
         super().__init__(agent_id, start_pos, start_orientation, full_map, view_len, view_len)
         self.update_agent_pos(start_pos)
-        self.initial_level = self.init_level(max_level=3)
+        self.agent_level = self.init_level(max_level=3)
+        self.level_consumed = 0
+        self.surroundings_chars = []
+        self.surroundings = []
+        self.consumed_list = []
+        self.reward = 0
 
-    def round_pos(self,pos):
-        round_pos = []
-        [row,col] = pos[0]
-        round_pos = [[row,col],[row+1,col],[row-1,col],[row,col+1],[row,col-1],[row,col+1]]
-        return round_pos
+    # def round_pos(self):
+    #     if np.shape(np.shape(self.pos)[0]) == 1:
+    #         round_pos = []
+    #         [row,col] = self.pos[0]
+    #         round_pos = [[row,col],[row+1,col],[row-1,col],[row,col+1],[row,col-1],[row,col+1]]
+    #     else:
+    #         round_pos = []
+    #         for p in self.pos:
+    #             [row,col] = p[0]
+    #             round_pos_p = np.array([[row,col],[row+1,col],[row-1,col],[row,col+1],[row,col-1],[row,col+1]])
+    #             round_pos = np.concat((round_pos,round_pos_p),axis=0)
+    #     self.surroundings = round_pos
     
-
     def init_level(self,max_level):
-        return random.randint(1,3)
+        return random.randint(1,max_level)
 
     # Ugh, this is gross, this leads to the actions basically being
     # defined in two places
@@ -241,12 +253,37 @@ class LBF10Agent(Agent):
     def get_done(self):
         return False
 
-    def consume(self,char):
-        """Defines how an agent interacts with the char it is standing on"""
-        return char
-
     def compute_reward(self):
-        return None
+        reward = self.reward * self.agent_level
+        return reward
+
+    # def check_char_status(self,char):
+    #     if char == b"A":
+    #         if self.level_consumed >= 1:
+    #             return b" "
+    #         else:
+    #             return char
+    #     elif char == b"B":
+    #         if self.level_consumed >= 2:
+    #             return b" "
+    #         else:
+    #             return char
+    #     else:
+    #         if self.level_consumed >= 3:
+    #             return b" "
+    #         else:
+    #             return char
+
+
+
+    def consume(self):
+        """Defines how an agent interacts with the char it is standing on"""
+        agent_level = self.agent_level
+        for i in range(len(self.surroundings)):
+                if self.surroundings_chars[i] == b"A" or self.surroundings_chars[i] == b"B" or self.surroundings_chars[i] == b"C":
+                    self.level_consumed += agent_level
+                    self.consumed_list.append([self.surroundings[i],self.surroundings_chars[i]])
+        
                 
 
 
@@ -265,32 +302,31 @@ class Coin3Agent(Agent):
     def get_done(self):
         return False
 
-    def consume(self, char):
+    def consume(self, char, pos=[0,0]):
         """Defines how an agent interacts with the char it is standing on"""
-
         agent1 = "agent-" + str(0)
         agent2 = "agent-" + str(1)
         agent3 = "agent-" + str(2)
         if char == b"A":
             self.reward_this_turn += 1
             if self.agent_id == agent2:
-                self.penalty_1 += 2
+                self.penalty_1 -= 2
             elif self.agent_id == agent3:
-                self.penalty_1 += 2
+                self.penalty_1 -= 2
             return b" "
         elif char == b"B":
             self.reward_this_turn += 1
             if self.agent_id == agent1:
-                self.penalty_2 += 2
+                self.penalty_2 -= 2
             elif self.agent_id == agent3:
-                self.penalty_2 += 2
+                self.penalty_2 -= 2
             return b" "
         elif char == b"C":
             self.reward_this_turn += 1
             if self.agent_id == agent1:
-                self.penalty_3 += 2
+                self.penalty_3 -= 2
             elif self.agent_id == agent2:
-                self.penalty_3 += 2
+                self.penalty_3 -= 2
             return b" "
         else:
             return char

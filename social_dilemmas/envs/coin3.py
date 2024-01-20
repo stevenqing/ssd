@@ -25,6 +25,7 @@ class Coin3Env(MapEnv):
         use_reward_model=False,
         alpha=0.0,
         beta=0.0,
+        env_name='COIN3'
     ):
         super().__init__(
             ascii_map,
@@ -37,6 +38,7 @@ class Coin3Env(MapEnv):
             alpha=alpha,
             beta=beta,
         )
+        self.env_name = env_name
         self.apple_points = []
         # The initial position of the apples are determined
         for row in range(self.base_map.shape[0]):

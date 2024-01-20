@@ -178,8 +178,8 @@ class MapEnv(MultiAgentEnv):
                 dtype=np.uint8,
             ),
             "all_rewards": Box(
-                low=-4,
-                high=1,
+                low=-100,
+                high=100,
                 shape=(self.num_agents,),
                 dtype=np.int8,
                 ),
@@ -237,8 +237,8 @@ class MapEnv(MultiAgentEnv):
                     dtype=np.int32,
                 ),
                 "prev_rewards":  Box(
-                low=-4,
-                high=1,
+                low=-100,
+                high=100,
                 shape=(self.num_agents,),
                 dtype=np.int8,
                 ),   
@@ -298,6 +298,7 @@ class MapEnv(MultiAgentEnv):
                 arr[row, col] = ascii_list[row][col]
         return arr
 
+
     def step(self, actions):
         """Takes in a dict of actions and converts them to a map update
 
@@ -324,20 +325,46 @@ class MapEnv(MultiAgentEnv):
                 store_actions.append(int(action))
 
         # Remove agents from color map
+        agents_pos = []
         for agent in self.agents.values():
+            agents_pos.append(list(agent.pos))
             row, col = agent.pos[0], agent.pos[1]
             self.single_update_world_color_map(row, col, self.world_map[row, col])
 
         self.update_moves(agent_actions)
         
         # Construct the vector state
-        apple_pos, apple_type = self.count_apples()
-        apple_pos = [item for sublist in apple_pos for item in sublist]    
-        
-        for agent in self.agents.values():
-            pos = agent.pos
-            new_char = agent.consume(self.world_map[pos[0], pos[1]])
-            self.single_update_map(pos[0], pos[1], new_char)
+        if self.env_name == 'LBF10':
+            apple_pos, apple_type, apple_pos_list, apple_type_list = self.count_apples()
+        else:
+            apple_pos, apple_type = self.count_apples()
+        apple_pos = [item for sublist in apple_pos for item in sublist]  
+
+        total_level_consumed = 0  
+        agent_contribution_dict = {}
+        if self.env_name == 'LBF10':
+            for i in range(len(apple_pos_list)):
+                apple = apple_pos_list[i]
+                level = apple_type_list[i]
+                surroundings = self.round_pos(apple)
+                common_pos = [pos for pos in agents_pos if pos in surroundings]
+                total_agent_level = 0
+                for pos in common_pos:
+                    for agent in self.agents.values():
+                        if pos == list(agent.pos):
+                            level -= agent.agent_level
+                            total_agent_level += agent.agent_level
+                if level <= 0:
+                    # Update the map
+                    new_char = b" "
+                    self.single_update_map(apple[0],apple[1],new_char)
+                    for agent in self.agents.values():
+                        agent.reward += apple_type_list[i] / total_agent_level
+        else:
+            for agent in self.agents.values():
+                pos = agent.pos
+                new_char = agent.consume(self.world_map[pos[0], pos[1]])
+                self.single_update_map(pos[0], pos[1], new_char)
 
         
         # execute custom moves like firing

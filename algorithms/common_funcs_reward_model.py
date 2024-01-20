@@ -155,6 +155,7 @@ class REWARDLossForClassification(object):
         # self.correlation_factor = self.get_rank_correlation(true_rewards,correlation_reward_preds)
         self.pred_reward = tf.argmax(reward_preds,-1)
         self.true_reward = true_rewards
+        self.accuracy = tf.equal(self.pred)
         # tf.Print(self.mse_loss, [self.mse_loss], message="Reward MSE loss")
         # tf.Print(self.reg_loss, [self.reg_loss], message="Sparsity loss")
             
