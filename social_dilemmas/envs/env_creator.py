@@ -24,6 +24,7 @@ def get_env_creator(
                 inequity_averse_reward=inequity_averse_reward,
                 alpha=alpha,
                 beta=beta,
+                env_name='HARVEST'
             )
 
     elif env == "coin":
@@ -48,7 +49,7 @@ def get_env_creator(
                 use_reward_model=use_reward_model,
                 alpha=alpha,
                 beta=beta,
-                env_name='coin3'
+                env_name='COIN3'
             )
     elif env == "lbf10":
         def env_creator(_):
@@ -72,6 +73,7 @@ def get_env_creator(
                 inequity_averse_reward=inequity_averse_reward,
                 alpha=alpha,
                 beta=beta,
+                env_name='CLEANUP'
             )
 
     elif env == "switch":

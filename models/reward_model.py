@@ -60,7 +60,7 @@ class RewardModel(RecurrentTFModelV2):
 
 
         # add by ReedZyd
-        self.discrete_rewards = True
+        self.discrete_rewards = False
         
         # Declare whether to use causal mask
         self.use_causal_mask = True
@@ -404,7 +404,9 @@ class RewardModel(RecurrentTFModelV2):
         if self.discrete_rewards:
             # get argmax
             cf_reward = tf.argmax(predicted_cf_reward,axis=-1)
-        return cf_reward
+            return cf_reward
+        else:
+            return predicted_cf_reward
 
     def marginalize_predictions_over_own_actions(self, prev_action_logits, counterfactual_logits):
         """
