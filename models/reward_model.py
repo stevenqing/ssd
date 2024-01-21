@@ -60,7 +60,7 @@ class RewardModel(RecurrentTFModelV2):
 
 
         # add by ReedZyd
-        self.discrete_rewards = False
+        self.discrete_rewards = True
         
         # Declare whether to use causal mask
         self.use_causal_mask = True

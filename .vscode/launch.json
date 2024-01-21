@@ -23,7 +23,7 @@
             "justMyCode": false,
             "args": [
                 "--env",
-                "lbf10",
+                "coin3",
                 "--model",
                 "reward",
                 "--algorithm",
