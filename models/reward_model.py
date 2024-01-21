@@ -102,7 +102,7 @@ class RewardModel(RecurrentTFModelV2):
         self.reg_loss_weight = model_config["custom_options"]["reg_loss_weight"]
 
 
-        self.register_variables(self.actions_model.rnn_model.variables)
+        self.register_variables(self.actions_model.rnn_model.variables + self.reward_model.variables)
         # self.actions_model.rnn_model.summary()
         # self.reward_model.summary()
 
@@ -248,7 +248,7 @@ class RewardModel(RecurrentTFModelV2):
             "prev_actions": input_dict["prev_actions"],
         }
         
-        # Add time dimension to rnn inputs
+        # Add time dimension to rnn inputsModel
         for k, v in rnn_input_dict.items():
             rnn_input_dict[k] = add_time_dimension(v, seq_lens)
 
@@ -260,7 +260,8 @@ class RewardModel(RecurrentTFModelV2):
             # self._predicted_reward =  input_dict['prev_rewards'] 
             # self._counterfactual_rewards = input_dict['prev_rewards']
             self._predicted_reward = self.compute_reward(input_dict)
-            self._true_reward = input_dict['obs']['prev_rewards']
+            #self._true_reward = input_dict['obs']['prev_rewards']
+            self._true_reward = input_dict['obs']['all_rewards']
             self._counterfactual_rewards = self.compute_conterfactual_reward(input_dict)
             if self.use_causal_mask:
                 self._reg_loss = self.causal_mask_layer.get_reg_loss()
@@ -324,6 +325,7 @@ class RewardModel(RecurrentTFModelV2):
 
     def get_predicted_reward(self, ):
         return self._predicted_reward
+    
     def get_true_reward(self, ):
         return self._true_reward
     

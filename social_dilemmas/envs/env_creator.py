@@ -48,6 +48,7 @@ def get_env_creator(
                 use_reward_model=use_reward_model,
                 alpha=alpha,
                 beta=beta,
+                env_name='coin3'
             )
     elif env == "lbf10":
         def env_creator(_):

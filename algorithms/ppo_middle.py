@@ -17,8 +17,9 @@ from ray.rllib.agents.ppo.ppo_tf_policy import (
     setup_mixins,
     vf_preds_fetches,
 )
-from algorithms.common_funcs_middle_model import (
+from algorithms.common_funcs_middle import (
     middle_postprocess_trajectory,
+    middle_fetches
 )
 from ray.rllib.agents.trainer_template import build_trainer
 from ray.rllib.policy import build_tf_policy
@@ -44,6 +45,7 @@ def extra_middle_model_stats(policy, train_batch):
         EXTRINSIC_REWARD: tf.reduce_mean(train_batch[SampleBatch.REWARDS]),
         TEAM_REWARD: train_batch[TEAM_REWARD],
     }
+    return base_stats
 
 def postprocess_ppo_middle(policy, sample_batch, other_agent_batches=None, episode=None):
     """
@@ -55,8 +57,17 @@ def postprocess_ppo_middle(policy, sample_batch, other_agent_batches=None, episo
     batch = postprocess_ppo_gae(policy, batch)
     return batch
 
-    return base_stats
-def build_ppo_baseline_trainer(config):
+
+def extra_reward_fetches(policy):
+    """
+    Adds value function, logits, reward predictions to experience train_batch
+    :return: Updated fetches
+    """
+    ppo_fetches = vf_preds_fetches(policy)
+    ppo_fetches.update(middle_fetches(policy))
+    return ppo_fetches
+
+def build_ppo_middle_trainer(config):
     """
     Creates a PPO policy class, then creates a trainer with this policy.
     :param config: The configuration dictionary.
@@ -76,7 +87,7 @@ def build_ppo_baseline_trainer(config):
     )
 
     ppo_trainer = build_trainer(
-        name="BaselinePPOTrainer",
+        name="MiddlePPOTrainer",
         make_policy_optimizer=choose_policy_optimizer,
         default_policy=policy,
         default_config=config,

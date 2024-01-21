@@ -21,6 +21,7 @@ from algorithms.ppo_baseline import build_ppo_baseline_trainer
 from algorithms.ppo_moa import build_ppo_moa_trainer
 from algorithms.ppo_scm import build_ppo_scm_trainer
 from algorithms.ppo_reward_model import build_ppo_reward_trainer
+from algorithms.ppo_middle import build_ppo_middle_trainer
 from models.baseline_model import BaselineModel
 from models.moa_model import MOAModel
 from models.scm_model import SocialCuriosityModule
@@ -59,6 +60,9 @@ def build_experiment_config_dict(args):
         # ModelCatalog.register_custom_model(model_name, BaselineModel)
         from models.reward_model import RewardModel
         ModelCatalog.register_custom_model(model_name, RewardModel)
+    elif args.model == "middle":
+        from models.middle_model import MiddleModel
+        ModelCatalog.register_custom_model(model_name, MiddleModel)
     elif args.model == "baseline":
         ModelCatalog.register_custom_model(model_name, BaselineModel)
     
@@ -240,6 +244,16 @@ def get_trainer(args, config):
         if args.algorithm == "PPO":
             # TODO: modify config
             trainer = build_ppo_reward_trainer(config)
+        if args.algorithm == "IMPALA":
+            # trainer = build_impala_scm_trainer(config)
+            raise NotImplementedError
+    elif args.model == "middle":
+        if args.algorithm == "A3C":
+            # trainer = build_a3c_scm_trainer(config)
+            raise NotImplementedError
+        if args.algorithm == "PPO":
+            # TODO: modify config
+            trainer = build_ppo_middle_trainer(config)
         if args.algorithm == "IMPALA":
             # trainer = build_impala_scm_trainer(config)
             raise NotImplementedError

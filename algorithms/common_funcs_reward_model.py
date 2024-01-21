@@ -136,8 +136,6 @@ class REWARDLossForClassification(object):
         self.mse_per_entry = classification_per_entry(
                         true_rewards, reward_preds)
 
-
-
         # Zero out the loss if the other agent isn't visible to this one.
         # print(true_rewards,reward_preds)
         # if others_visibility is not None:
@@ -155,7 +153,7 @@ class REWARDLossForClassification(object):
         # self.correlation_factor = self.get_rank_correlation(true_rewards,correlation_reward_preds)
         self.pred_reward = tf.argmax(reward_preds,-1)
         self.true_reward = true_rewards
-        self.accuracy = tf.equal(self.pred)
+        # self.accuracy = tf.equal(self.pred_reward,)
         # tf.Print(self.mse_loss, [self.mse_loss], message="Reward MSE loss")
         # tf.Print(self.reg_loss, [self.reg_loss], message="Sparsity loss")
             
@@ -235,7 +233,7 @@ def setup_reward_model_classification_loss(policy, train_batch):
 
 
 
-def reward_postprocess_trajectory(policy,sample_batch):
+def reward_postprocess_trajectory(policy,sample_batch, use_model=False):
     # add conterfactual reward and add to batch.
     # TODO check if the timestep for reward can match the timestep for statecorrelation
     # TODO add weight to the conterfactural reward
@@ -248,7 +246,11 @@ def reward_postprocess_trajectory(policy,sample_batch):
     conterfactual_reward = np.mean(conterfactual_reward,axis=1) # 1, N_agents
     # print(sample_batch[CONTERFACTUAL_REWARD])
     sample_batch[EXTRINSIC_REWARD] = sample_batch["rewards"]
-    sample_batch["rewards"] = sample_batch["rewards"] + np.sum(conterfactual_reward,axis=1) * cur_cf_reward_weight
+    if use_model:
+        sample_batch["rewards"] = sample_batch["rewards"] + np.sum(conterfactual_reward,axis=1) * cur_cf_reward_weight
+    else:
+        team_reward = sample_batch["true_reward"]
+        sample_batch["rewards"] = sample_batch["rewards"] + np.sum(team_reward,axis=1)
 
     return sample_batch
             
