@@ -121,7 +121,7 @@ class MapEnv(MultiAgentEnv):
         # self.reward_model.eval()
         self.sample_number = sample_number
         self.store_trajs = store_trajs
-        self.count = 0
+        self.timestep = 0
         self.num_agents = num_agents
         self.agent_id_matrix = np.eye(self.num_agents,dtype=int).astype(np.uint8)
         self.prev_vector_state = np.array([1, 7, 1, 1, 7, 6, 3, 3, 5, 5, 6, 2, 1, 2, 3]).astype(np.int32)
@@ -315,6 +315,7 @@ class MapEnv(MultiAgentEnv):
         dones: dict indicating whether each agent is done
         info: dict to pass extra info to gym
         """
+        self.timestep += 1
         self.beam_pos = []
         agent_actions = {}
         store_actions = []
@@ -340,8 +341,7 @@ class MapEnv(MultiAgentEnv):
             apple_pos, apple_type = self.count_apples()
         apple_pos = [item for sublist in apple_pos for item in sublist]  
 
-        total_level_consumed = 0  
-        agent_contribution_dict = {}
+
         if self.env_name == 'LBF10':
             for i in range(len(apple_pos_list)):
                 apple = apple_pos_list[i]
@@ -349,17 +349,20 @@ class MapEnv(MultiAgentEnv):
                 surroundings = self.round_pos(apple)
                 common_pos = [pos for pos in agents_pos if pos in surroundings]
                 total_agent_level = 0
+                agent_id = []
                 for pos in common_pos:
                     for agent in self.agents.values():
                         if pos == list(agent.pos):
                             level -= agent.agent_level
                             total_agent_level += agent.agent_level
+                            agent_id.append(agent.agent_id)
                 if level <= 0:
                     # Update the map
                     new_char = b" "
                     self.single_update_map(apple[0],apple[1],new_char)
                     for agent in self.agents.values():
-                        agent.reward += apple_type_list[i] / total_agent_level
+                        if agent.agent_id in agent_id:
+                            agent.reward += apple_type_list[i] / total_agent_level
         else:
             for agent in self.agents.values():
                 pos = agent.pos
@@ -460,21 +463,24 @@ class MapEnv(MultiAgentEnv):
             else:
                 observations[agent.agent_id] = {"curr_obs": rgb_arr,"vector_state": vector_state}
             store_rewards.append(rewards[agent.agent_id])
-            dones[agent.agent_id] = agent.get_done()
+            if self.env_name == 'LBF10':
+                dones[agent.agent_id] = agent.get_done(self.timestep,apple_pos_list)
+            else:
+                dones[agent.agent_id] = agent.get_done()
             infos[agent.agent_id] = {}
-        if self.count < 1000 or 4000 < self.count < 5000:
-            if self.store_trajs:
-                vector_state = positions + apple_pos + apple_type
-                vector_state = [int(i) for i in vector_state]
-                store_trajs['vector_states'] = vector_state
-                store_trajs['actions'] = store_actions
-                store_trajs['rewards'] = store_rewards
+        # if self.count < 1000 or 4000 < self.count < 5000:
+        #     if self.store_trajs:
+        #         vector_state = positions + apple_pos + apple_type
+        #         vector_state = [int(i) for i in vector_state]
+        #         store_trajs['vector_states'] = vector_state
+        #         store_trajs['actions'] = store_actions
+        #         store_trajs['rewards'] = store_rewards
     
-                with open(self.file_path, "a") as json_file:
-                    json.dump(store_trajs, json_file)
-                    json_file.write('\n')
+        #         with open(self.file_path, "a") as json_file:
+        #             json.dump(store_trajs, json_file)
+        #             json_file.write('\n')
     
-            store_trajs = {'vector_states':[],'actions':[],'rewards':[]}
+        #     store_trajs = {'vector_states':[],'actions':[],'rewards':[]}
         if self.use_reward_model:
             vector_state = positions + apple_pos + apple_type
             vector_state = [int(i) for i in vector_state]

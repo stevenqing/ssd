@@ -39,7 +39,7 @@ from algorithms.common_funcs_reward_model import (
     get_reward_mixins,
     reward_fetches,
     reward_postprocess_trajectory,
-    setup_reward_model_loss,
+    # setup_reward_model_loss,
     setup_reward_model_classification_loss,
     setup_reward_mixins,
     validate_reward_config,

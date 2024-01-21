@@ -179,30 +179,30 @@ class REWARDLossForClassification(object):
 
 
 
-def setup_reward_model_loss(policy, train_batch):
-    # Instantiate the prediction loss
-    reward_preds = train_batch[PREDICTED_REWARD] # need to reconsider in here, checking featches
-    # true_rewards = train_batch[EXTRINSIC_REWARD]
-    # true_rewards = train_batch['obs'][:,12:15]
-    true_rewards = train_batch[TRUE_REWARD]
-    true_rewards = tf.cast(true_rewards, tf.int32)
-    true_rewards = tf.where(true_rewards > 127, true_rewards - 256, true_rewards)
-    # 0/1 multiplier array representing whether each agent is visible to
-    # the current agent.
-    if policy.train_reward_only_when_visible:
-        # if VISIBILITY in train_batch:
-        others_visibility = train_batch[VISIBILITY]
-    else:
-        others_visibility = None
-    # raise NotImplementedError
-    reward_model_loss = REWARDLoss(
-        policy, 
-        reward_preds,
-        true_rewards,
-        loss_weight=[policy.reward_loss_weight, policy.reg_loss_weight], # not sure if it's good
-        others_visibility=others_visibility,
-    )
-    return reward_model_loss
+# def setup_reward_model_loss(policy, train_batch):
+#     # Instantiate the prediction loss
+#     reward_preds = train_batch[PREDICTED_REWARD] # need to reconsider in here, checking featches
+#     # true_rewards = train_batch[EXTRINSIC_REWARD]
+#     # true_rewards = train_batch['obs'][:,12:15]
+#     true_rewards = train_batch[TRUE_REWARD]
+#     true_rewards = tf.cast(true_rewards, tf.int32)
+#     true_rewards = tf.where(true_rewards > 127, true_rewards - 256, true_rewards)
+#     # 0/1 multiplier array representing whether each agent is visible to
+#     # the current agent.
+#     if policy.train_reward_only_when_visible:
+#         # if VISIBILITY in train_batch:
+#         others_visibility = train_batch[VISIBILITY]
+#     else:
+#         others_visibility = None
+#     # raise NotImplementedError
+#     reward_model_loss = REWARDLoss(
+#         policy, 
+#         reward_preds,
+#         true_rewards,
+#         loss_weight=[policy.reward_loss_weight, policy.reg_loss_weight], # not sure if it's good
+#         others_visibility=others_visibility,
+#     )
+#     return reward_model_loss
 
 
 def setup_reward_model_classification_loss(policy, train_batch):

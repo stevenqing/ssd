@@ -250,29 +250,16 @@ class LBF10Agent(Agent):
         """Maps action_number to a desired action in the map"""
         return COIN_ACTIONS[action_number]
 
-    def get_done(self):
+    def get_done(self,timestep, apple_pos_list):
+        # if np.shape(apple_pos_list)[0] < 1:
+        #     return True
+        # else:
         return False
 
     def compute_reward(self):
         reward = self.reward * self.agent_level
+        self.reward = 0
         return reward
-
-    # def check_char_status(self,char):
-    #     if char == b"A":
-    #         if self.level_consumed >= 1:
-    #             return b" "
-    #         else:
-    #             return char
-    #     elif char == b"B":
-    #         if self.level_consumed >= 2:
-    #             return b" "
-    #         else:
-    #             return char
-    #     else:
-    #         if self.level_consumed >= 3:
-    #             return b" "
-    #         else:
-    #             return char
 
 
 
