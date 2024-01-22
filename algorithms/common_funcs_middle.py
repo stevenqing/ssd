@@ -20,25 +20,28 @@ ACTION_LOGITS = "action_logits"
 COUNTERFACTUAL_ACTIONS = "counterfactual_actions"
 POLICY_SCOPE = "func"
 
-# add by ReedZyd
+
 PREDICTED_REWARD = "predicted_reward" # predicted rewards for reward model learning
 CONTERFACTUAL_REWARD = "conterfactual_reward" # conterfactual rewards for policy learning
 TRUE_REWARD = 'true_reward' # true rewards for reward model learning
+TEAM_REWARD = 'team_reward'
 
-def reward_postprocess_trajectory(sample_batch):
+def middle_postprocess_trajectory(sample_batch):
     # add conterfactual reward and add to batch.
     # TODO check if the timestep for reward can match the timestep for state
     # TODO add weight to the conterfactural reward
-    conterfactual_reward = sample_batch[CONTERFACTUAL_REWARD]
+    team_reward = sample_batch[TEAM_REWARD]
+    team_reward = tf.cast(team_reward, tf.int32)
+    team_reward = tf.where(team_reward > 127, team_reward - 256, team_reward)
     # print(sample_batch[CONTERFACTUAL_REWARD])
     sample_batch[EXTRINSIC_REWARD] = sample_batch["rewards"]
-    sample_batch["rewards"] = sample_batch["rewards"] + np.sum(conterfactual_reward,axis=1)
+    sample_batch["rewards"] = sample_batch["rewards"] + np.sum(team_reward,axis=1)
 
     return sample_batch
             
 
 
-def reward_fetches(policy):
+def middle_fetches(policy):
     """Adds logits, moa predictions of counterfactual actions to experience train_batches."""
     return {
         # Be aware that this is frozen here so that we don't
@@ -47,9 +50,7 @@ def reward_fetches(policy):
         ACTION_LOGITS: policy.model.action_logits(),
         OTHERS_ACTIONS: policy.model.other_agent_actions(), 
         VISIBILITY: policy.model.visibility(),
-        PREDICTED_REWARD: policy.model.get_predicted_reward(),
-        TRUE_REWARD: policy.model.get_true_reward(),
-        CONTERFACTUAL_REWARD: policy.model.get_conterfactual_reward(), # check policy.model.predicted_actions()
+        TEAM_REWARD: policy.model.get_team_reward(),
     }
 
 

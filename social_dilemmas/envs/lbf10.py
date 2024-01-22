@@ -24,6 +24,8 @@ class LBF10Env(MapEnv):
         inequity_averse_reward=False,
         alpha=0.0,
         beta=0.0,
+        max_level = 9,
+        env_name = 'LBF10'
     ):
         super().__init__(
             ascii_map,
@@ -36,7 +38,9 @@ class LBF10Env(MapEnv):
             alpha=alpha,
             beta=beta,
         )
+        self.env_name = env_name
         self.apple_points = []
+        self.max_level = max_level
         for row in range(self.base_map.shape[0]):
             for col in range(self.base_map.shape[1]):
                 if self.base_map[row, col] == b"A":
@@ -99,18 +103,32 @@ class LBF10Env(MapEnv):
         current_apples = []
         new_apple_points = []
         agent_positions = self.agent_pos
+        current_apples_level = 0
         # apples can't spawn where agents are standing or where an apple already is
-        isapple = False
         for row in range(1,np.shape(self.world_map)[0]-1):
             for col in range(1,np.shape(self.world_map)[1]-1):
                 char = self.world_map[row, col]
                 if char == b'A' or char == b'B' or char == b'C':
                     current_apples.append([row, col])
-        if len(current_apples) <= 2:
-            round_agent_pos = self.round_pos(agent_positions)
-            while [row, col] not in round_agent_pos and [row, col] not in current_apples:
+                    if char == b'A':
+                        current_apples_level += 1
+                    elif char == b'B':
+                        current_apples_level += 2
+                    else:
+                        current_apples_level += 3
+        if len(current_apples) <= 2 and current_apples_level < self.max_level:
+            round_agent_pos = []
+            for pos in agent_positions:
+                round_agent_pos.append(self.round_pos(list(pos)))
+            current_apples_round_pos = []
+            for pos in current_apples:
+                current_apples_round_pos.append(self.round_pos(list(pos)))
+            row = random.randint(1,np.shape(self.world_map)[0]-1)
+            col = random.randint(1,np.shape(self.world_map)[1]-1)
+            while [row, col] not in round_agent_pos and [row, col] not in current_apples_round_pos:
                 row = random.randint(1,np.shape(self.world_map)[0]-1)
                 col = random.randint(1,np.shape(self.world_map)[1]-1)
+                break
             spawn_prob = 0.1
             rand_num = np.random.choice([1,0.1],p=[0.9,0.1])
             if rand_num == spawn_prob:
@@ -122,10 +140,11 @@ class LBF10Env(MapEnv):
                 else:
                     new_apple_points.append((row, col, b"C"))
         return new_apple_points
+    
 
     def round_pos(self,pos):
         round_pos = []
-        [row,col] = pos[0]
+        [row,col] = pos
         round_pos = [[row,col],[row+1,col],[row-1,col],[row,col+1],[row,col-1],[row,col+1]]
         return round_pos
 
@@ -133,16 +152,24 @@ class LBF10Env(MapEnv):
         # Return apples pos and type
         apple_pos = [[0,0],[0,0],[0,0]]
         apple_type = [0,0,0]
+        apple_pos_list = []
+        apple_type_list = []
         for row in range(1,np.shape(self.world_map)[0]-1):
            for col in range(1,np.shape(self.world_map)[1]-1):
                char = self.world_map[row, col]
                if char == b'A':
                    apple_pos[0] = [int(row),int(col)]
                    apple_type[0] = 1
+                   apple_pos_list.append([int(row),int(col)])
+                   apple_type_list.append(3)
                elif char == b'B':
                    apple_pos[1] = [int(row),int(col)]
                    apple_type[1] = 2
+                   apple_pos_list.append([int(row),int(col)])
+                   apple_type_list.append(3)
                elif char == b'C':
                    apple_pos[2] = [int(row),int(col)]
                    apple_type[2] = 3
-        return apple_pos, apple_type
+                   apple_pos_list.append([int(row),int(col)])
+                   apple_type_list.append(3)
+        return apple_pos, apple_type, apple_pos_list, apple_type_list

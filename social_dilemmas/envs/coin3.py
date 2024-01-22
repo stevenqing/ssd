@@ -25,6 +25,7 @@ class Coin3Env(MapEnv):
         use_reward_model=False,
         alpha=0.0,
         beta=0.0,
+        env_name='COIN3'
     ):
         super().__init__(
             ascii_map,
@@ -37,6 +38,7 @@ class Coin3Env(MapEnv):
             alpha=alpha,
             beta=beta,
         )
+        self.env_name = env_name
         self.apple_points = []
         # The initial position of the apples are determined
         for row in range(self.base_map.shape[0]):
@@ -111,6 +113,10 @@ class Coin3Env(MapEnv):
         if len(current_apples) <= 1:
             row = random.randint(1,np.shape(self.world_map)[0]-1)
             col = random.randint(1,np.shape(self.world_map)[1]-1)
+            while [row, col] not in agent_positions and [row, col] not in current_apples:
+                row = random.randint(1,np.shape(self.world_map)[0]-1)
+                col = random.randint(1,np.shape(self.world_map)[1]-1)
+                break
             if [row, col] not in agent_positions and [row, col] not in current_apples:
                 spawn_prob = 0.1
                 rand_num = np.random.choice([1,0.1],p=[0.9,0.1])
@@ -122,6 +128,7 @@ class Coin3Env(MapEnv):
                         new_apple_points.append((row, col, b"B"))
                     else:
                         new_apple_points.append((row, col, b"C"))
+            
         return new_apple_points
 
     def count_apples(self):

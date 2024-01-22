@@ -26,6 +26,7 @@ class HarvestEnv(MapEnv):
         inequity_averse_reward=False,
         alpha=0.0,
         beta=0.0,
+        env_name='HARVEST'
     ):
         super().__init__(
             ascii_map,

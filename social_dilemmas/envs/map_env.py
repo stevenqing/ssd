@@ -72,7 +72,15 @@ DEFAULT_COLOURS = {
 #         N
 #         |
 
+ENV_TO_VEC = {
+    'COIN3': 15,
+    'LBF10': 18
+}
 
+INIT_VEC = {
+    'COIN3': np.array([1, 7, 1, 1, 7, 6, 3, 3, 5, 5, 6, 2, 1, 2, 3]).astype(np.int32),
+    'LBF10': np.array([1, 7, 1, 1, 7, 6, 1, 1, 1, 3, 3, 5, 5, 6, 2, 1, 2, 3]).astype(np.int32),
+}
 class MapEnv(MultiAgentEnv):
     def __init__(
         self,
@@ -121,10 +129,9 @@ class MapEnv(MultiAgentEnv):
         # self.reward_model.eval()
         self.sample_number = sample_number
         self.store_trajs = store_trajs
-        self.count = 0
+        self.timestep = 0
         self.num_agents = num_agents
         self.agent_id_matrix = np.eye(self.num_agents,dtype=int).astype(np.uint8)
-        self.prev_vector_state = np.array([1, 7, 1, 1, 7, 6, 3, 3, 5, 5, 6, 2, 1, 2, 3]).astype(np.int32)
         self.use_reward_model = use_reward_model
         self.base_map = self.ascii_to_numpy(ascii_map)
         self.view_len = view_len
@@ -168,6 +175,7 @@ class MapEnv(MultiAgentEnv):
                 elif self.base_map[row, col] == b"@":
                     self.wall_points.append([row, col])
         self.setup_agents()
+        # self.prev_vector_state = INIT_VEC[self.env_name]
     @property
     def observation_space(self):
         obs_space = {
@@ -177,17 +185,17 @@ class MapEnv(MultiAgentEnv):
                 shape=(2 * self.view_len + 1, 2 * self.view_len + 1, 3),
                 dtype=np.uint8,
             ),
-            "all_rewards": Box(
-                low=-4,
-                high=1,
-                shape=(self.num_agents,),
-                dtype=np.int8,
-                ),
         }
         if self.return_agent_actions:
             # Append the actions of other agents
             obs_space = {
                 **obs_space,
+                "all_rewards": Box(
+                low=-100,
+                high=100,
+                shape=(self.num_agents,),
+                dtype=np.int8,
+                ),
                 "other_agent_actions": Box(
                     low=0,
                     high=len(self.all_actions),
@@ -227,18 +235,18 @@ class MapEnv(MultiAgentEnv):
                 "prev_vector_state": Box(
                     low=0,
                     high=100,
-                    shape=(15,), #TODO: settle for coin3, need to change that later
+                    shape=(ENV_TO_VEC[self.env_name],), #TODO: settle for coin3, need to change that later
                     dtype=np.int32,
                 ),
                 "vector_state": Box(
                     low=0,
                     high=100,
-                    shape=(15,), #TODO: settle for coin3, need to change that later
+                    shape=(ENV_TO_VEC[self.env_name],), #TODO: settle for coin3, need to change that later
                     dtype=np.int32,
                 ),
                 "prev_rewards":  Box(
-                low=-4,
-                high=1,
+                low=-100,
+                high=100,
                 shape=(self.num_agents,),
                 dtype=np.int8,
                 ),   
@@ -298,6 +306,7 @@ class MapEnv(MultiAgentEnv):
                 arr[row, col] = ascii_list[row][col]
         return arr
 
+
     def step(self, actions):
         """Takes in a dict of actions and converts them to a map update
 
@@ -314,6 +323,7 @@ class MapEnv(MultiAgentEnv):
         dones: dict indicating whether each agent is done
         info: dict to pass extra info to gym
         """
+        self.timestep += 1
         self.beam_pos = []
         agent_actions = {}
         store_actions = []
@@ -324,20 +334,48 @@ class MapEnv(MultiAgentEnv):
                 store_actions.append(int(action))
 
         # Remove agents from color map
+        agents_pos = []
         for agent in self.agents.values():
+            agents_pos.append(list(agent.pos))
             row, col = agent.pos[0], agent.pos[1]
             self.single_update_world_color_map(row, col, self.world_map[row, col])
 
         self.update_moves(agent_actions)
         
         # Construct the vector state
-        apple_pos, apple_type = self.count_apples()
-        apple_pos = [item for sublist in apple_pos for item in sublist]    
-        
-        for agent in self.agents.values():
-            pos = agent.pos
-            new_char = agent.consume(self.world_map[pos[0], pos[1]])
-            self.single_update_map(pos[0], pos[1], new_char)
+        if self.env_name == 'LBF10':
+            apple_pos, apple_type, apple_pos_list, apple_type_list = self.count_apples()
+        else:
+            apple_pos, apple_type = self.count_apples()
+        apple_pos = [item for sublist in apple_pos for item in sublist]  
+
+
+        if self.env_name == 'LBF10':
+            for i in range(len(apple_pos_list)):
+                apple = apple_pos_list[i]
+                level = apple_type_list[i]
+                surroundings = self.round_pos(apple)
+                common_pos = [pos for pos in agents_pos if pos in surroundings]
+                total_agent_level = 0
+                agent_id = []
+                for pos in common_pos:
+                    for agent in self.agents.values():
+                        if pos == list(agent.pos):
+                            level -= agent.agent_level
+                            total_agent_level += agent.agent_level
+                            agent_id.append(agent.agent_id)
+                if level <= 0:
+                    # Update the map
+                    new_char = b" "
+                    self.single_update_map(apple[0],apple[1],new_char)
+                    for agent in self.agents.values():
+                        if agent.agent_id in agent_id:
+                            agent.reward += apple_type_list[i] / total_agent_level
+        else:
+            for agent in self.agents.values():
+                pos = agent.pos
+                new_char = agent.consume(self.world_map[pos[0], pos[1]])
+                self.single_update_map(pos[0], pos[1], new_char)
 
         
         # execute custom moves like firing
@@ -386,7 +424,14 @@ class MapEnv(MultiAgentEnv):
             agent.penalty_2 = penalty_2
             agent.penalty_3 = penalty_3
             rewards[agent.agent_id] = agent.compute_reward()
-            
+        
+
+        if self.env_name == 'LBF10':
+            levels = []
+            for agent in self.agents.values():
+                levels.append(agent.agent_level)
+
+
         for agent in self.agents.values():
             agent.full_map = map_with_agents
             rgb_arr = self.color_view(agent)
@@ -395,7 +440,10 @@ class MapEnv(MultiAgentEnv):
             if apple_type == None:
                 vector_state = positions + apple_pos
             else:
-                vector_state = positions + apple_pos + apple_type
+                if self.env_name == 'LBF10':
+                    vector_state = positions + levels + apple_pos + apple_type
+                else:
+                    vector_state = positions + apple_pos + apple_type
             vector_state = [int(i) for i in vector_state]
             
             agent_type = np.zeros(self.num_agents)
@@ -433,21 +481,24 @@ class MapEnv(MultiAgentEnv):
             else:
                 observations[agent.agent_id] = {"curr_obs": rgb_arr,"vector_state": vector_state}
             store_rewards.append(rewards[agent.agent_id])
-            dones[agent.agent_id] = agent.get_done()
+            if self.env_name == 'LBF10':
+                dones[agent.agent_id] = agent.get_done(self.timestep,apple_pos_list)
+            else:
+                dones[agent.agent_id] = agent.get_done()
             infos[agent.agent_id] = {}
-        if self.count < 1000 or 4000 < self.count < 5000:
-            if self.store_trajs:
-                vector_state = positions + apple_pos + apple_type
-                vector_state = [int(i) for i in vector_state]
-                store_trajs['vector_states'] = vector_state
-                store_trajs['actions'] = store_actions
-                store_trajs['rewards'] = store_rewards
+        # if self.count < 1000 or 4000 < self.count < 5000:
+        #     if self.store_trajs:
+        #         vector_state = positions + apple_pos + apple_type
+        #         vector_state = [int(i) for i in vector_state]
+        #         store_trajs['vector_states'] = vector_state
+        #         store_trajs['actions'] = store_actions
+        #         store_trajs['rewards'] = store_rewards
     
-                with open(self.file_path, "a") as json_file:
-                    json.dump(store_trajs, json_file)
-                    json_file.write('\n')
+        #         with open(self.file_path, "a") as json_file:
+        #             json.dump(store_trajs, json_file)
+        #             json_file.write('\n')
     
-            store_trajs = {'vector_states':[],'actions':[],'rewards':[]}
+        #     store_trajs = {'vector_states':[],'actions':[],'rewards':[]}
         if self.use_reward_model:
             vector_state = positions + apple_pos + apple_type
             vector_state = [int(i) for i in vector_state]
@@ -525,7 +576,6 @@ class MapEnv(MultiAgentEnv):
                 # No previous actions so just pass in "wait" action
                 prev_actions = np.array([4 for _ in range(self.num_agents - 1)]).astype(np.uint8)
                 visible_agents = self.find_visible_agents(agent.agent_id)
-                init_vector_state = np.array([1, 7, 1, 1, 7, 6, 3, 3, 5, 5, 6, 2, 1, 2, 3]).astype(np.uint8)
                 observations[agent.agent_id] = {
                     "curr_obs": rgb_arr,
                     "all_rewards": np.array([0 for _ in range(self.num_agents)]).astype(np.int8),
@@ -535,13 +585,14 @@ class MapEnv(MultiAgentEnv):
                     "visible_agents": visible_agents,
                     "prev_visible_agents": visible_agents,
                     "agent_id_matrix": self.agent_id_matrix,
-                    "prev_vector_state": init_vector_state,
+                    "prev_vector_state": INIT_VEC[self.env_name],
                     # "action_range": np.array([len(self.all_actions)]).astype(np.uint8),
-                    "vector_state": init_vector_state,
+                    "vector_state": INIT_VEC[self.env_name],
                     "prev_rewards": np.array([0 for _ in range(self.num_agents)]).astype(np.int8),
                 }
                 agent.prev_visible_agents = visible_agents
                 self.prev_rewards = np.array([0 for _ in range(self.num_agents)]).astype(np.int8)
+                self.prev_vector_state = INIT_VEC[self.env_name]
             else:
                 observations[agent.agent_id] = {"curr_obs": rgb_arr}
         return observations

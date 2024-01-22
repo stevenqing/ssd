@@ -32,6 +32,8 @@ from ray.rllib.utils import try_import_tf
 from algorithms.common_funcs_reward_model import (
     EXTRINSIC_REWARD,
     CONTERFACTUAL_REWARD,
+    MAPING_REWARD_FROM_CLASS_TO_VALUE,
+    MAPING_REWARD_FROM_VALUE_TO_CLASS,
     REWARDResetConfigMixin,
     build_model,
     get_reward_mixins,
@@ -68,8 +70,9 @@ def loss_with_reward_model(policy, model, dist_class, train_batch):
     else:
         policy.reg_loss = tf.zeros([1])
     # some metric we want to focus
-    policy.correlation_factor = reward_loss.correlation_factor
+    # policy.correlation_factor = reward_loss.correlation_factor
     policy.pred_reward = reward_loss.pred_reward
+    policy.true_reward = reward_loss.true_reward
     if state:
         max_seq_len = tf.reduce_max(train_batch["seq_lens"])
         mask = tf.sequence_mask(train_batch["seq_lens"], max_seq_len)
@@ -96,7 +99,8 @@ def loss_with_reward_model(policy, model, dist_class, train_batch):
         policy.config["vf_loss_coeff"],
         policy.config["use_gae"],
     ) 
-    policy.loss_obj.loss += policy.reward_loss + policy.reg_loss
+    policy.loss_obj.loss += policy.reward_loss 
+    policy.loss_obj.loss += policy.reg_loss
 
     return policy.loss_obj.loss
 
@@ -126,10 +130,11 @@ def extra_reward_model_stats(policy, train_batch):
         # ),
         "reward_loss": policy.reward_loss,
         "reg_loss": policy.reg_loss,
-        "correlation_factor": policy.correlation_factor,
+        # "correlation_factor": policy.correlation_factor,
         "pred_reward": policy.pred_reward,
+        "true_reward": policy.true_reward,
         EXTRINSIC_REWARD: tf.reduce_mean(train_batch[SampleBatch.REWARDS]),
-        CONTERFACTUAL_REWARD: tf.reduce_mean(train_batch[CONTERFACTUAL_REWARD]),
+        CONTERFACTUAL_REWARD: tf.reduce_mean(MAPING_REWARD_FROM_CLASS_TO_VALUE(train_batch[CONTERFACTUAL_REWARD])),
     }
 
     return base_stats

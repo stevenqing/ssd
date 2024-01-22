@@ -10,7 +10,7 @@ from models.common_layers import build_conv_layers, build_fc_layers
 tf = try_import_tf()
 
 
-class BaselineModel(RecurrentTFModelV2):
+class MiddleModel(RecurrentTFModelV2):
     def __init__(self, obs_space, action_space, num_outputs, model_config, name):
         """
         The baseline model without social influence from the social influence paper.
@@ -20,7 +20,7 @@ class BaselineModel(RecurrentTFModelV2):
         :param model_config: The model config dict. Used to determine size of conv and fc layers.
         :param name: The model name.
         """
-        super(BaselineModel, self).__init__(obs_space, action_space, num_outputs, model_config, name)
+        super(MiddleModel, self).__init__(obs_space, action_space, num_outputs, model_config, name)
 
         self.obs_space = obs_space
         self.num_outputs = num_outputs
@@ -71,6 +71,7 @@ class BaselineModel(RecurrentTFModelV2):
         new_dict = {"curr_obs": add_time_dimension(trunk, seq_lens)}
 
         output, new_state = self.forward_rnn(new_dict, state, seq_lens)
+        self._team_reward = self.compute_team_reward(input_dict)
         return tf.reshape(output, [-1, self.num_outputs]), new_state
 
     def forward_rnn(self, input_dict, state, seq_lens):
@@ -93,6 +94,14 @@ class BaselineModel(RecurrentTFModelV2):
         ) = self.policy_model.forward_rnn(input_dict, [h1, c1], seq_lens)
 
         return self._model_out, [output_h1, output_c1]
+    
+
+    def compute_team_reward(self,input_dict):
+        return input_dict['obs']['all_rewards']
+    
+    def get_team_reward(self):
+        return self._team_reward
+
 
     def action_logits(self):
         """
