@@ -21,7 +21,7 @@ def parse_args():
         "--env-name",
         type=str,
         default="harvest",
-        choices=["harvest", "cleanup"],
+        choices=["harvest", "cleanup", "coin3", "lbf10"],
         help="The SSD environment to use",
     )
     parser.add_argument(
@@ -35,6 +35,18 @@ def parse_args():
         type=int,
         default=1000,
         help="length of training rollouts AND length at which env is reset",
+    )
+    parser.add_argument(
+        "--num_cpus",
+        type=int,
+        default=1,
+        help="number of cpus enabled",
+    )
+    parser.add_argument(
+        "--num_envs",
+        type=int,
+        default=1,
+        help="number of environments enabled",
     )
     parser.add_argument(
         "--total-timesteps",
@@ -121,10 +133,10 @@ def main(args):
     inequity_averse_reward = args.inequity_averse_reward
     alpha = args.alpha
     beta = args.beta
+    num_cpus = args.cpus 
+    num_envs = args.envs
 
     # Training
-    num_cpus = 4  # number of cpus
-    num_envs = 12  # number of parallel multi-agent environments
     num_frames = 6  # number of frames to stack together; use >4 to avoid automatic VecTransposeImage
     features_dim = (
         128  # output layer of cnn extractor AND shared layer for policy and value functions

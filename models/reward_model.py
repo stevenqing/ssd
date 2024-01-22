@@ -63,7 +63,7 @@ class RewardModel(RecurrentTFModelV2):
         self.discrete_rewards = True
         
         # Declare whether to use causal mask
-        self.use_causal_mask = True
+        self.use_causal_mask = False
         # Declare variables that will later be used as loss fetches
         self._model_out = None
         self._value_out = None
@@ -102,7 +102,7 @@ class RewardModel(RecurrentTFModelV2):
         self.reg_loss_weight = model_config["custom_options"]["reg_loss_weight"]
 
 
-        self.register_variables(self.actions_model.rnn_model.variables + self.reward_model.variables)
+        self.register_variables(self.actions_model.rnn_model.variables)
         # self.actions_model.rnn_model.summary()
         # self.reward_model.summary()
 
@@ -123,7 +123,7 @@ class RewardModel(RecurrentTFModelV2):
         # RGB
         original_obs_dims = obs_space.original_space.spaces["curr_obs"].shape
         inputs = tf.keras.layers.Input(original_obs_dims, name="observations", dtype=tf.uint8)
-
+        
         # Divide by 255 to transform [0,255] uint8 rgb pixel values to [0,1] float32.
         last_layer = tf.keras.backend.cast(inputs, tf.float32)
         last_layer = tf.math.divide(last_layer, 255.0)
@@ -147,6 +147,9 @@ class RewardModel(RecurrentTFModelV2):
 
 
         # define inputs
+        # flatten_obs_dims = np.prod(original_obs_dims)
+        # flatten_inputs = tf.keras.layers.Input(flatten_obs_dims, name="flatten_observations", dtype=tf.uint8)
+        # zeroed_inputs = tf.keras.layers.Lambda(lambda x: x * 0)(inputs)
         inputs_for_reward = tf.keras.layers.Input(vector_state_dim + action_dim, name="inputs_for_reward", dtype=tf.float32)
         agent_id_matrix = tf.keras.layers.Input((num_agents, num_agents), name="inputs_id", dtype=tf.float32)
 
@@ -304,19 +307,7 @@ class RewardModel(RecurrentTFModelV2):
     def compute_reward(self, input_dict):
         #TODO: Double check the input_dict['obs']['all_actions'](checked should be all right)
         states, actions = input_dict['obs']['prev_vector_state'], input_dict['obs']['all_actions']
-        # agent_id_matrix = tf.transpose(agent_id_matrix,perm=[1,0,2])
 
-        # states = tf.expand_dims(states,axis=0)
-        # actions = tf.expand_dims(actions,axis=0)
-
-        # all_vector_state = tf.repeat(states,agent_id_matrix.shape[-1],axis=0)
-        # actions = tf.repeat(actions,agent_id_matrix.shape[-1],axis=0)
-
-        # all_vector_state = tf.concat((all_vector_state[:,:,:negative_index],agent_id_matrix),axis=-1)
-
-        # state_action = tf.concat((all_vector_state, actions), axis=-1)
-        # if state_action.shape[1] > 0:
-         #     state_action = tf.squeeze(state_action,axis=1)
         state_action = tf.concat((states, actions), axis=-1)
 
         predicted_reward = self.reward_model({'inputs_for_reward': state_action, 
@@ -367,32 +358,6 @@ class RewardModel(RecurrentTFModelV2):
         cf_vector_obs_action = tf.gather(all_vector_state_action, random_index)
         cf_agent_id_matrix = tf.gather(cf_agent_id_matrix,random_index)
 
-        # for i in range(sample_number):
-        #     inputs_for_reward = cf_vector_obs_action[i]
-        #     inputs_id = cf_agent_id_matrix[i]
-
-        #     # None, N_agent
-        #     predicted_cf_reward = self.reward_model({'inputs_for_reward': inputs_for_reward, 
-        #                                         'inputs_id': inputs_id})
-        #     predicted_cf_reward = tf.expand_dims(predicted_cf_reward,axis=0)
-        #     if i == 0:
-        #         cf_reward = predicted_cf_reward
-        #     else:
-        #         cf_reward = tf.concat((cf_reward,predicted_cf_reward),axis=0)
-        # for i in range(sample_number):
-        #     inputs_for_reward = cf_vector_obs_action[i]
-        #     inputs_id = cf_agent_id_matrix[i]
-
-        #     # None, N_agent
-        #     predicted_cf_reward = self.reward_model({'inputs_for_reward': inputs_for_reward, 
-        #                                         'inputs_id': inputs_id})
-        #     predicted_cf_reward = tf.expand_dims(predicted_cf_reward,axis=0)
-        #     if i == 0:
-        #         cf_reward = predicted_cf_reward
-        #     else:
-        #         cf_reward = tf.concat((cf_reward,predicted_cf_reward),axis=0)
-
-        # concatenate all the cf reward
         predicted_cf_reward = self.reward_model({'inputs_for_reward': tf.concat([cf_vector_obs_action[i] for i in range(cf_vector_obs_action.shape[0])], 0), 
                                                 'inputs_id': tf.concat([cf_agent_id_matrix[i] for i in range(cf_agent_id_matrix.shape[0])], 0)})
         
