@@ -73,11 +73,10 @@ class RewardModel(RecurrentTFModelV2):
         self._visibility = None
         self._social_conterfactual_reward = None
         self._true_one_hot_actions = None
-        self.policy_model, self.reward_model = self.create_model(obs_space, model_config)
-        self.register_variables(self.policy_model.variables)
+        self.reward_model= self.create_model(obs_space, model_config)
         self.register_variables(self.reward_model.variables)
 
-        inner_obs_space = self.policy_model.output_shape[1]
+        inner_obs_space = self.reward_model.output_shape[0][-1]
 
         cell_size = model_config["custom_options"].get("cell_size")
         # print(inner_obs_space, action_space, num_outputs, model_config, cell_size)
@@ -153,6 +152,8 @@ class RewardModel(RecurrentTFModelV2):
         inputs_for_reward = tf.keras.layers.Input(vector_state_dim + action_dim, name="inputs_for_reward", dtype=tf.float32)
         agent_id_matrix = tf.keras.layers.Input((num_agents, num_agents), name="inputs_id", dtype=tf.float32)
 
+        inputs_for_reward_conterfactual = tf.keras.layers.Input(vector_state_dim + action_dim, name="inputs_for_reward_conterfactual", dtype=tf.float32)
+        agent_id_matrix_conterfactual = tf.keras.layers.Input((num_agents, num_agents), name="inputs_id_conterfactual", dtype=tf.float32)
         # causal mask times input 
         # inputs_for_reward: [batch_size, vector_state_dim + action_dim] -> [batch_size, 1, vector_state_dim + action_dim]
         # causal_mask: [num_agents, vector_state_dim + action_dim] -> [1, num_agents, vector_state_dim + action_dim]
@@ -161,63 +162,132 @@ class RewardModel(RecurrentTFModelV2):
             self.causal_mask_layer = CAUSAL_MASK(input_dim=vector_state_dim + action_dim, num_agent=num_agents)
             masked_input = self.causal_mask_layer(inputs_for_reward)
             predicted_input = tf.keras.layers.Concatenate(axis=-1)([masked_input, agent_id_matrix])
+
+            masked_input_conterfactual = self.causal_mask_layer(inputs_for_reward_conterfactual)
+            predicted_input_conterfactual = tf.keras.layers.Concatenate(axis=-1)([masked_input_conterfactual, agent_id_matrix_conterfactual])
         else:
             reward_input = tf.expand_dims(inputs_for_reward,axis=1)
             reward_input = tf.repeat(reward_input,agent_id_matrix.shape[-1],axis=1)
             predicted_input = tf.concat((reward_input,agent_id_matrix),axis=-1)
+
+            # TODO double check
+            reward_input_conterfactual = tf.expand_dims(inputs_for_reward_conterfactual,axis=1)
+            reward_input_conterfactual = tf.repeat(reward_input_conterfactual,agent_id_matrix_conterfactual.shape[-1],axis=1)
+            predicted_input_conterfactual = tf.concat((reward_input_conterfactual,agent_id_matrix_conterfactual),axis=-1)
         # ! by ReedZyd: Currently, always set flag_discretize to False
-        predicted_reward = self.get_reward_predictor(predicted_input,custom_activation=False,flag_discretize=False) 
+
+        # predicted_input_all = tf.concat((predicted_input, predicted_input_conterfactual), axis=-1)
+        predicted_reward, predicted_reward_conterfactual = self.get_reward_predictor(predicted_input,predicted_input_conterfactual, custom_activation=False,flag_discretize=False) 
         if not self.discrete_rewards:
             predicted_reward = tf.squeeze(predicted_reward, axis=-1)
+            predicted_reward_conterfactual = tf.squeeze(predicted_reward_conterfactual, axis=-1)
 
-        return tf.keras.Model(inputs, [actor_critic_fc], name="Policy_Model"), tf.keras.Model([inputs_for_reward, agent_id_matrix], predicted_reward, name="Reward_Predictor_Model")
+        return tf.keras.Model([inputs, inputs_for_reward, agent_id_matrix, inputs_for_reward_conterfactual, agent_id_matrix_conterfactual], [actor_critic_fc, predicted_reward, predicted_reward_conterfactual], name="Reward_Model")
+    # , tf.keras.Model([], predicted_reward, name="Reward_Predictor_Model")
 
 
     
-    def get_reward_predictor(self, masked_input_with_id, emb_size=64, flag_discretize=False, custom_activation=True, reward_range=5):
+    # def get_reward_predictor(self, masked_input_with_id, emb_size=64, flag_discretize=False, custom_activation=True, reward_range=5, reuse=False):
+    #     # layer 1
+    #     last_layer = tf.keras.layers.Dense(
+    #             emb_size,
+    #             name="fc_{}_{}".format(1, 'reward'),
+    #             activation='sigmoid',
+    #             kernel_initializer=normc_initializer(1.0),
+    #         )(masked_input_with_id)
+    #     # layer 2
+    #     last_layer = tf.keras.layers.Dense(
+    #                 units=emb_size * 2, # output size for each agent's reward
+    #                 name="fc_{}_{}".format(2, 'reward'),
+    #                 activation='sigmoid', # double check activation function, -4 to 4
+    #                 kernel_initializer=normc_initializer(1.0),
+    #             )(last_layer)
+    #     # layer 3
+    #     last_layer = tf.keras.layers.Dense(
+    #                 units=emb_size, # output size for each agent's reward
+    #                 name="fc_{}_{}".format(3, 'reward'),
+    #                 activation='sigmoid', # double check activation function, -4 to 4
+    #                 kernel_initializer=normc_initializer(1.0),
+    #             )(last_layer)
+    #     if custom_activation:
+    #         def custom_activation_function(x):
+    #             sigmoid = tf.keras.activations.sigmoid(x)
+    #             return 5 * sigmoid - 4
+    #         # layer 4
+    #         last_layer = tf.keras.layers.Dense(
+    #                         units=1 if not flag_discretize else 5, # output size for each agent's reward
+    #                         name="fc_{}_{}".format(4, 'reward'),
+    #                         activation=custom_activation_function, # double check activation function, -4 to 4
+    #                         kernel_initializer=normc_initializer(1.0),
+    #                     )(last_layer)
+    #     else:
+    #     # layer 4
+    #         last_layer = tf.keras.layers.Dense(
+    #                         # output size for each agent's reward
+    #                         # ! by ReedZyd: discrete size only suitable for Coin3 env
+    #                         # TODO: make it compatiable and using a general flag to control if use discrete rewards and the reward range
+    #                         units=1 if not self.discrete_rewards else 6, 
+    #                         name="fc_{}_{}".format(4, 'reward'),
+    #                         activation=None, # double check activation function, -4 to 4
+    #                         kernel_initializer=normc_initializer(1.0),
+    #                     )(last_layer)
+    #     if flag_discretize:
+            
+    #         # apply gumble softmax
+    #         def gumbel_softmax(logits, temperature=1.0): # TODO: double check temperature
+    #             gumbel_noise = -tf.math.log(-tf.math.log(tf.random.uniform(tf.shape(logits), 0, 1)))
+    #             y = logits + gumbel_noise
+    #             return tf.nn.softmax(y / temperature, axis=-1)
+
+    #         last_layer = tf.keras.layers.Lambda(lambda x: gumbel_softmax(x, 1.0))(last_layer)
+        
+
+    def get_reward_predictor(self, masked_input_with_id, masked_input_with_id_conterfactual, emb_size=64, flag_discretize=False, custom_activation=True, reward_range=5, reuse=False):
         # layer 1
-        last_layer = tf.keras.layers.Dense(
+        reward_model_seq = tf.keras.Sequential()
+        reward_model_seq.add(tf.keras.layers.Dense(
                 emb_size,
                 name="fc_{}_{}".format(1, 'reward'),
                 activation='sigmoid',
                 kernel_initializer=normc_initializer(1.0),
-            )(masked_input_with_id)
+            ))
         # layer 2
-        last_layer = tf.keras.layers.Dense(
+        reward_model_seq.add(tf.keras.layers.Dense(
                     units=emb_size * 2, # output size for each agent's reward
                     name="fc_{}_{}".format(2, 'reward'),
                     activation='sigmoid', # double check activation function, -4 to 4
                     kernel_initializer=normc_initializer(1.0),
-                )(last_layer)
-        # layer 3
-        last_layer = tf.keras.layers.Dense(
+                ))
+        reward_model_seq.add(tf.keras.layers.Dense(
                     units=emb_size, # output size for each agent's reward
                     name="fc_{}_{}".format(3, 'reward'),
                     activation='sigmoid', # double check activation function, -4 to 4
                     kernel_initializer=normc_initializer(1.0),
-                )(last_layer)
+                ))
         if custom_activation:
             def custom_activation_function(x):
                 sigmoid = tf.keras.activations.sigmoid(x)
                 return 5 * sigmoid - 4
             # layer 4
-            last_layer = tf.keras.layers.Dense(
+            reward_model_seq.add(tf.keras.layers.Dense(
                             units=1 if not flag_discretize else 5, # output size for each agent's reward
                             name="fc_{}_{}".format(4, 'reward'),
                             activation=custom_activation_function, # double check activation function, -4 to 4
                             kernel_initializer=normc_initializer(1.0),
-                        )(last_layer)
+                        ))
         else:
         # layer 4
-            last_layer = tf.keras.layers.Dense(
+            reward_model_seq.add(tf.keras.layers.Dense(
                             # output size for each agent's reward
                             # ! by ReedZyd: discrete size only suitable for Coin3 env
                             # TODO: make it compatiable and using a general flag to control if use discrete rewards and the reward range
-                            units=1 if not self.discrete_rewards else 6, 
+                            units=1 if not self.discrete_rewards else 6,
                             name="fc_{}_{}".format(4, 'reward'),
                             activation=None, # double check activation function, -4 to 4
                             kernel_initializer=normc_initializer(1.0),
-                        )(last_layer)
+                        ))
+        last_layer = reward_model_seq(masked_input_with_id)
+        last_layer_conterfactual = reward_model_seq(masked_input_with_id_conterfactual)
         if flag_discretize:
             
             # apply gumble softmax
@@ -226,8 +296,9 @@ class RewardModel(RecurrentTFModelV2):
                 y = logits + gumbel_noise
                 return tf.nn.softmax(y / temperature, axis=-1)
             last_layer = tf.keras.layers.Lambda(lambda x: gumbel_softmax(x, 1.0))(last_layer)
+            last_layer_conterfactual = tf.keras.layers.Lambda(lambda x: gumbel_softmax(x, 1.0))(last_layer_conterfactual)
         
-        return last_layer
+        return last_layer, last_layer_conterfactual    #     return last_layer
 
     def get_reg_loss(self, ):
         return self._reg_loss
@@ -242,7 +313,31 @@ class RewardModel(RecurrentTFModelV2):
         :return: The agent's own action logits and the new model state.
         """
         # Evaluate non-lstm layers
-        actor_critic_fc_output = self.policy_model(input_dict["obs"]["curr_obs"])
+        states, actions = input_dict['obs']['prev_vector_state'], input_dict['obs']['all_actions']
+
+        state_action = tf.concat((states, actions), axis=-1)
+        inputs_ = {
+            'observations': input_dict["obs"]["curr_obs"],
+            'inputs_for_reward': state_action, 
+            'inputs_id': input_dict['obs']['agent_id_matrix'],
+            
+
+            }
+        input_conterfactual = self.get_inputs_for_conterfactual_reward(input_dict)
+        inputs_.update(input_conterfactual)
+        actor_critic_fc_output, self._predicted_reward,  _counterfactual_rewards_raw = self.reward_model(inputs_)
+
+        sample_number = 10
+        predicted_cf_reward = tf.stack(tf.split(_counterfactual_rewards_raw, sample_number), axis=1)
+
+        # cf_total_reward = self.reward_model({'inputs_for_reward': cf_vector_obs_action, 
+        #                                         'inputs_id': cf_agent_id_matrix})
+        if self.discrete_rewards:
+            # get argmax
+            self._counterfactual_rewards = tf.argmax(predicted_cf_reward,axis=-1)
+        else:
+            self._counterfactual_rewards = predicted_cf_reward
+
         rnn_input_dict = {
             "ac_trunk": actor_critic_fc_output,
             # "prev_reward_trunk": state[5],
@@ -258,17 +353,16 @@ class RewardModel(RecurrentTFModelV2):
         output, new_state = self.forward_rnn(rnn_input_dict, state, seq_lens)
         action_logits = tf.reshape(output, [-1, self.num_outputs])
 
-        if training:
             # TODO using conterfactual reward & computing rewards
             # self._predicted_reward =  input_dict['prev_rewards'] 
             # self._counterfactual_rewards = input_dict['prev_rewards']
-            self._predicted_reward = self.compute_reward(input_dict)
+            # self._predicted_reward = self.compute_reward(input_dict)
+
             # self._true_reward = input_dict['prev_rewards']
-            self._true_reward = input_dict['obs']['prev_rewards']
-            self._counterfactual_rewards = self.compute_conterfactual_reward(input_dict)
-            if self.use_causal_mask:
-                self._reg_loss = self.causal_mask_layer.get_reg_loss()
-                self._sparsity = self.causal_mask_layer.get_sparsity()
+        self._true_reward = input_dict['obs']['prev_rewards']
+        if self.use_causal_mask:
+            self._reg_loss = self.causal_mask_layer.get_reg_loss()
+            self._sparsity = self.causal_mask_layer.get_sparsity()
         return action_logits, new_state
     
     def forward_rnn(self, input_dict, state, seq_lens):
@@ -303,16 +397,7 @@ class RewardModel(RecurrentTFModelV2):
         self._visibility = input_dict["visible_agents"]
 
         return self._model_out, [output_h1, output_c1]
-    
-    def compute_reward(self, input_dict):
-        #TODO: Double check the input_dict['obs']['all_actions'](checked should be all right)
-        states, actions = input_dict['obs']['prev_vector_state'], input_dict['obs']['all_actions']
 
-        state_action = tf.concat((states, actions), axis=-1)
-
-        predicted_reward = self.reward_model({'inputs_for_reward': state_action, 
-                                                'inputs_id': input_dict['obs']['agent_id_matrix']})
-        return predicted_reward
 
     def get_predicted_reward(self, ):
         return self._predicted_reward
@@ -323,6 +408,44 @@ class RewardModel(RecurrentTFModelV2):
     def get_conterfactual_reward(self, ):
         return self._counterfactual_rewards
     
+
+    def get_inputs_for_conterfactual_reward(self, input_dict, sample_number=10):
+        """
+        Compute counterfactual reward of other agents.
+        :param input_dict: The model input tensors.
+        :param prev_action_logits: Logits for the agent's own policy/actions at t-1
+        :param counterfactual_logits: The counterfactual obs_action vector for actions made by other
+        agents at t.
+        """
+
+        vector_state = input_dict["obs"]["vector_state"]
+        agent_id_matrix = input_dict["obs"]["agent_id_matrix"]
+        cf_actions = input_dict["obs"]["cf_actions"]
+
+        cf_number = cf_actions.shape[1]
+        agent_num = agent_id_matrix.shape[-1]
+        
+        # enabling the cf action 
+        all_vector_state = tf.expand_dims(vector_state,axis=0)
+        all_vector_state = tf.repeat(all_vector_state, cf_number, axis=0)
+
+        cf_actions = tf.transpose(cf_actions,perm=[1,0,2]) # 16, None, 3
+        
+        # all_vector_state: 16, None, 15
+        # cf_actions: 16, None, 3
+        # all_vector_state_action: 16, None, 18
+        all_vector_state_action = tf.concat((all_vector_state,cf_actions),axis=-1)
+
+        cf_agent_id_matrix = tf.expand_dims(agent_id_matrix,axis=0)
+        cf_agent_id_matrix = tf.repeat(cf_agent_id_matrix,cf_number,axis=0)
+
+        
+        random_index = tf.random.uniform(shape=(sample_number,), maxval=cf_number, dtype=tf.int32)
+        cf_vector_obs_action = tf.gather(all_vector_state_action, random_index)
+        cf_agent_id_matrix = tf.gather(cf_agent_id_matrix,random_index)
+
+        return {'inputs_for_reward_conterfactual': tf.concat([cf_vector_obs_action[i] for i in range(cf_vector_obs_action.shape[0])], 0), 
+                                                'inputs_id_conterfactual': tf.concat([cf_agent_id_matrix[i] for i in range(cf_agent_id_matrix.shape[0])], 0)}
     def compute_conterfactual_reward(self, input_dict, sample_number=10):
         """
         Compute counterfactual reward of other agents.
