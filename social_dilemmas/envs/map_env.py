@@ -349,8 +349,9 @@ class MapEnv(MultiAgentEnv):
         # Construct the vector state
         if self.env_name == 'LBF10':
             apple_pos, apple_type, apple_pos_list, apple_type_list = self.count_apples()
-        else:
+        elif self.env_name == 'COIN3':
             apple_pos, apple_type = self.count_apples()
+  
         apple_pos = [item for sublist in apple_pos for item in sublist]  
 
 

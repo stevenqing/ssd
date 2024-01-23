@@ -11,7 +11,7 @@ from social_dilemmas.maps import LBF10_MAP
 _HARVEST_ACTIONS = {"FIRE": 5}  # length of firing range
 
 
-COIN_VIEW_SIZE = 10
+COIN_VIEW_SIZE = 7
 
 
 class LBF10Env(MapEnv):
