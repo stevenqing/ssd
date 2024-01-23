@@ -119,7 +119,7 @@ def parse_args():
     )
     parser.add_argument("--eval-interval", type=int, default=4000)
     parser.add_argument("--eval-episodes", type=int, default=1)
-    parser.add_argument("--user_name", type=str, default="icml2024_selfishness")
+    parser.add_argument("--user_name", type=str, default="ssd_pytorch")
     parser.add_argument("--aga", action='store_true', default=False)
     parser.add_argument("--selfish-level", type=float, default=1.0)
     parser.add_argument("--play-altruistic-game", action='store_true', default=False)
