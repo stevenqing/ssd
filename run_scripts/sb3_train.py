@@ -151,7 +151,7 @@ class CustomCNN(BaseFeaturesExtractor):
 
         #flat_out = num_frames * 6 * (view_len * 2 - 1) ** 2
         
-        flat_out = 1014 * 6 # coin game?
+        flat_out = num_frames * 6 * (view_len * 2 - 1) ** 2 
         self.conv = nn.Conv2d(
             in_channels=num_frames * 3,  # Input: (3 * 4) x 15 x 15
             out_channels=num_frames * 6,  # Output: 24 x 13 x 13

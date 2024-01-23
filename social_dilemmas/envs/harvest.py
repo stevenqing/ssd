@@ -39,6 +39,7 @@ class HarvestEnv(MapEnv):
             alpha=alpha,
             beta=beta,
         )
+        self.env_name = env_name
         self.apple_points = []
         for row in range(self.base_map.shape[0]):
             for col in range(self.base_map.shape[1]):

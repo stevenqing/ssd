@@ -50,7 +50,7 @@ class CleanupEnv(MapEnv):
             alpha=alpha,
             beta=beta,
         )
-
+        self.env_name = env_name
         # compute potential waste area
         unique, counts = np.unique(self.base_map, return_counts=True)
         counts_dict = dict(zip(unique, counts))

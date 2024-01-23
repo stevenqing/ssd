@@ -74,12 +74,16 @@ DEFAULT_COLOURS = {
 
 ENV_TO_VEC = {
     'COIN3': 15,
-    'LBF10': 18
+    'LBF10': 18,
+    'CLEANUP': 12,
+    'HARVEST': 12,
 }
 
 INIT_VEC = {
     'COIN3': np.array([1, 7, 1, 1, 7, 6, 3, 3, 5, 5, 6, 2, 1, 2, 3]).astype(np.int32),
     'LBF10': np.array([1, 7, 1, 1, 7, 6, 1, 1, 1, 3, 3, 5, 5, 6, 2, 1, 2, 3]).astype(np.int32),
+    'CLEANUP': np.array([1, 7, 1, 1, 7, 6, 3, 3, 5, 5, 6, 2]).astype(np.int32),
+    'HARVEST': np.array([1, 7, 1, 1, 7, 6, 3, 3, 5, 5, 6, 2]).astype(np.int32),
 }
 class MapEnv(MultiAgentEnv):
     def __init__(
