@@ -43,7 +43,7 @@ def parse_args():
     )
     parser.add_argument(
         "--kl-threshold",
-        type=int,
+        type=float,
         default=0.01,
         help="The number of envs",
     )
