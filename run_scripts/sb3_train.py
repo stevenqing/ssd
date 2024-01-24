@@ -178,7 +178,7 @@ def main(args):
         net_arch=[features_dim],
     )
 
-    tensorboard_log = "./results/sb3/cleanup_ppo_paramsharing"
+    tensorboard_log = f"./results/{env_name}_ppo_paramsharing"
 
     model = PPO(
         "CnnPolicy",
