@@ -19,7 +19,7 @@ CLEANUP_COLORS = {
 
 SPAWN_PROB = [0, 0.005, 0.02, 0.05]
 
-CLEANUP_VIEW_SIZE = 7
+CLEANUP_VIEW_SIZE = 10
 
 thresholdDepletion = 0.4
 thresholdRestoration = 0.0

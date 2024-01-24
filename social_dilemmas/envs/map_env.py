@@ -1,3 +1,6 @@
+
+
+
 """Base map class that defines the rendering process
 """
 import tensorflow as tf
@@ -85,6 +88,11 @@ INIT_VEC = {
     'CLEANUP': np.array([1, 7, 1, 1, 7, 6, 3, 3, 5, 5, 6, 2]).astype(np.int32),
     'HARVEST': np.array([1, 7, 1, 1, 7, 6, 3, 3, 5, 5, 6, 2]).astype(np.int32),
 }
+
+for i in INIT_VEC:
+    INIT_VEC[i] = np.pad(INIT_VEC[i],(0,21-len(INIT_VEC[i])))[:,np.newaxis,np.newaxis]
+    INIT_VEC[i] = np.repeat(INIT_VEC[i], 21, axis=1)
+
 class MapEnv(MultiAgentEnv):
     def __init__(
         self,
@@ -186,7 +194,7 @@ class MapEnv(MultiAgentEnv):
             "curr_obs": Box(
                 low=0,
                 high=255,
-                shape=(2 * self.view_len + 1, 2 * self.view_len + 1, 3),
+                shape=(2 * self.view_len + 1, 2 * self.view_len + 1, 4), # set to 4, pad the vector state
                 dtype=np.uint8,
             ),
         }
@@ -451,6 +459,13 @@ class MapEnv(MultiAgentEnv):
                     vector_state = positions + apple_pos + apple_type
             vector_state = [int(i) for i in vector_state]
             
+
+            vector_state = np.array(vector_state)
+            vector_state = np.pad(vector_state,(0,21-len(vector_state)))[:,np.newaxis,np.newaxis]
+            vector_state = np.repeat(vector_state, 21, axis=1)
+            rgb_arr = np.concatenate((rgb_arr,vector_state),axis=-1)
+
+
             agent_type = np.zeros(self.num_agents)
             agent_type[int(agent.agent_id[-1])] = 1
             agent_type = [int(a) for a in agent_type]
@@ -576,6 +591,7 @@ class MapEnv(MultiAgentEnv):
         for agent in self.agents.values():
             agent.full_map = map_with_agents
             rgb_arr = self.color_view(agent)
+            rgb_arr = np.concatenate((rgb_arr,INIT_VEC[self.env_name]),axis=-1)
             # concatenate on the prev_actions to the observations
             if self.return_agent_actions:
                 # No previous actions so just pass in "wait" action

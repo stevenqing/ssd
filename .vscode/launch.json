@@ -78,6 +78,46 @@
 
 
 
+// {
+//     // Use IntelliSense to learn about possible attributes.
+//     // Hover to view descriptions of existing attributes.
+//     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+//     "version": "0.2.0",
+//     "configurations": [
+//         {
+//             "name": "Python: 当前文件",
+//             "type": "python",
+//             "request": "launch",
+//             "program": "${file}",
+//             "console": "integratedTerminal",
+//             "python": "/home/shuqingshi/miniconda3/envs/melting-ssd/bin/python",
+//             "justMyCode": false
+//         },
+//         {
+//             "name": "Python: main",
+//             "type": "python",
+//             "request": "launch",
+//             "program": "run_scripts/sb3_train.py",
+//             "console": "integratedTerminal",
+//             "python": "/home/shuqingshi/miniconda3/envs/melting-ssd/bin/python",
+//             "justMyCode": false,
+//             "args": [
+//                 "--env",
+//                 "lbf10",
+//                 "--num-agents",
+//                 "3",
+//                 "--rollout-len",
+//                 "1000",
+//                 "--user_name",
+//                 "1160677229",
+//                 "--num_envs",
+//                 "1",
+//             ],
+//         },
+//     ]
+
+
+
 {
     // Use IntelliSense to learn about possible attributes.
     // Hover to view descriptions of existing attributes.
@@ -90,7 +130,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "python": "/home/shuqingshi/miniconda3/envs/melting-ssd/bin/python",
+            "python": "/home/shuqingshi/miniconda3/envs/ssd/bin/python",
             "justMyCode": false
         },
         {
@@ -99,17 +139,19 @@
             "request": "launch",
             "program": "run_scripts/sb3_train.py",
             "console": "integratedTerminal",
-            "python": "/home/shuqingshi/miniconda3/envs/melting-ssd/bin/python",
+            "python": "/home/shuqingshi/miniconda3/envs/ssd/bin/python",
             "justMyCode": false,
             "args": [
                 "--env",
-                "lbf10",
+                "harvest",
                 "--num-agents",
-                "3",
+                "5",
                 "--rollout-len",
                 "1000",
-                "--user_name",
-                "1160677229",
+                // "--user_name",
+                // "1160677229",
+                "--num_envs",
+                "1",
             ],
         },
     ]

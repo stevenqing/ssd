@@ -390,6 +390,8 @@ class RolloutBuffer(BaseBuffer):
 
     def reset(self) -> None:
         self.observations = np.zeros((self.buffer_size, self.n_envs, *self.obs_shape), dtype=np.float32)
+        self.prev_vector_state = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.vector_state = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.actions = np.zeros((self.buffer_size, self.n_envs, self.action_dim), dtype=np.float32)
         self.rewards = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         # Author: Yang Li
@@ -500,6 +502,8 @@ class RolloutBuffer(BaseBuffer):
         if not self.generator_ready:
             _tensor_names = [
                 "observations",
+                "prev_vector_state",
+                "vector_state",
                 "actions",
                 "values",
                 "log_probs",
@@ -532,6 +536,8 @@ class RolloutBuffer(BaseBuffer):
         # print(self.observations.shape)
         data = (
             self.observations[batch_inds],
+            self.prev_vector_state[batch_inds],
+            self.vector_state[batch_inds],
             self.actions[batch_inds],
             self.values[batch_inds],
             self.log_probs[batch_inds],
@@ -776,6 +782,8 @@ class DictRolloutBuffer(RolloutBuffer):
         self.observations = {}
         for key, obs_input_shape in self.obs_shape.items():
             self.observations[key] = np.zeros((self.buffer_size, self.n_envs, *obs_input_shape), dtype=np.float32)
+        self.prev_vector_state = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.vector_state = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.actions = np.zeros((self.buffer_size, self.n_envs, self.action_dim), dtype=np.float32)
         self.rewards = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.shaped_rewards = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
