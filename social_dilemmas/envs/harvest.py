@@ -13,7 +13,7 @@ _HARVEST_ACTIONS = {"FIRE": 5}  # length of firing range
 
 SPAWN_PROB = [0, 0.005, 0.02, 0.05]
 
-HARVEST_VIEW_SIZE = 10
+HARVEST_VIEW_SIZE = 7
 
 
 class HarvestEnv(MapEnv):
