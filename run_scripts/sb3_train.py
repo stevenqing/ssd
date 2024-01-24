@@ -42,6 +42,12 @@ def parse_args():
         help="The number of envs",
     )
     parser.add_argument(
+        "--kl-threshold",
+        type=int,
+        default=0.01,
+        help="The number of envs",
+    )
+    parser.add_argument(
         "--rollout-len",
         type=int,
         default=1000,
@@ -135,6 +141,7 @@ def main(args):
     num_cpus = args.num_cpus
     num_envs = args.num_envs
 
+    target_kl = args.kl_threshold
     # Training
       # number of cpus
       # number of parallel multi-agent environments
@@ -149,7 +156,6 @@ def main(args):
     n_epochs = 30
     gae_lambda = 1.0
     gamma = 0.99
-    target_kl = 0.01
     grad_clip = 40
     verbose = 3
 
