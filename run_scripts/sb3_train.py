@@ -30,6 +30,18 @@ def parse_args():
         help="The number of agents",
     )
     parser.add_argument(
+        "--num-cpus",
+        type=int,
+        default=4,
+        help="The number of cpus",
+    )
+    parser.add_argument(
+        "--num-envs",
+        type=int,
+        default=12,
+        help="The number of envs",
+    )
+    parser.add_argument(
         "--rollout-len",
         type=int,
         default=1000,
@@ -120,10 +132,12 @@ def main(args):
     inequity_averse_reward = args.inequity_averse_reward
     alpha = args.alpha
     beta = args.beta
+    num_cpus = args.num_cpus
+    num_envs = args.num_envs
 
     # Training
-    num_cpus = 4  # number of cpus
-    num_envs = 12  # number of parallel multi-agent environments
+      # number of cpus
+      # number of parallel multi-agent environments
     num_frames = 6  # number of frames to stack together; use >4 to avoid automatic VecTransposeImage
     features_dim = (
         128  # output layer of cnn extractor AND shared layer for policy and value functions
