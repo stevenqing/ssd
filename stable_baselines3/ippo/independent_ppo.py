@@ -1,15 +1,13 @@
 import time
 from collections import deque
 from typing import Any, Dict, List, Optional, Type, Union
-import os
-import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import gym
 import numpy as np
 import torch as th
 import wandb
 from gym.spaces import Box, Discrete
-from stable_baselines3 import PPO
+import PPO
 from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
 from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.type_aliases import (GymEnv, MaybeCallback,
@@ -82,8 +80,9 @@ class IndependentPPO(OnPolicyAlgorithm):
                 policy_kwargs=policy_kwargs,
                 verbose=verbose,
                 device=device,
+                agent_id=i
             )
-            for _ in range(self.num_agents)
+            for i in range(self.num_agents)
         ]
 
     def learn(

@@ -1,5 +1,7 @@
 import argparse
-
+import os 
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import gym
 import supersuit as ss
 import torch
@@ -7,7 +9,7 @@ import torch.nn.functional as F
 # pip install git+https://github.com/Rohan138/marl-baselines3
 import wandb
 import socket
-from marl_baselines3 import IndependentPPO
+from stable_baselines3.independent_ppo import IndependentPPO
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
 from torch import nn
@@ -87,6 +89,7 @@ def parse_args():
         default=0.05,
         help="Disadvantageous inequity aversion factor",
     )
+    parser.add_argument("--user_name", type=str, default="1160677229")
     args = parser.parse_args()
     return args
 
@@ -133,6 +136,7 @@ class CustomCNN(BaseFeaturesExtractor):
 
 def main(args):
     # Config
+    model='baseline'
     env_name = args.env_name
     num_agents = args.num_agents
     rollout_len = args.rollout_len
@@ -183,7 +187,7 @@ def main(args):
                          entity=args.user_name, 
                          notes=socket.gethostname(),
                          name=str(env_name) +"_"+ str(model),
-                         group=str(env_name) +"_"+ str(model),
+                         group=str(env_name) +"_"+ str(model)+ "_independent",
                          dir="./",
                          job_type="training",
                          reinit=True)

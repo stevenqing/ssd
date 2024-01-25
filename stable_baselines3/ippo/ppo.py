@@ -1,6 +1,8 @@
 import warnings
 from typing import Any, Dict, Optional, Type, TypeVar, Union
-
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import numpy as np
 import torch as th
 from gym import spaces
@@ -97,6 +99,7 @@ class PPO(OnPolicyAlgorithm):
         seed: Optional[int] = None,
         device: Union[th.device, str] = "auto",
         _init_setup_model: bool = True,
+        agent_id: int = 0,
     ):
 
         super().__init__(
@@ -117,6 +120,7 @@ class PPO(OnPolicyAlgorithm):
             device=device,
             seed=seed,
             _init_setup_model=False,
+            agent_id=agent_id,
             supported_action_spaces=(
                 spaces.Box,
                 spaces.Discrete,
@@ -131,6 +135,7 @@ class PPO(OnPolicyAlgorithm):
             assert (
                 batch_size > 1
             ), "`batch_size` must be greater than 1. See https://github.com/DLR-RM/stable-baselines3/issues/440"
+        print("marl_ppo")
         if self.env is not None:
             # Check that `n_steps * n_envs > 1` to avoid NaN
             # when doing advantage normalization

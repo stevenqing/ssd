@@ -1,9 +1,7 @@
 import time
 from collections import deque
 from typing import Any, Dict, List, Optional, Type, Union
-import os
-import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import gym
 import numpy as np
 import torch as th
@@ -152,11 +150,6 @@ class IndependentPPO(OnPolicyAlgorithm):
                 )
                 if log_interval is not None and num_timesteps % log_interval == 0:
                     fps = int(policy.num_timesteps / (time.time() - policy.start_time))
-                    policy_loss, other_loss, entropy_loss = policy.cal_policy_loss()
-                    wandb.log({f"{polid}/policy_id": polid}, step=num_timesteps)
-                    wandb.log({f"{polid}/policy_loss": policy_loss}, step=num_timesteps)
-                    wandb.log({f"{polid}/other_loss": other_loss}, step=num_timesteps)
-                    wandb.log({f"{polid}/entropy_loss": entropy_loss}, step=num_timesteps)
                     wandb.log({f"{polid}/fps": fps}, step=num_timesteps)
                     wandb.log({f"{polid}/ep_rew_mean": policy.ep_info_buffer[-1]["r"]}, step=num_timesteps)
                     wandb.log({f"{polid}/ep_len_mean": policy.ep_info_buffer[-1]["l"]}, step=num_timesteps)
