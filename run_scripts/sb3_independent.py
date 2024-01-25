@@ -5,6 +5,8 @@ import supersuit as ss
 import torch
 import torch.nn.functional as F
 # pip install git+https://github.com/Rohan138/marl-baselines3
+import wandb
+import socket
 from marl_baselines3 import IndependentPPO
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
@@ -175,6 +177,18 @@ def main(args):
         env, num_vec_envs=num_envs, num_cpus=num_cpus, base_class="stable_baselines3"
     )
     env = VecMonitor(env)
+
+    run = wandb.init(config=args,
+                         project="SSD_pytorch",
+                         entity=args.user_name, 
+                         notes=socket.gethostname(),
+                         name=str(env_name) +"_"+ str(model),
+                         group=str(env_name) +"_"+ str(model),
+                         dir="./",
+                         job_type="training",
+                         reinit=True)
+    
+    args = wandb.config # for wandb sweep
 
     policy_kwargs = dict(
         features_extractor_class=CustomCNN,
