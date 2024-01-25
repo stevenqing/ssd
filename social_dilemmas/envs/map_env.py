@@ -351,6 +351,7 @@ class MapEnv(MultiAgentEnv):
         self.update_moves(agent_actions)
         
         # Construct the vector state
+        apple_type = None
         if self.env_name == 'LBF10':
             apple_pos, apple_type, apple_pos_list, apple_type_list = self.count_apples()
         elif self.env_name == 'COIN3':
@@ -363,10 +364,10 @@ class MapEnv(MultiAgentEnv):
         apple_pos = [item for sublist in apple_pos for item in sublist]  
         if self.env_name == 'CLEANUP':
             waste_pos = [item for sublist in waste_pos for item in sublist]
-            apple_pos = np.pad(apple_pos,([0,0],5-len(apple_pos)))
-            waste_pos = np.pad(waste_pos,([0,0],5-len(waste_pos)))
+            apple_pos = np.pad(apple_pos,(0,10-len(apple_pos)))
+            waste_pos = np.pad(waste_pos,(0,10-min(len(waste_pos),10))) if len(waste_pos) < 10 else waste_pos[:10]
         elif self.env_name == 'HARVEST':
-            apple_pos = np.pad(apple_pos,([0,0],5-len(apple_pos)))
+            apple_pos = np.pad(apple_pos,(0,10-len(apple_pos))) if len(apple_pos) < 10 else apple_pos[:10]
 
 
         if self.env_name == 'LBF10':
@@ -459,11 +460,10 @@ class MapEnv(MultiAgentEnv):
 
             # generate vector_state
             if apple_type == None:
-                vector_state = positions + apple_pos
                 if self.env_name == 'CLEANUP':
-                    vector_state = vector_state + apple_pos + waste_pos
+                    vector_state = positions + apple_pos + waste_pos
                 else:
-                    vector_state = vector_state + apple_pos
+                    vector_state = positions + apple_pos
             else:
                 if self.env_name == 'LBF10':
                     vector_state = positions + levels + apple_pos + apple_type
