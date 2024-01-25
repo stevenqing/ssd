@@ -118,9 +118,19 @@ class HarvestEnv(MapEnv):
                     new_apple_points.append((row, col, b"A"))
         return new_apple_points
 
-    def count_apples(self, window):
-        # compute how many apples are in window
-        unique, counts = np.unique(window, return_counts=True)
-        counts_dict = dict(zip(unique, counts))
-        num_apples = counts_dict.get(b"A", 0)
-        return num_apples
+    # def count_apples(self, window):
+    #     # compute how many apples are in window
+    #     unique, counts = np.unique(window, return_counts=True)
+    #     counts_dict = dict(zip(unique, counts))
+    #     num_apples = counts_dict.get(b"A", 0)
+    #     return num_apples
+
+    def count_apples(self):
+        # Return apples pos and type
+        apple_pos = []
+        for row in range(1,np.shape(self.world_map)[0]-1):
+           for col in range(1,np.shape(self.world_map)[1]-1):
+               char = self.world_map[row, col]
+               if char == b'A':
+                   apple_pos.append([int(row),int(col)])
+        return apple_pos

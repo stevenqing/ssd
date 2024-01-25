@@ -135,7 +135,7 @@ class PPO(OnPolicyAlgorithm):
             assert (
                 batch_size > 1
             ), "`batch_size` must be greater than 1. See https://github.com/DLR-RM/stable-baselines3/issues/440"
-        print("marl_ppo")
+
         if self.env is not None:
             # Check that `n_steps * n_envs > 1` to avoid NaN
             # when doing advantage normalization

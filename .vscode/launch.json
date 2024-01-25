@@ -134,9 +134,9 @@
             "justMyCode": false,
             "args": [
                 "--env",
-                "coin3",
+                "harvest",
                 "--num-agents",
-                "3",
+                "5",
                 "--rollout-len",
                 "1000",
                 "--user_name",

@@ -1,0 +1,111 @@
+{
+    "os": "Linux-6.2.0-36-generic-x86_64-with-glibc2.17",
+    "python": "3.8.10",
+    "heartbeatAt": "2024-01-25T18:45:40.739690",
+    "startedAt": "2024-01-25T18:45:40.044944",
+    "docker": null,
+    "cuda": null,
+    "args": [
+        "--env",
+        "harvest",
+        "--num-agents",
+        "5",
+        "--rollout-len",
+        "1000",
+        "--user_name",
+        "1160677229",
+        "--num-envs",
+        "1"
+    ],
+    "state": "running",
+    "program": "run_scripts/sb3_independent.py",
+    "codePathLocal": "run_scripts/sb3_independent.py",
+    "codePath": "run_scripts/sb3_independent.py",
+    "git": {
+        "remote": "https://github.com/stevenqing/ssd.git",
+        "commit": "9c08a92c1af5fe2b8387e914725b2fa167428713"
+    },
+    "email": null,
+    "root": "/home/shuqingshi/Downloads/ssd",
+    "host": "nmslap007078",
+    "username": "shuqingshi",
+    "executable": "/home/shuqingshi/miniconda3/envs/ssd/bin/python",
+    "cpu_count": 10,
+    "cpu_count_logical": 12,
+    "cpu_freq": {
+        "current": 1407.70575,
+        "min": 400.0,
+        "max": 4333.333333333333
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 2535.62,
+            "min": 400.0,
+            "max": 5200.0
+        },
+        {
+            "current": 2310.518,
+            "min": 400.0,
+            "max": 5200.0
+        },
+        {
+            "current": 1781.089,
+            "min": 400.0,
+            "max": 5200.0
+        },
+        {
+            "current": 915.576,
+            "min": 400.0,
+            "max": 5200.0
+        },
+        {
+            "current": 1768.972,
+            "min": 400.0,
+            "max": 3900.0
+        },
+        {
+            "current": 1797.886,
+            "min": 400.0,
+            "max": 3900.0
+        },
+        {
+            "current": 1852.522,
+            "min": 400.0,
+            "max": 3900.0
+        },
+        {
+            "current": 1718.89,
+            "min": 400.0,
+            "max": 3900.0
+        },
+        {
+            "current": 1671.548,
+            "min": 400.0,
+            "max": 3900.0
+        },
+        {
+            "current": 1712.5,
+            "min": 400.0,
+            "max": 3900.0
+        },
+        {
+            "current": 1882.101,
+            "min": 400.0,
+            "max": 3900.0
+        },
+        {
+            "current": 1655.419,
+            "min": 400.0,
+            "max": 3900.0
+        }
+    ],
+    "disk": {
+        "/": {
+            "total": 913.7511215209961,
+            "used": 68.58128356933594
+        }
+    },
+    "memory": {
+        "total": 30.937389373779297
+    }
+}

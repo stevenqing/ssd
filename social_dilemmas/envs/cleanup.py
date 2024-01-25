@@ -202,20 +202,15 @@ class CleanupEnv(MapEnv):
         return free_area
 
 
-    def count_apples(self):
+    def count_apples_waste(self):
         # Return apples pos and type
-        apple_pos = [[0,0],[0,0],[0,0]]
-        apple_type = [0,0,0]
+        apple_pos = []
+        waste_pos = []
         for row in range(1,np.shape(self.world_map)[0]-1):
            for col in range(1,np.shape(self.world_map)[1]-1):
                char = self.world_map[row, col]
-               if char == b'A':
-                   apple_pos[0] = [int(row),int(col)]
-                   apple_type[0] = 1
-               elif char == b'B':
-                   apple_pos[1] = [int(row),int(col)]
-                   apple_type[1] = 2
-               elif char == b'C':
-                   apple_pos[2] = [int(row),int(col)]
-                   apple_type[2] = 3
-        return apple_pos, apple_type
+               if char == b'B':
+                   apple_pos.append([int(row),int(col)])
+               elif char == b'H':
+                   waste_pos.append([int(row),int(col)])
+        return apple_pos, waste_pos
