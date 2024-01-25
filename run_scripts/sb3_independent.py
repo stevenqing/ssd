@@ -161,7 +161,6 @@ def main(args):
     n_epochs = 30
     gae_lambda = 1.0
     gamma = 0.99
-    target_kl = 0.01
     grad_clip = 40
     verbose = 3
 
