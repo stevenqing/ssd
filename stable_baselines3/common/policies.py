@@ -9,9 +9,8 @@ from typing import Any, Dict, List, Optional, Tuple, Type, TypeVar, Union
 
 import numpy as np
 import torch as th
-from gym import spaces #from gymnasium import spaces
+from gym import spaces
 from torch import nn
-# from social_dilemmas.ppo.AgA import AgA_Adam
 
 from stable_baselines3.common.distributions import (
     BernoulliDistribution,
@@ -31,7 +30,7 @@ from stable_baselines3.common.torch_layers import (
     NatureCNN,
     create_mlp,
 )
-from stable_baselines3.common.type_aliases import PyTorchObs, Schedule
+from stable_baselines3.common.type_aliases import Schedule
 from stable_baselines3.common.utils import get_device, is_vectorized_observation, obs_as_tensor
 
 SelfBaseModel = TypeVar("SelfBaseModel", bound="BaseModel")
@@ -59,18 +58,15 @@ class BaseModel(nn.Module):
         excluding the learning rate, to pass to the optimizer
     """
 
-    optimizer: th.optim.Optimizer
-
     def __init__(
         self,
         observation_space: spaces.Space,
         action_space: spaces.Space,
         features_extractor_class: Type[BaseFeaturesExtractor] = FlattenExtractor,
         features_extractor_kwargs: Optional[Dict[str, Any]] = None,
-        features_extractor: Optional[BaseFeaturesExtractor] = None,
+        features_extractor: Optional[nn.Module] = None,
         normalize_images: bool = True,
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
-        # optimizer_class: Type[th.optim.Optimizer] = AgA_Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
     ):
         super().__init__()
@@ -88,11 +84,12 @@ class BaseModel(nn.Module):
 
         self.optimizer_class = optimizer_class
         self.optimizer_kwargs = optimizer_kwargs
+        self.optimizer = None  # type: Optional[th.optim.Optimizer]
 
         self.features_extractor_class = features_extractor_class
         self.features_extractor_kwargs = features_extractor_kwargs
         # Automatically deactivate dtype and bounds checks
-        if not normalize_images and issubclass(features_extractor_class, (NatureCNN, CombinedExtractor)):
+        if normalize_images is False and issubclass(features_extractor_class, (NatureCNN, CombinedExtractor)):
             self.features_extractor_kwargs.update(dict(normalized_image=True))
 
     def _update_features_extractor(
@@ -121,14 +118,26 @@ class BaseModel(nn.Module):
         """Helper method to create a features extractor."""
         return self.features_extractor_class(self.observation_space, **self.features_extractor_kwargs)
 
-    def extract_features(self, obs: PyTorchObs, features_extractor: BaseFeaturesExtractor) -> th.Tensor:
+    def extract_features(self, obs: th.Tensor, features_extractor: Optional[BaseFeaturesExtractor] = None) -> th.Tensor:
         """
         Preprocess the observation if needed and extract features.
 
-        :param obs: Observation
-        :param features_extractor: The features extractor to use.
-        :return: The extracted features
+         :param obs: The observation
+         :param features_extractor: The features extractor to use. If it is set to None,
+            the features extractor of the policy is used.
+         :return: The features
         """
+        if features_extractor is None:
+            warnings.warn(
+                (
+                    "When calling extract_features(), you should explicitely pass a features_extractor as parameter. "
+                    "This will be mandatory in Stable-Baselines v1.8.0"
+                ),
+                DeprecationWarning,
+            )
+
+        features_extractor = features_extractor or self.features_extractor
+        assert features_extractor is not None, "No features extractor was set"
         preprocessed_obs = preprocess_obs(obs, self.observation_space, normalize_images=self.normalize_images)
         return features_extractor(preprocessed_obs)
 
@@ -178,7 +187,7 @@ class BaseModel(nn.Module):
         saved_variables = th.load(path, map_location=device)
 
         # Create policy object
-        model = cls(**saved_variables["data"])
+        model = cls(**saved_variables["data"])  # pytype: disable=not-instantiable
         # Load weights
         model.load_state_dict(saved_variables["state_dict"])
         model.to(device)
@@ -210,30 +219,7 @@ class BaseModel(nn.Module):
         """
         self.train(mode)
 
-    def is_vectorized_observation(self, observation: Union[np.ndarray, Dict[str, np.ndarray]]) -> bool:
-        """
-        Check whether or not the observation is vectorized,
-        apply transposition to image (so that they are channel-first) if needed.
-        This is used in DQN when sampling random action (epsilon-greedy policy)
-
-        :param observation: the input observation to check
-        :return: whether the given observation is vectorized or not
-        """
-        vectorized_env = False
-        if isinstance(observation, dict):
-            assert isinstance(
-                self.observation_space, spaces.Dict
-            ), f"The observation provided is a dict but the obs space is {self.observation_space}"
-            for key, obs in observation.items():
-                obs_space = self.observation_space.spaces[key]
-                vectorized_env = vectorized_env or is_vectorized_observation(maybe_transpose(obs, obs_space), obs_space)
-        else:
-            vectorized_env = is_vectorized_observation(
-                maybe_transpose(observation, self.observation_space), self.observation_space
-            )
-        return vectorized_env
-
-    def obs_to_tensor(self, observation: Union[np.ndarray, Dict[str, np.ndarray]]) -> Tuple[PyTorchObs, bool]:
+    def obs_to_tensor(self, observation: Union[np.ndarray, Dict[str, np.ndarray]]) -> Tuple[th.Tensor, bool]:
         """
         Convert an input observation to a PyTorch tensor that can be fed to a model.
         Includes sugar-coating to handle different observations (e.g. normalizing images).
@@ -244,9 +230,6 @@ class BaseModel(nn.Module):
         """
         vectorized_env = False
         if isinstance(observation, dict):
-            assert isinstance(
-                self.observation_space, spaces.Dict
-            ), f"The observation provided is a dict but the obs space is {self.observation_space}"
             # need to copy the dict as the dict in VecFrameStack will become a torch tensor
             observation = copy.deepcopy(observation)
             for key, obs in observation.items():
@@ -257,7 +240,7 @@ class BaseModel(nn.Module):
                     obs_ = np.array(obs)
                 vectorized_env = vectorized_env or is_vectorized_observation(obs_, obs_space)
                 # Add batch dimension if needed
-                observation[key] = obs_.reshape((-1, *self.observation_space[key].shape))  # type: ignore[misc]
+                observation[key] = obs_.reshape((-1,) + self.observation_space[key].shape)
 
         elif is_image_space(self.observation_space):
             # Handle the different cases for images
@@ -271,10 +254,10 @@ class BaseModel(nn.Module):
             # Dict obs need to be handled separately
             vectorized_env = is_vectorized_observation(observation, self.observation_space)
             # Add batch dimension if needed
-            observation = observation.reshape((-1, *self.observation_space.shape))  # type: ignore[misc]
+            observation = observation.reshape((-1,) + self.observation_space.shape)
 
-        obs_tensor = obs_as_tensor(observation, self.device)
-        return obs_tensor, vectorized_env
+        observation = obs_as_tensor(observation, self.device)
+        return observation, vectorized_env
 
 
 class BasePolicy(BaseModel, ABC):
@@ -287,8 +270,6 @@ class BasePolicy(BaseModel, ABC):
     :param squash_output: For continuous actions, whether the output is squashed
         or not using a ``tanh()`` function.
     """
-
-    features_extractor: BaseFeaturesExtractor
 
     def __init__(self, *args, squash_output: bool = False, **kwargs):
         super().__init__(*args, **kwargs)
@@ -316,7 +297,7 @@ class BasePolicy(BaseModel, ABC):
                 module.bias.data.fill_(0.0)
 
     @abstractmethod
-    def _predict(self, observation: PyTorchObs, deterministic: bool = False) -> th.Tensor:
+    def _predict(self, observation: th.Tensor, deterministic: bool = False) -> th.Tensor:
         """
         Get the action according to the policy for a given observation.
 
@@ -348,42 +329,35 @@ class BasePolicy(BaseModel, ABC):
         :return: the model's action and the next hidden state
             (used in recurrent policies)
         """
+        # TODO (GH/1): add support for RNN policies
+        # if state is None:
+        #     state = self.initial_state
+        # if episode_start is None:
+        #     episode_start = [False for _ in range(self.n_envs)]
         # Switch to eval mode (this affects batch norm / dropout)
         self.set_training_mode(False)
 
-        # Check for common mistake that the user does not mix Gym/VecEnv API
-        # Tuple obs are not supported by SB3, so we can safely do that check
-        if isinstance(observation, tuple) and len(observation) == 2 and isinstance(observation[1], dict):
-            raise ValueError(
-                "You have passed a tuple to the predict() function instead of a Numpy array or a Dict. "
-                "You are probably mixing Gym API with SB3 VecEnv API: `obs, info = env.reset()` (Gym) "
-                "vs `obs = vec_env.reset()` (SB3 VecEnv). "
-                "See related issue https://github.com/DLR-RM/stable-baselines3/issues/1694 "
-                "and documentation for more information: https://stable-baselines3.readthedocs.io/en/master/guide/vec_envs.html#vecenv-api-vs-gym-api"
-            )
-
-        obs_tensor, vectorized_env = self.obs_to_tensor(observation)
+        observation, vectorized_env = self.obs_to_tensor(observation)
 
         with th.no_grad():
-            actions = self._predict(obs_tensor, deterministic=deterministic)
+            actions = self._predict(observation, deterministic=deterministic)
         # Convert to numpy, and reshape to the original action shape
-        actions = actions.cpu().numpy().reshape((-1, *self.action_space.shape))  # type: ignore[misc]
+        actions = actions.cpu().numpy().reshape((-1,) + self.action_space.shape)
 
         if isinstance(self.action_space, spaces.Box):
             if self.squash_output:
                 # Rescale to proper domain when using squashing
-                actions = self.unscale_action(actions)  # type: ignore[assignment, arg-type]
+                actions = self.unscale_action(actions)
             else:
                 # Actions could be on arbitrary scale, so clip the actions to avoid
                 # out of bound error (e.g. if sampling from a Gaussian distribution)
-                actions = np.clip(actions, self.action_space.low, self.action_space.high)  # type: ignore[assignment, arg-type]
+                actions = np.clip(actions, self.action_space.low, self.action_space.high)
 
         # Remove batch dimension if needed
         if not vectorized_env:
-            assert isinstance(actions, np.ndarray)
             actions = actions.squeeze(axis=0)
 
-        return actions, state  # type: ignore[return-value]
+        return actions, state
 
     def scale_action(self, action: np.ndarray) -> np.ndarray:
         """
@@ -393,9 +367,6 @@ class BasePolicy(BaseModel, ABC):
         :param action: Action to scale
         :return: Scaled action
         """
-        assert isinstance(
-            self.action_space, spaces.Box
-        ), f"Trying to scale an action using an action space that is not a Box(): {self.action_space}"
         low, high = self.action_space.low, self.action_space.high
         return 2.0 * ((action - low) / (high - low)) - 1.0
 
@@ -406,9 +377,6 @@ class BasePolicy(BaseModel, ABC):
 
         :param scaled_action: Action to un-scale
         """
-        assert isinstance(
-            self.action_space, spaces.Box
-        ), f"Trying to unscale an action using an action space that is not a Box(): {self.action_space}"
         low, high = self.action_space.low, self.action_space.high
         return low + (0.5 * (scaled_action + 1.0) * (high - low))
 
@@ -450,7 +418,8 @@ class ActorCriticPolicy(BasePolicy):
         observation_space: spaces.Space,
         action_space: spaces.Space,
         lr_schedule: Schedule,
-        net_arch: Optional[Union[List[int], Dict[str, List[int]]]] = None,
+        # TODO(antonin): update type annotation when we remove shared network support
+        net_arch: Union[List[int], Dict[str, List[int]], List[Dict[str, List[int]]], None] = None,
         activation_fn: Type[nn.Module] = nn.Tanh,
         ortho_init: bool = True,
         use_sde: bool = False,
@@ -463,13 +432,12 @@ class ActorCriticPolicy(BasePolicy):
         share_features_extractor: bool = True,
         normalize_images: bool = True,
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
-        # optimizer_class: Type[th.optim.Optimizer] = AgA_Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
     ):
+
         if optimizer_kwargs is None:
             optimizer_kwargs = {}
             # Small values to avoid NaN in Adam optimizer
-            # if optimizer_class == th.optim.Adam and optimizer_class == AgA_Adam:
             if optimizer_class == th.optim.Adam:
                 optimizer_kwargs["eps"] = 1e-5
 
@@ -484,15 +452,21 @@ class ActorCriticPolicy(BasePolicy):
             normalize_images=normalize_images,
         )
 
-        if isinstance(net_arch, list) and len(net_arch) > 0 and isinstance(net_arch[0], dict):
-            warnings.warn(
-                (
-                    "As shared layers in the mlp_extractor are removed since SB3 v1.8.0, "
-                    "you should now pass directly a dictionary and not a list "
-                    "(net_arch=dict(pi=..., vf=...) instead of net_arch=[dict(pi=..., vf=...)])"
-                ),
-            )
-            net_arch = net_arch[0]
+        # Convert [dict()] to dict() as shared network are deprecated
+        if isinstance(net_arch, list) and len(net_arch) > 0:
+            if isinstance(net_arch[0], dict):
+                warnings.warn(
+                    (
+                        "As shared layers in the mlp_extractor are deprecated and will be removed in SB3 v1.8.0, "
+                        "you should now pass directly a dictionary and not a list "
+                        "(net_arch=dict(pi=..., vf=...) instead of net_arch=[dict(pi=..., vf=...)])"
+                    ),
+                )
+                net_arch = net_arch[0]
+            else:
+                # Note: deprecation warning will be emitted
+                # by the MlpExtractor constructor
+                pass
 
         # Default network architecture, from stable-baselines
         if net_arch is None:
@@ -514,11 +488,15 @@ class ActorCriticPolicy(BasePolicy):
         else:
             self.pi_features_extractor = self.features_extractor
             self.vf_features_extractor = self.make_features_extractor()
+            # if the features extractor is not shared, there cannot be shared layers in the mlp_extractor
+            # TODO(antonin): update the check once we change net_arch behavior
+            if isinstance(net_arch, list) and len(net_arch) > 0:
+                raise ValueError(
+                    "Error: if the features extractor is not shared, there cannot be shared layers in the mlp_extractor"
+                )
 
         self.log_std_init = log_std_init
         dist_kwargs = None
-
-        assert not (squash_output and not use_sde), "squash_output=True is only available when using gSDE (use_sde=True)"
         # Keyword arguments for gSDE distribution
         if use_sde:
             dist_kwargs = {
@@ -539,7 +517,7 @@ class ActorCriticPolicy(BasePolicy):
     def _get_constructor_parameters(self) -> Dict[str, Any]:
         data = super()._get_constructor_parameters()
 
-        default_none_kwargs = self.dist_kwargs or collections.defaultdict(lambda: None)  # type: ignore[arg-type, return-value]
+        default_none_kwargs = self.dist_kwargs or collections.defaultdict(lambda: None)
 
         data.update(
             dict(
@@ -633,14 +611,7 @@ class ActorCriticPolicy(BasePolicy):
                 module.apply(partial(self.init_weights, gain=gain))
 
         # Setup optimizer with initial learning rate
-        # if self.optimizer_class == AgA_Adam:
-        #     # print(self.value_net)
-        #     # print(self.action_net)
-        #     self.actor_optimizer = self.optimizer_class(self.action_net.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)
-        #     self.critic_optimizer = th.optim.Adam(self.value_net.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)
-        # else:
-        self.actor_optimizer = self.optimizer_class(self.action_net.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)  # type: ignore[call-arg]
-        self.critic_optimizer = self.optimizer_class(self.value_net.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)  # type: ignore[call-arg]
+        self.optimizer = self.optimizer_class(self.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)
 
     def forward(self, obs: th.Tensor, deterministic: bool = False) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
         """
@@ -663,29 +634,19 @@ class ActorCriticPolicy(BasePolicy):
         distribution = self._get_action_dist_from_latent(latent_pi)
         actions = distribution.get_actions(deterministic=deterministic)
         log_prob = distribution.log_prob(actions)
-        actions = actions.reshape((-1, *self.action_space.shape))  # type: ignore[misc]
+        actions = actions.reshape((-1,) + self.action_space.shape)
         return actions, values, log_prob
 
-    def extract_features(  # type: ignore[override]
-        self, obs: PyTorchObs, features_extractor: Optional[BaseFeaturesExtractor] = None
-    ) -> Union[th.Tensor, Tuple[th.Tensor, th.Tensor]]:
+    def extract_features(self, obs: th.Tensor) -> Union[th.Tensor, Tuple[th.Tensor, th.Tensor]]:
         """
         Preprocess the observation if needed and extract features.
 
         :param obs: Observation
-        :param features_extractor: The features extractor to use. If None, then ``self.features_extractor`` is used.
-        :return: The extracted features. If features extractor is not shared, returns a tuple with the
-            features for the actor and the features for the critic.
+        :return: the output of the features extractor(s)
         """
         if self.share_features_extractor:
-            return super().extract_features(obs, self.features_extractor if features_extractor is None else features_extractor)
+            return super().extract_features(obs, self.features_extractor)
         else:
-            if features_extractor is not None:
-                warnings.warn(
-                    "Provided features_extractor will be ignored because the features extractor is not shared.",
-                    UserWarning,
-                )
-
             pi_features = super().extract_features(obs, self.pi_features_extractor)
             vf_features = super().extract_features(obs, self.vf_features_extractor)
             return pi_features, vf_features
@@ -715,7 +676,7 @@ class ActorCriticPolicy(BasePolicy):
         else:
             raise ValueError("Invalid action distribution")
 
-    def _predict(self, observation: PyTorchObs, deterministic: bool = False) -> th.Tensor:
+    def _predict(self, observation: th.Tensor, deterministic: bool = False) -> th.Tensor:
         """
         Get the action according to the policy for a given observation.
 
@@ -725,7 +686,7 @@ class ActorCriticPolicy(BasePolicy):
         """
         return self.get_distribution(observation).get_actions(deterministic=deterministic)
 
-    def evaluate_actions(self, obs: PyTorchObs, actions: th.Tensor) -> Tuple[th.Tensor, th.Tensor, Optional[th.Tensor]]:
+    def evaluate_actions(self, obs: th.Tensor, actions: th.Tensor) -> Tuple[th.Tensor, th.Tensor, Optional[th.Tensor]]:
         """
         Evaluate actions according to the current policy,
         given the observations.
@@ -749,7 +710,7 @@ class ActorCriticPolicy(BasePolicy):
         entropy = distribution.entropy()
         return values, log_prob, entropy
 
-    def get_distribution(self, obs: PyTorchObs) -> Distribution:
+    def get_distribution(self, obs: th.Tensor) -> Distribution:
         """
         Get the current policy distribution given the observations.
 
@@ -760,7 +721,7 @@ class ActorCriticPolicy(BasePolicy):
         latent_pi = self.mlp_extractor.forward_actor(features)
         return self._get_action_dist_from_latent(latent_pi)
 
-    def predict_values(self, obs: PyTorchObs) -> th.Tensor:
+    def predict_values(self, obs: th.Tensor) -> th.Tensor:
         """
         Get the estimated values according to the current policy given the observations.
 
@@ -809,7 +770,7 @@ class ActorCriticCnnPolicy(ActorCriticPolicy):
         observation_space: spaces.Space,
         action_space: spaces.Space,
         lr_schedule: Schedule,
-        net_arch: Optional[Union[List[int], Dict[str, List[int]]]] = None,
+        net_arch: Union[List[int], Dict[str, List[int]], List[Dict[str, List[int]]], None] = None,
         activation_fn: Type[nn.Module] = nn.Tanh,
         ortho_init: bool = True,
         use_sde: bool = False,
@@ -822,7 +783,6 @@ class ActorCriticCnnPolicy(ActorCriticPolicy):
         share_features_extractor: bool = True,
         normalize_images: bool = True,
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
-        # optimizer_class: Type[th.optim.Optimizer] = AgA_Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(
@@ -883,7 +843,7 @@ class MultiInputActorCriticPolicy(ActorCriticPolicy):
         observation_space: spaces.Dict,
         action_space: spaces.Space,
         lr_schedule: Schedule,
-        net_arch: Optional[Union[List[int], Dict[str, List[int]]]] = None,
+        net_arch: Union[List[int], Dict[str, List[int]], List[Dict[str, List[int]]], None] = None,
         activation_fn: Type[nn.Module] = nn.Tanh,
         ortho_init: bool = True,
         use_sde: bool = False,
@@ -946,14 +906,12 @@ class ContinuousCritic(BaseModel):
         between the actor and the critic (this saves computation time)
     """
 
-    features_extractor: BaseFeaturesExtractor
-
     def __init__(
         self,
         observation_space: spaces.Space,
-        action_space: spaces.Box,
+        action_space: spaces.Space,
         net_arch: List[int],
-        features_extractor: BaseFeaturesExtractor,
+        features_extractor: nn.Module,
         features_dim: int,
         activation_fn: Type[nn.Module] = nn.ReLU,
         normalize_images: bool = True,
@@ -971,10 +929,10 @@ class ContinuousCritic(BaseModel):
 
         self.share_features_extractor = share_features_extractor
         self.n_critics = n_critics
-        self.q_networks: List[nn.Module] = []
+        self.q_networks = []
         for idx in range(n_critics):
-            q_net_list = create_mlp(features_dim + action_dim, 1, net_arch, activation_fn)
-            q_net = nn.Sequential(*q_net_list)
+            q_net = create_mlp(features_dim + action_dim, 1, net_arch, activation_fn)
+            q_net = nn.Sequential(*q_net)
             self.add_module(f"qf{idx}", q_net)
             self.q_networks.append(q_net)
 

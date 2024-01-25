@@ -2,7 +2,7 @@ from copy import deepcopy
 from typing import Dict, Union
 
 import numpy as np
-from gym import spaces #from gymnasium import spaces
+from gym import spaces
 
 from stable_baselines3.common.preprocessing import is_image_space, is_image_space_channels_first
 from stable_baselines3.common.vec_env.base_vec_env import VecEnv, VecEnvStepReturn, VecEnvWrapper
@@ -20,7 +20,7 @@ class VecTransposeImage(VecEnvWrapper):
 
     def __init__(self, venv: VecEnv, skip: bool = False):
         assert is_image_space(venv.observation_space) or isinstance(
-            venv.observation_space, spaces.Dict
+            venv.observation_space, spaces.dict.Dict
         ), "The observation space must be an image or dictionary observation space"
 
         self.skip = skip
@@ -29,18 +29,16 @@ class VecTransposeImage(VecEnvWrapper):
             super().__init__(venv)
             return
 
-        if isinstance(venv.observation_space, spaces.Dict):
+        if isinstance(venv.observation_space, spaces.dict.Dict):
             self.image_space_keys = []
             observation_space = deepcopy(venv.observation_space)
             for key, space in observation_space.spaces.items():
                 if is_image_space(space):
                     # Keep track of which keys should be transposed later
                     self.image_space_keys.append(key)
-                    assert isinstance(space, spaces.Box)
                     observation_space.spaces[key] = self.transpose_space(space, key)
         else:
-            assert isinstance(venv.observation_space, spaces.Box)
-            observation_space = self.transpose_space(venv.observation_space)  # type: ignore[assignment]
+            observation_space = self.transpose_space(venv.observation_space)
         super().__init__(venv, observation_space=observation_space)
 
     @staticmethod
@@ -59,7 +57,7 @@ class VecTransposeImage(VecEnvWrapper):
         ), f"The observation space {key} must follow the channel last convention"
         height, width, channels = observation_space.shape
         new_shape = (channels, height, width)
-        return spaces.Box(low=0, high=255, shape=new_shape, dtype=observation_space.dtype)  # type: ignore[arg-type]
+        return spaces.Box(low=0, high=255, shape=new_shape, dtype=observation_space.dtype)
 
     @staticmethod
     def transpose_image(image: np.ndarray) -> np.ndarray:
@@ -103,16 +101,13 @@ class VecTransposeImage(VecEnvWrapper):
             if "terminal_observation" in infos[idx]:
                 infos[idx]["terminal_observation"] = self.transpose_observations(infos[idx]["terminal_observation"])
 
-        assert isinstance(observations, (np.ndarray, dict))
         return self.transpose_observations(observations), rewards, dones, infos
 
     def reset(self) -> Union[np.ndarray, Dict]:
         """
         Reset all environments
         """
-        observations = self.venv.reset()
-        assert isinstance(observations, (np.ndarray, dict))
-        return self.transpose_observations(observations)
+        return self.transpose_observations(self.venv.reset())
 
     def close(self) -> None:
         self.venv.close()

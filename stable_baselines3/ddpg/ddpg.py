@@ -76,6 +76,7 @@ class DDPG(TD3):
         device: Union[th.device, str] = "auto",
         _init_setup_model: bool = True,
     ):
+
         super().__init__(
             policy=policy,
             env=env,
@@ -120,6 +121,7 @@ class DDPG(TD3):
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
     ) -> SelfDDPG:
+
         return super().learn(
             total_timesteps=total_timesteps,
             callback=callback,

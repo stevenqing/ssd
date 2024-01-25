@@ -1,5 +1,7 @@
 import argparse
-
+import os 
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import gym
 import supersuit as ss
 import torch
@@ -8,7 +10,8 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
 from torch import nn
-
+import wandb
+import socket
 from social_dilemmas.envs.pettingzoo_env import parallel_env
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -84,6 +87,7 @@ def parse_args():
         default=0.05,
         help="Disadvantageous inequity aversion factor",
     )
+    parser.add_argument("--user_name", type=str, default="1160677229")
     args = parser.parse_args()
     return args
 
@@ -130,6 +134,7 @@ class CustomCNN(BaseFeaturesExtractor):
 
 def main(args):
     # Config
+    model = 'baseline'
     env_name = args.env_name
     num_agents = args.num_agents
     rollout_len = args.rollout_len
@@ -175,6 +180,18 @@ def main(args):
         env, num_vec_envs=num_envs, num_cpus=num_cpus, base_class="stable_baselines3"
     )
     env = VecMonitor(env)
+
+    run = wandb.init(config=args,
+                         project="SSD_pytorch",
+                         entity=args.user_name, 
+                         notes=socket.gethostname(),
+                         name=str(env_name) +"_"+ str(model),
+                         group=str(env_name) +"_"+ str(model),
+                         dir="./",
+                         job_type="training",
+                         reinit=True)
+    
+    args = wandb.config # for wandb sweep
 
     policy_kwargs = dict(
         features_extractor_class=CustomCNN,

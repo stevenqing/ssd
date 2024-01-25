@@ -125,15 +125,6 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: 当前文件",
-            "type": "python",
-            "request": "launch",
-            "program": "${file}",
-            "console": "integratedTerminal",
-            "python": "/home/shuqingshi/miniconda3/envs/ssd/bin/python",
-            "justMyCode": false
-        },
-        {
             "name": "Python: main",
             "type": "python",
             "request": "launch",
@@ -143,14 +134,14 @@
             "justMyCode": false,
             "args": [
                 "--env",
-                "harvest",
+                "coin3",
                 "--num-agents",
-                "5",
+                "3",
                 "--rollout-len",
                 "1000",
-                // "--user_name",
-                // "1160677229",
-                "--num_envs",
+                "--user_name",
+                "1160677229",
+                "--num-envs",
                 "1",
             ],
         },

@@ -7,11 +7,10 @@ from collections import deque
 from itertools import zip_longest
 from typing import Dict, Iterable, List, Optional, Tuple, Union
 
-import cloudpickle
-import gymnasium as gym
+import gym
 import numpy as np
 import torch as th
-from gym import spaces #from gymnasium import spaces
+from gym import spaces
 
 import stable_baselines3 as sb3
 
@@ -19,7 +18,7 @@ import stable_baselines3 as sb3
 try:
     from torch.utils.tensorboard import SummaryWriter
 except ImportError:
-    SummaryWriter = None  # type: ignore[misc, assignment]
+    SummaryWriter = None
 
 from stable_baselines3.common.logger import Logger, configure
 from stable_baselines3.common.type_aliases import GymEnv, Schedule, TensorDict, TrainFreq, TrainFrequencyUnit
@@ -77,7 +76,7 @@ def update_learning_rate(optimizer: th.optim.Optimizer, learning_rate: float) ->
         param_group["lr"] = learning_rate
 
 
-def get_schedule_fn(value_schedule: Union[Schedule, float]) -> Schedule:
+def get_schedule_fn(value_schedule: Union[Schedule, float, int]) -> Schedule:
     """
     Transform (if needed) learning rate and clip range (for PPO)
     to callable.
@@ -231,24 +230,6 @@ def check_for_correct_spaces(env: GymEnv, observation_space: spaces.Space, actio
         raise ValueError(f"Action spaces do not match: {action_space} != {env.action_space}")
 
 
-def check_shape_equal(space1: spaces.Space, space2: spaces.Space) -> None:
-    """
-    If the spaces are Box, check that they have the same shape.
-
-    If the spaces are Dict, it recursively checks the subspaces.
-
-    :param space1: Space
-    :param space2: Other space
-    """
-    if isinstance(space1, spaces.Dict):
-        assert isinstance(space2, spaces.Dict), "spaces must be of the same type"
-        assert space1.spaces.keys() == space2.spaces.keys(), "spaces must have the same keys"
-        for key in space1.spaces.keys():
-            check_shape_equal(space1.spaces[key], space2.spaces[key])
-    elif isinstance(space1, spaces.Box):
-        assert space1.shape == space2.shape, "spaces must have the same shape"
-
-
 def is_vectorized_box_observation(observation: np.ndarray, observation_space: spaces.Box) -> bool:
     """
     For box observation type, detects and validates the shape,
@@ -396,13 +377,13 @@ def is_vectorized_observation(observation: Union[int, np.ndarray], observation_s
 
     for space_type, is_vec_obs_func in is_vec_obs_func_dict.items():
         if isinstance(observation_space, space_type):
-            return is_vec_obs_func(observation, observation_space)  # type: ignore[operator]
+            return is_vec_obs_func(observation, observation_space)
     else:
         # for-else happens if no break is called
         raise ValueError(f"Error: Cannot determine if the observation is vectorized with the space type {observation_space}.")
 
 
-def safe_mean(arr: Union[np.ndarray, list, deque]) -> float:
+def safe_mean(arr: Union[np.ndarray, list, deque]) -> np.ndarray:
     """
     Compute the mean of an array if there is at least one element.
     For empty array, return NaN. It is used for logging only.
@@ -410,7 +391,7 @@ def safe_mean(arr: Union[np.ndarray, list, deque]) -> float:
     :param arr: Numpy array or list of values
     :return:
     """
-    return np.nan if len(arr) == 0 else float(np.mean(arr))  # type: ignore[arg-type]
+    return np.nan if len(arr) == 0 else np.mean(arr)
 
 
 def get_parameters_by_name(model: th.nn.Module, included_names: Iterable[str]) -> List[th.Tensor]:
@@ -471,7 +452,9 @@ def polyak_update(
             th.add(target_param.data, param.data, alpha=tau, out=target_param.data)
 
 
-def obs_as_tensor(obs: Union[np.ndarray, Dict[str, np.ndarray]], device: th.device) -> Union[th.Tensor, TensorDict]:
+def obs_as_tensor(
+    obs: Union[np.ndarray, Dict[Union[str, int], np.ndarray]], device: th.device
+) -> Union[th.Tensor, TensorDict]:
     """
     Moves the observation to the given device.
 
@@ -532,16 +515,8 @@ def get_system_info(print_info: bool = True) -> Tuple[Dict[str, str], str]:
         "PyTorch": th.__version__,
         "GPU Enabled": str(th.cuda.is_available()),
         "Numpy": np.__version__,
-        "Cloudpickle": cloudpickle.__version__,
-        "Gymnasium": gym.__version__,
+        "Gym": gym.__version__,
     }
-    try:
-        import gym as openai_gym
-
-        env_info.update({"OpenAI Gym": openai_gym.__version__})
-    except ImportError:
-        pass
-
     env_info_str = ""
     for key, value in env_info.items():
         env_info_str += f"- {key}: {value}\n"

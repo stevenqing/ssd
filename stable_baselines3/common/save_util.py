@@ -33,10 +33,11 @@ def recursive_getattr(obj: Any, attr: str, *args) -> Any:
     :param attr: Attribute to retrieve
     :return: The attribute
     """
+
     def _getattr(obj: Any, attr: str) -> Any:
         return getattr(obj, attr, *args)
 
-    return functools.reduce(_getattr, [obj, *attr.split(".")])
+    return functools.reduce(_getattr, [obj] + attr.split("."))
 
 
 def recursive_setattr(obj: Any, attr: str, val: Any) -> None:
@@ -177,9 +178,7 @@ def json_to_data(json_string: str, custom_objects: Optional[Dict[str, Any]] = No
 
 
 @functools.singledispatch
-def open_path(
-    path: Union[str, pathlib.Path, io.BufferedIOBase], mode: str, verbose: int = 0, suffix: Optional[str] = None
-) -> Union[io.BufferedWriter, io.BufferedReader, io.BytesIO]:
+def open_path(path: Union[str, pathlib.Path, io.BufferedIOBase], mode: str, verbose: int = 0, suffix: Optional[str] = None):
     """
     Opens a path for reading or writing with a preferred suffix and raises debug information.
     If the provided path is a derivative of io.BufferedIOBase it ensures that the file
@@ -202,21 +201,18 @@ def open_path(
         is not None, we attempt to open the path with the suffix.
     :return:
     """
-    # Note(antonin): the true annotation should be IO[bytes]
-    # but there is not easy way to check that
-    allowed_types = (io.BufferedWriter, io.BufferedReader, io.BytesIO, io.BufferedRandom)
-    if not isinstance(path, allowed_types):
-        raise TypeError(f"Path {path} parameter has invalid type: expected one of {allowed_types}.")
+    if not isinstance(path, io.BufferedIOBase):
+        raise TypeError("Path parameter has invalid type.", io.BufferedIOBase)
     if path.closed:
-        raise ValueError(f"File stream {path} is closed.")
+        raise ValueError("File stream is closed.")
     mode = mode.lower()
     try:
         mode = {"write": "w", "read": "r", "w": "w", "r": "r"}[mode]
     except KeyError as e:
         raise ValueError("Expected mode to be either 'w' or 'r'.") from e
     if ("w" == mode) and not path.writable() or ("r" == mode) and not path.readable():
-        error_msg = "writable" if "w" == mode else "readable"
-        raise ValueError(f"Expected a {error_msg} file.")
+        e1 = "writable" if "w" == mode else "readable"
+        raise ValueError(f"Expected a {e1} file.")
     return path
 
 
@@ -235,7 +231,7 @@ def open_path_str(path: str, mode: str, verbose: int = 0, suffix: Optional[str] 
         is not None, we attempt to open the path with the suffix.
     :return:
     """
-    return open_path_pathlib(pathlib.Path(path), mode, verbose, suffix)
+    return open_path(pathlib.Path(path), mode, verbose, suffix)
 
 
 @open_path.register(pathlib.Path)
@@ -259,7 +255,7 @@ def open_path_pathlib(path: pathlib.Path, mode: str, verbose: int = 0, suffix: O
 
     if mode == "r":
         try:
-            return open_path(path.open("rb"), mode, verbose, suffix)
+            path = path.open("rb")
         except FileNotFoundError as error:
             if suffix is not None and suffix != "":
                 newpath = pathlib.Path(f"{path}.{suffix}")
@@ -274,7 +270,7 @@ def open_path_pathlib(path: pathlib.Path, mode: str, verbose: int = 0, suffix: O
                 path = pathlib.Path(f"{path}.{suffix}")
             if path.exists() and path.is_file() and verbose >= 2:
                 warnings.warn(f"Path '{path}' exists, will overwrite it.")
-            return open_path(path.open("wb"), mode, verbose, suffix)
+            path = path.open("wb")
         except IsADirectoryError:
             warnings.warn(f"Path '{path}' is a folder. Will save instead to {path}_2")
             path = pathlib.Path(f"{path}_2")
@@ -282,11 +278,12 @@ def open_path_pathlib(path: pathlib.Path, mode: str, verbose: int = 0, suffix: O
             warnings.warn(f"Path '{path.parent}' does not exist. Will create it.")
             path.parent.mkdir(exist_ok=True, parents=True)
 
-    # if opening was successful uses the open_path() function
+    # if opening was successful uses the identity function
     # if opening failed with IsADirectory|FileNotFound, calls open_path_pathlib
     #   with corrections
     # if reading failed with FileNotFoundError, calls open_path_pathlib with suffix
-    return open_path_pathlib(path, mode, verbose, suffix)
+
+    return open_path(path, mode, verbose, suffix)
 
 
 def save_to_zip_file(
@@ -307,14 +304,14 @@ def save_to_zip_file(
     :param pytorch_variables: Other PyTorch variables expected to contain name and value of the variable.
     :param verbose: Verbosity level: 0 for no output, 1 for info messages, 2 for debug messages
     """
-    file = open_path(save_path, "w", verbose=0, suffix="zip")
+    save_path = open_path(save_path, "w", verbose=0, suffix="zip")
     # data/params can be None, so do not
     # try to serialize them blindly
     if data is not None:
         serialized_data = data_to_json(data)
 
     # Create a zip-archive and write our objects there.
-    with zipfile.ZipFile(file, mode="w") as archive:
+    with zipfile.ZipFile(save_path, mode="w") as archive:
         # Do not try to save "None" elements
         if data is not None:
             archive.writestr("data", serialized_data)
@@ -330,9 +327,6 @@ def save_to_zip_file(
         # Save system info about the current python env
         archive.writestr("system_info.txt", get_system_info(print_info=False)[1])
 
-    if isinstance(save_path, (str, pathlib.Path)):
-        file.close()
-
 
 def save_to_pkl(path: Union[str, pathlib.Path, io.BufferedIOBase], obj: Any, verbose: int = 0) -> None:
     """
@@ -346,12 +340,10 @@ def save_to_pkl(path: Union[str, pathlib.Path, io.BufferedIOBase], obj: Any, ver
     :param obj: The object to save.
     :param verbose: Verbosity level: 0 for no output, 1 for info messages, 2 for debug messages
     """
-    file = open_path(path, "w", verbose=verbose, suffix="pkl")
-    # Use protocol>=4 to support saving replay buffers >= 4Gb
-    # See https://docs.python.org/3/library/pickle.html
-    pickle.dump(obj, file, protocol=pickle.HIGHEST_PROTOCOL)
-    if isinstance(path, (str, pathlib.Path)):
-        file.close()
+    with open_path(path, "w", verbose=verbose, suffix="pkl") as file_handler:
+        # Use protocol>=4 to support saving replay buffers >= 4Gb
+        # See https://docs.python.org/3/library/pickle.html
+        pickle.dump(obj, file_handler, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def load_from_pkl(path: Union[str, pathlib.Path, io.BufferedIOBase], verbose: int = 0) -> Any:
@@ -364,11 +356,8 @@ def load_from_pkl(path: Union[str, pathlib.Path, io.BufferedIOBase], verbose: in
         path actually exists. If path is a io.BufferedIOBase the path exists.
     :param verbose: Verbosity level: 0 for no output, 1 for info messages, 2 for debug messages
     """
-    file = open_path(path, "r", verbose=verbose, suffix="pkl")
-    obj = pickle.load(file)
-    if isinstance(path, (str, pathlib.Path)):
-        file.close()
-    return obj
+    with open_path(path, "r", verbose=verbose, suffix="pkl") as file_handler:
+        return pickle.load(file_handler)
 
 
 def load_from_zip_file(
@@ -378,7 +367,7 @@ def load_from_zip_file(
     device: Union[th.device, str] = "auto",
     verbose: int = 0,
     print_system_info: bool = False,
-) -> Tuple[Optional[Dict[str, Any]], TensorDict, Optional[TensorDict]]:
+) -> (Tuple[Optional[Dict[str, Any]], Optional[TensorDict], Optional[TensorDict]]):
     """
     Load model data from a .zip archive
 
@@ -398,14 +387,14 @@ def load_from_zip_file(
     :return: Class parameters, model state_dicts (aka "params", dict of state_dict)
         and dict of pytorch variables
     """
-    file = open_path(load_path, "r", verbose=verbose, suffix="zip")
+    load_path = open_path(load_path, "r", verbose=verbose, suffix="zip")
 
     # set device to cpu if cuda is not available
     device = get_device(device=device)
 
     # Open the zip archive and load data
     try:
-        with zipfile.ZipFile(file) as archive:
+        with zipfile.ZipFile(load_path) as archive:
             namelist = archive.namelist()
             # If data or parameters is not in the
             # zip archive, assume they were stored
@@ -457,7 +446,4 @@ def load_from_zip_file(
     except zipfile.BadZipFile as e:
         # load_path wasn't a zip file
         raise ValueError(f"Error: the file {load_path} wasn't a zip-file") from e
-    finally:
-        if isinstance(load_path, (str, pathlib.Path)):
-            file.close()
     return data, params, pytorch_variables
