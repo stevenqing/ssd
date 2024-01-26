@@ -7,14 +7,14 @@ from gym import spaces
 from torch.nn import functional as F
 import wandb
 from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
-from stable_baselines3.common.policies import ActorCriticCnnPolicy, ActorCriticPolicy, BasePolicy, MultiInputActorCriticPolicy
+from stable_baselines3.common.policies import ActorCriticCnnPolicy, ActorCriticPolicy, BasePolicy, MultiInputActorCriticPolicy, RewardActorCriticPolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import explained_variance, get_schedule_fn
+from causal_model import CausalModel
+CausalPPO = TypeVar("CausalPPO", bound="CausalPPO")
 
-SelfPPO = TypeVar("SelfPPO", bound="PPO")
 
-
-class PPO(OnPolicyAlgorithm):
+class CausalPPO(OnPolicyAlgorithm):
     """
     Proximal Policy Optimization algorithm (PPO) (clip version)
 
@@ -70,6 +70,7 @@ class PPO(OnPolicyAlgorithm):
         "MlpPolicy": ActorCriticPolicy,
         "CnnPolicy": ActorCriticCnnPolicy,
         "MultiInputPolicy": MultiInputActorCriticPolicy,
+        "RewardPolicy": RewardActorCriticPolicy,
     }
 
     def __init__(
@@ -160,6 +161,7 @@ class PPO(OnPolicyAlgorithm):
         if _init_setup_model:
             self._setup_model()
 
+    
     def _setup_model(self) -> None:
         super()._setup_model()
 
@@ -308,14 +310,14 @@ class PPO(OnPolicyAlgorithm):
             self.logger.record("train/clip_range_vf", clip_range_vf)
 
     def learn(
-        self: SelfPPO,
+        self: CausalPPO,
         total_timesteps: int,
         callback: MaybeCallback = None,
         log_interval: int = 1,
         tb_log_name: str = "PPO",
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
-    ) -> SelfPPO:
+    ) -> CausalPPO:
 
         return super().learn(
             total_timesteps=total_timesteps,

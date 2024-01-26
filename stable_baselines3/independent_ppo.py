@@ -152,8 +152,8 @@ class IndependentPPO(OnPolicyAlgorithm):
                 if log_interval is not None and num_timesteps % log_interval == 0:
                     fps = int(policy.num_timesteps / (time.time() - policy.start_time))
                     wandb.log({f"{polid}/fps": fps}, step=num_timesteps)
-                    wandb.log({f"{polid}/ep_rew_mean": policy.ep_info_buffer[-1]["r"]}, step=num_timesteps)
-                    SW_ep_rew_mean += policy.ep_info_buffer[-1]["r"]
+                    wandb.log({f"{polid}/ep_rew_mean": safe_mean([ep_info["r"] for ep_info in policy.ep_info_buffer])}, step=num_timesteps)
+                    SW_ep_rew_mean += safe_mean([ep_info["r"] for ep_info in policy.ep_info_buffer])
                     wandb.log({f"{polid}/ep_len_mean": policy.ep_info_buffer[-1]["l"]}, step=num_timesteps)
                     wandb.log({f"{polid}/time_elapsed": int(time.time() - policy.start_time)}, step=num_timesteps)
                     wandb.log({f"{polid}/total_timesteps": policy.num_timesteps}, step=num_timesteps)

@@ -16,7 +16,6 @@ from stable_baselines3.common.utils import (configure_logger, obs_as_tensor,
                                             safe_mean)
 from stable_baselines3.common.vec_env import DummyVecEnv
 
-
 class DummyGymEnv(gym.Env):
     def __init__(self, observation_space, action_space):
         self.observation_space = observation_space
@@ -83,6 +82,11 @@ class IndependentPPO(OnPolicyAlgorithm):
             )
             for _ in range(self.num_agents)
         ]
+
+    def reward_model(self, obs, action):
+        
+        return 
+
 
     def learn(
         self,
