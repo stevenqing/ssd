@@ -227,19 +227,6 @@ class LBF10Agent(Agent):
         self.surroundings = []
         self.consumed_list = []
         self.reward = 0
-
-    # def round_pos(self):
-    #     if np.shape(np.shape(self.pos)[0]) == 1:
-    #         round_pos = []
-    #         [row,col] = self.pos[0]
-    #         round_pos = [[row,col],[row+1,col],[row-1,col],[row,col+1],[row,col-1],[row,col+1]]
-    #     else:
-    #         round_pos = []
-    #         for p in self.pos:
-    #             [row,col] = p[0]
-    #             round_pos_p = np.array([[row,col],[row+1,col],[row-1,col],[row,col+1],[row,col-1],[row,col+1]])
-    #             round_pos = np.concat((round_pos,round_pos_p),axis=0)
-    #     self.surroundings = round_pos
     
     def init_level(self,max_level):
         return random.randint(1,max_level)
@@ -248,7 +235,7 @@ class LBF10Agent(Agent):
     # defined in two places
     def action_map(self, action_number):
         """Maps action_number to a desired action in the map"""
-        return COIN_ACTIONS[action_number]
+        return BASE_ACTIONS[action_number]
 
     def get_done(self,timestep, apple_pos_list):
         # if np.shape(apple_pos_list)[0] < 1:
@@ -284,7 +271,7 @@ class Coin3Agent(Agent):
     # defined in two places
     def action_map(self, action_number):
         """Maps action_number to a desired action in the map"""
-        return COIN_ACTIONS[action_number]
+        return BASE_ACTIONS[action_number]
 
     def get_done(self):
         return False
