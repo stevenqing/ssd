@@ -13,10 +13,23 @@ from stable_baselines3.independent_ppo import IndependentPPO
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
 from torch import nn
-
+import numpy as np
+import random
 from social_dilemmas.envs.pettingzoo_env import parallel_env
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
+def set_seed(seed: int = 42) -> None:
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    # When running on the CuDNN backend, two further options must be set
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    # Set a fixed value for the hash seed
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    print(f"Random seed set as {seed}")
 
 
 def parse_args():
@@ -89,6 +102,7 @@ def parse_args():
         default=0.05,
         help="Disadvantageous inequity aversion factor",
     )
+    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--user_name", type=str, default="1160677229")
     args = parser.parse_args()
     return args
@@ -136,6 +150,7 @@ class CustomCNN(BaseFeaturesExtractor):
 
 def main(args):
     # Config
+    set_seed(args.seed)
     model='baseline'
     env_name = args.env_name
     num_agents = args.num_agents
