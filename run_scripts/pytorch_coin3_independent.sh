@@ -1,4 +1,4 @@
-python run_scripts/sb3_train.py \
+python run_scripts/sb3_independent.py \
 --env-name coin3 \
 --num-cpus 64 \
 --num-envs 24 \

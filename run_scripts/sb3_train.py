@@ -202,7 +202,7 @@ def main(args):
                          entity=args.user_name, 
                          notes=socket.gethostname(),
                          name=str(env_name) +"_"+ str(model),
-                         group=str(env_name) +"_"+ str(model),
+                         group=str(env_name) +"_"+ str(model) + "_" + str(args.seed),
                          dir="./",
                          job_type="training",
                          reinit=True)
