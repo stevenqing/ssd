@@ -417,7 +417,7 @@ class RolloutBuffer(BaseBuffer):
         self.returns = self.advantages + self.values
 
 
-    def compute_sw_returns_and_advantage(self, last_values: th.Tensor, dones: np.ndarray, alpha: np.int) -> None:
+    def compute_sw_returns_and_advantage(self, last_values: th.Tensor, dones: np.ndarray, alpha: np.int32) -> None:
         """
         Post-processing step: compute the lambda-return (TD(lambda) estimate)
         and GAE(lambda) advantage.
