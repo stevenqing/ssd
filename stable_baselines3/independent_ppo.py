@@ -47,6 +47,8 @@ class IndependentPPO(OnPolicyAlgorithm):
         policy_kwargs: Optional[Dict[str, Any]] = None,
         verbose: int = 0,
         device: Union[th.device, str] = "auto",
+        alpha: float = 0.5,
+        model: str = 'baseline',
     ):
         self.env = env
         self.num_agents = num_agents
@@ -57,6 +59,8 @@ class IndependentPPO(OnPolicyAlgorithm):
         self.tensorboard_log = tensorboard_log
         self.verbose = verbose
         self._logger = None
+        self.alpha = alpha
+        self.model = model
         env_fn = lambda: DummyGymEnv(self.observation_space, self.action_space)
         dummy_env = DummyVecEnv([env_fn] * self.num_envs)
         self.policies = [
@@ -218,6 +222,8 @@ class IndependentPPO(OnPolicyAlgorithm):
                 ]
             )
             policy.policy.set_training_mode(False)
+            policy.rollout_buffer.agent_number = self.num_agents
+            policy.rollout_buffer.model = self.model
             policy.rollout_buffer.reset()
             callbacks[polid].on_rollout_start()
             all_last_episode_starts[polid] = policy._last_episode_starts
@@ -298,14 +304,29 @@ class IndependentPPO(OnPolicyAlgorithm):
                 if isinstance(self.action_space, Discrete):
                     all_actions[polid] = all_actions[polid].reshape(-1, 1)
                 all_actions[polid] = all_actions[polid].cpu().numpy()
-                policy.rollout_buffer.add(
-                    all_last_obs[polid],
-                    all_actions[polid],
-                    all_rewards[polid],
-                    all_last_episode_starts[polid],
-                    all_values[polid],
-                    all_log_probs[polid],
-                )
+            rollout_all_actions = all_actions
+            for polid, policy in enumerate(self.policies):
+                if self.model == 'causal':
+                    policy.rollout_buffer.add_sw(
+                        all_last_obs[polid],
+                        all_actions[polid],
+                        all_rewards[polid],
+                        all_last_episode_starts[polid],
+                        all_values[polid],
+                        all_log_probs[polid],
+                        all_last_obs,
+                        rollout_all_actions,
+                        all_rewards,
+                    )
+                else:
+                    policy.rollout_buffer.add(
+                        all_last_obs[polid],
+                        all_actions[polid],
+                        all_rewards[polid],
+                        all_last_episode_starts[polid],
+                        all_values[polid],
+                        all_log_probs[polid],
+                    )
             all_last_obs = all_obs
             all_last_episode_starts = all_dones
 
@@ -313,9 +334,14 @@ class IndependentPPO(OnPolicyAlgorithm):
             for polid, policy in enumerate(self.policies):
                 obs_tensor = obs_as_tensor(all_last_obs[polid], policy.device)
                 _, value, _ = policy.policy.forward(obs_tensor)
-                policy.rollout_buffer.compute_returns_and_advantage(
-                    last_values=value, dones=all_dones[polid]
-                )
+                if self.model == 'causal':
+                        policy.rollout_buffer.compute_sw_returns_and_advantage(
+                        last_values=value, dones=all_dones[polid], alpha=self.alpha
+                    )
+                else:
+                    policy.rollout_buffer.compute_returns_and_advantage(
+                        last_values=value, dones=all_dones[polid]
+                    )
 
         for callback in callbacks:
             callback.on_rollout_end()

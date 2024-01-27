@@ -93,7 +93,7 @@ def parse_args():
     parser.add_argument(
         "--alpha",
         type=float,
-        default=5,
+        default=0.55,
         help="Advantageous inequity aversion factor",
     )
     parser.add_argument(
@@ -104,6 +104,7 @@ def parse_args():
     )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--user_name", type=str, default="1160677229")
+    parser.add_argument("--model", type=str, default='baseline')
     args = parser.parse_args()
     return args
 
@@ -151,7 +152,7 @@ class CustomCNN(BaseFeaturesExtractor):
 def main(args):
     # Config
     set_seed(args.seed)
-    model='baseline'
+    model=args.model
     env_name = args.env_name
     num_agents = args.num_agents
     rollout_len = args.rollout_len
@@ -234,6 +235,8 @@ def main(args):
         policy_kwargs=policy_kwargs,
         tensorboard_log=tensorboard_log,
         verbose=verbose,
+        alpha=alpha,
+        model=model,
     )
     model.learn(total_timesteps=total_timesteps)
 
