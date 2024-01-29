@@ -339,7 +339,6 @@ class IndependentPPO(OnPolicyAlgorithm):
                 obs_tensor = obs_as_tensor(all_last_obs[polid], policy.device)
                 _, value, _ = policy.policy.forward(obs_tensor)
                 if self.model == 'causal':
-                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid)
                         policy.rollout_buffer.compute_sw_returns_and_advantage(
                         last_values=value, dones=all_dones[polid], alpha=self.alpha
                     )
@@ -385,7 +384,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         all_obs_actions_features = all_obs_actions_features.reshape(-1,all_obs_actions_features.shape[-1])
         
         all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
-        all_cf_rewards = th.mean(all_cf_rewards,dim=1).detach().numpy()
+        all_cf_rewards = th.mean(all_cf_rewards,dim=1).cpu().detach().numpy()
         return all_cf_rewards
 
 
