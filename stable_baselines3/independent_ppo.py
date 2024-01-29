@@ -359,8 +359,9 @@ class IndependentPPO(OnPolicyAlgorithm):
 
     def compute_cf_rewards(self,policy,all_last_obs,all_actions,polid):
         all_cf_rewards = []
-        all_last_obs = th.tensor(np.array(all_last_obs))
-        all_actions = th.tensor(np.transpose(np.array(all_actions),(1,0,2)))
+
+        all_last_obs = obs_as_tensor(np.array(all_last_obs), policy.device)
+        all_actions = obs_as_tensor(np.transpose(np.array(all_actions),(1,0,2)), policy.device)
         
         # extract obs features
         all_obs_features = []
