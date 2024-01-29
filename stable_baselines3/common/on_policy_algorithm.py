@@ -72,6 +72,7 @@ class OnPolicyAlgorithm(BaseAlgorithm):
         device: Union[th.device, str] = "auto",
         _init_setup_model: bool = True,
         supported_action_spaces: Optional[Tuple[spaces.Space, ...]] = None,
+        num_agents: int = 3,
     ):
 
         super().__init__(
@@ -96,6 +97,7 @@ class OnPolicyAlgorithm(BaseAlgorithm):
         self.vf_coef = vf_coef
         self.max_grad_norm = max_grad_norm
         self.rollout_buffer = None
+        self.num_agents = num_agents
 
         if _init_setup_model:
             self._setup_model()

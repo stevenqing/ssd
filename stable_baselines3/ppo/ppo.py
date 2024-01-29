@@ -160,7 +160,7 @@ class PPO(OnPolicyAlgorithm):
         self.normalize_advantage = normalize_advantage
         self.target_kl = target_kl
         self.num_agents = num_agents
-
+        
         if _init_setup_model:
             self._setup_model()
 
@@ -174,6 +174,7 @@ class PPO(OnPolicyAlgorithm):
                 assert self.clip_range_vf > 0, "`clip_range_vf` must be positive, " "pass `None` to deactivate vf clipping"
 
             self.clip_range_vf = get_schedule_fn(self.clip_range_vf)
+        self.policy.num_agents = self.num_agents
 
 
     def train(self) -> None:

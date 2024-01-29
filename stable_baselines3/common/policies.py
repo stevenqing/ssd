@@ -520,7 +520,7 @@ class ActorCriticPolicy(BasePolicy):
         # Action distribution
         self.action_dist = make_proba_distribution(action_space, use_sde=use_sde, dist_kwargs=dist_kwargs)
 
-        self._build(lr_schedule)
+        # self._build(lr_schedule)
 
     def _get_constructor_parameters(self) -> Dict[str, Any]:
         data = super()._get_constructor_parameters()
@@ -812,6 +812,7 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
             optimizer_kwargs,
         )
         self.num_agents = num_agents
+        self._build(lr_schedule)
     def _build_mlp_extractor(self) -> None:
         """
         Create the policy and value networks.
@@ -1023,7 +1024,7 @@ class ActorCriticCnnPolicy(ActorCriticPolicy):
             optimizer_class,
             optimizer_kwargs,
         )
-
+        self._build(lr_schedule)
 
 class MultiInputActorCriticPolicy(ActorCriticPolicy):
     """
@@ -1096,6 +1097,7 @@ class MultiInputActorCriticPolicy(ActorCriticPolicy):
             optimizer_class,
             optimizer_kwargs,
         )
+        self._build(lr_schedule)
 
 
 class ContinuousCritic(BaseModel):
@@ -1154,6 +1156,7 @@ class ContinuousCritic(BaseModel):
             q_net = nn.Sequential(*q_net)
             self.add_module(f"qf{idx}", q_net)
             self.q_networks.append(q_net)
+
 
     def forward(self, obs: th.Tensor, actions: th.Tensor) -> Tuple[th.Tensor, ...]:
         # Learn the features extractor using the policy loss only

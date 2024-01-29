@@ -215,6 +215,7 @@ def main(args):
             features_dim=features_dim, num_frames=num_frames, fcnet_hiddens=fcnet_hiddens
         ),
         net_arch=[features_dim],
+        num_agents=args.num_agents,
     )
 
     tensorboard_log = f"./results/{env_name}_ppo_independent"
