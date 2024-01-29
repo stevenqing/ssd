@@ -33,7 +33,7 @@ class CausalModel(nn.Module):
             # nn.Tanh() # TODO double check the activation function
         ) 
         self.input_dim = input_dim
-        self.num_agent = num_agents
+        self.num_agents = num_agents
         if enable_causality:
             self.dynamic_mask = dynamic_mask
             if self.dynamic_mask:
@@ -50,7 +50,7 @@ class CausalModel(nn.Module):
             
             else:
                 self.causal_mask = \
-                    nn.Parameter(torch.ones(self.num_agent, input_dim), requires_grad=True)
+                    nn.Parameter(torch.ones(self.num_agents, input_dim), requires_grad=True)
                 self.sh = 0.1
 
     def forward(self, x, test=False):

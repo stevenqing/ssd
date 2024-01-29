@@ -218,26 +218,46 @@ def main(args):
     )
 
     tensorboard_log = f"./results/{env_name}_ppo_independent"
-
-    model = IndependentPPO(
-        "CnnPolicy",
-        num_agents=num_agents,
-        env=env,
-        learning_rate=lr,
-        n_steps=rollout_len,
-        batch_size=batch_size,
-        n_epochs=n_epochs,
-        gamma=gamma,
-        gae_lambda=gae_lambda,
-        ent_coef=ent_coef,
-        max_grad_norm=grad_clip,
-        target_kl=target_kl,
-        policy_kwargs=policy_kwargs,
-        tensorboard_log=tensorboard_log,
-        verbose=verbose,
-        alpha=alpha,
-        model=model,
-    )
+    if model == 'baseline':
+        model = IndependentPPO(
+            "CnnPolicy",
+            num_agents=num_agents,
+            env=env,
+            learning_rate=lr,
+            n_steps=rollout_len,
+            batch_size=batch_size,
+            n_epochs=n_epochs,
+            gamma=gamma,
+            gae_lambda=gae_lambda,
+            ent_coef=ent_coef,
+            max_grad_norm=grad_clip,
+            target_kl=target_kl,
+            policy_kwargs=policy_kwargs,
+            tensorboard_log=tensorboard_log,
+            verbose=verbose,
+            alpha=alpha,
+            model=model,
+        )
+    elif model == 'causal':
+        model = IndependentPPO(
+            "RewardPolicy",
+            num_agents=num_agents,
+            env=env,
+            learning_rate=lr,
+            n_steps=rollout_len,
+            batch_size=batch_size,
+            n_epochs=n_epochs,
+            gamma=gamma,
+            gae_lambda=gae_lambda,
+            ent_coef=ent_coef,
+            max_grad_norm=grad_clip,
+            target_kl=target_kl,
+            policy_kwargs=policy_kwargs,
+            tensorboard_log=tensorboard_log,
+            verbose=verbose,
+            alpha=alpha,
+            model=model,
+        )
     model.learn(total_timesteps=total_timesteps)
 
     logdir = model.logger.dir

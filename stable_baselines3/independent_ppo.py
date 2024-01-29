@@ -84,6 +84,8 @@ class IndependentPPO(OnPolicyAlgorithm):
                 policy_kwargs=policy_kwargs,
                 verbose=verbose,
                 device=device,
+                num_agents=self.num_agents,
+                model=self.model,
             )
             for _ in range(self.num_agents)
         ]
