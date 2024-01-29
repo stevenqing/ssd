@@ -37,6 +37,7 @@ class RolloutBufferSamples(NamedTuple):
     all_last_obs: th.Tensor
     all_actions: th.Tensor
     all_rewards: th.Tensor
+    cf_rewards: th.Tensor
 
 
 class DictRolloutBufferSamples(NamedTuple):

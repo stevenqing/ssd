@@ -354,7 +354,7 @@ class RolloutBuffer(BaseBuffer):
         self.gamma = gamma
         self.agent_number = agent_number
         self.observations, self.actions, self.rewards, self.advantages = None, None, None, None
-        self.all_last_obs, self.all_actions, self.all_rewards = None, None, None
+        self.all_last_obs, self.all_actions, self.all_rewards, self.cf_rewards = None, None, None, None
         self.returns, self.episode_starts, self.values, self.log_probs = None, None, None, None
         self.generator_ready = False
         self.model = model
@@ -372,9 +372,10 @@ class RolloutBuffer(BaseBuffer):
         self.advantages = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.generator_ready = False
 
-        self.all_last_obs = np.zeros((self.buffer_size, self.agent_number, self.n_envs) + self.obs_shape, dtype=np.float32)
-        self.all_actions = np.zeros((self.buffer_size, self.agent_number, self.n_envs, self.action_dim), dtype=np.float32)
-        self.all_rewards = np.zeros((self.buffer_size, self.agent_number, self.n_envs), dtype=np.float32)
+        self.all_last_obs = np.zeros((self.buffer_size, self.n_envs, self.agent_number) + self.obs_shape, dtype=np.float32)
+        self.all_actions = np.zeros((self.buffer_size, self.n_envs, self.agent_number, self.action_dim), dtype=np.float32)
+        self.all_rewards = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
+        self.cf_rewards = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
 
         super().reset()
     
@@ -447,7 +448,10 @@ class RolloutBuffer(BaseBuffer):
             else:
                 next_non_terminal = 1.0 - self.episode_starts[step + 1]
                 next_values = self.values[step + 1]
-            delta = self.rewards[step] + alpha * np.sum(self.all_rewards[step],axis=0) + self.gamma * next_values * next_non_terminal - self.values[step]
+            # naivly using sw
+            delta = self.rewards[step] + alpha * np.sum(self.all_rewards[step],axis=-1) + self.gamma * next_values * next_non_terminal - self.values[step]
+            # using cf
+            delta = self.rewards[step] + alpha * np.sum(self.cf_rewards[step],axis=-1) + self.gamma * next_values * next_non_terminal - self.values[step]   
             last_gae_lam = delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam
             self.advantages[step] = last_gae_lam
         # TD(lambda) estimator, see Github PR #375 or "Telescoping in TD(lambda)"
@@ -465,6 +469,7 @@ class RolloutBuffer(BaseBuffer):
         all_last_obs: np.ndarray,
         all_actions: np.ndarray,
         all_rewards: np.ndarray,
+        cf_rewards: np.ndarray,
     ) -> None:
         """
         :param obs: Observation
@@ -499,9 +504,10 @@ class RolloutBuffer(BaseBuffer):
         self.values[self.pos] = value.clone().cpu().numpy().flatten()
         self.log_probs[self.pos] = log_prob.clone().cpu().numpy()
 
-        self.all_last_obs[self.pos] = np.array(all_last_obs).copy()
-        self.all_actions[self.pos] = np.array(all_actions).copy()
-        self.all_rewards[self.pos] = np.array(all_rewards).copy()
+        self.all_last_obs[self.pos] = np.transpose(np.array(all_last_obs).copy(),(1,0,2,3,4))
+        self.all_actions[self.pos] = np.transpose(np.array(all_actions).copy(),(1,0,2))
+        self.all_rewards[self.pos] = np.transpose(np.array(all_rewards).copy(),(1,0))
+        self.cf_rewards[self.pos] = np.array(cf_rewards).copy()
 
         self.pos += 1
         if self.pos == self.buffer_size:
@@ -606,6 +612,7 @@ class RolloutBuffer(BaseBuffer):
                 "all_last_obs",
                 "all_actions",
                 "all_rewards",
+                "cf_rewards",
             ]
 
             for tensor in _tensor_names:
@@ -632,6 +639,7 @@ class RolloutBuffer(BaseBuffer):
             self.all_last_obs[batch_inds],
             self.all_actions[batch_inds],
             self.all_rewards[batch_inds],
+            self.cf_rewards[batch_inds],
         )
         return RolloutBufferSamples(*tuple(map(self.to_torch, data)))
 
