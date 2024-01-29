@@ -236,7 +236,7 @@ def main(args):
             tensorboard_log=tensorboard_log,
             verbose=verbose,
             alpha=alpha,
-            model=model,
+            model=args.model,
         )
     elif model == 'causal':
         model = IndependentPPO(
@@ -256,7 +256,7 @@ def main(args):
             tensorboard_log=tensorboard_log,
             verbose=verbose,
             alpha=alpha,
-            model=model,
+            model=args.model,
         )
     model.learn(total_timesteps=total_timesteps)
 
