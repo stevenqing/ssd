@@ -134,11 +134,11 @@
             "justMyCode": false,
             "args": [
                 "--env",
-                "harvest",
+                "coin3",
                 "--model",
                 "causal",
                 "--num-agents",
-                "5",
+                "3",
                 "--rollout-len",
                 "1000",
                 "--user_name",

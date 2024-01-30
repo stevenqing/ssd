@@ -27,7 +27,7 @@ MaybeCallback = Union[None, Callable, List[callbacks.BaseCallback], callbacks.Ba
 Schedule = Callable[[float], float]
 
 # add all information
-class RolloutBufferSamples(NamedTuple):
+class RewardRolloutBufferSamples(NamedTuple):
     observations: th.Tensor
     actions: th.Tensor
     old_values: th.Tensor
@@ -38,6 +38,14 @@ class RolloutBufferSamples(NamedTuple):
     all_actions: th.Tensor
     all_rewards: th.Tensor
     cf_rewards: th.Tensor
+
+class RolloutBufferSamples(NamedTuple):
+    observations: th.Tensor
+    actions: th.Tensor
+    old_values: th.Tensor
+    old_log_prob: th.Tensor
+    advantages: th.Tensor
+    returns: th.Tensor
 
 
 class DictRolloutBufferSamples(NamedTuple):
