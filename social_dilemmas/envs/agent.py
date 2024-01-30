@@ -282,25 +282,26 @@ class Coin3Agent(Agent):
         agent2 = "agent-" + str(1)
         agent3 = "agent-" + str(2)
         if char == b"A":
-            self.reward_this_turn += 1
-            if self.agent_id == agent2:
-                self.penalty_1 -= 2
-            elif self.agent_id == agent3:
-                self.penalty_1 -= 2
+            if self.agent_id == agent1:
+                self.reward_this_turn += 2
+            else:
+                self.reward_this_turn += 1
+                self.penalty_1 -= 3
             return b" "
         elif char == b"B":
+            if self.agent_id == agent2:
+                self.reward_this_turn += 2
+            else:
+                self.reward_this_turn += 1
+                self.penalty_2 -= 3
             self.reward_this_turn += 1
-            if self.agent_id == agent1:
-                self.penalty_2 -= 2
-            elif self.agent_id == agent3:
-                self.penalty_2 -= 2
             return b" "
         elif char == b"C":
-            self.reward_this_turn += 1
-            if self.agent_id == agent1:
-                self.penalty_3 -= 2
-            elif self.agent_id == agent2:
-                self.penalty_3 -= 2
+            if self.agent_id == agent3:
+                self.reward_this_turn += 2
+            else:    
+                self.reward_this_turn += 1
+                self.penalty_3 -= 3
             return b" "
         else:
             return char
