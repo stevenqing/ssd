@@ -123,11 +123,9 @@ class LBF10Env(MapEnv):
             current_apples_round_pos = []
             for pos in current_apples:
                 current_apples_round_pos.append(self.round_pos(list(pos)))
-            row = random.randint(1,np.shape(self.world_map)[0]-1)
-            col = random.randint(1,np.shape(self.world_map)[1]-1)
             while [row, col] not in round_agent_pos and [row, col] not in current_apples_round_pos:
-                row = random.randint(1,np.shape(self.world_map)[0]-1)
-                col = random.randint(1,np.shape(self.world_map)[1]-1)
+                row = random.randint(1,np.shape(self.world_map)[0]-2)
+                col = random.randint(1,np.shape(self.world_map)[1]-2)
                 break
             spawn_prob = 0.1
             rand_num = np.random.choice([1,0.1],p=[0.9,0.1])

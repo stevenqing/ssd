@@ -163,7 +163,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                     wandb.log({f"{polid}/ep_len_mean": policy.ep_info_buffer[-1]["l"]}, step=num_timesteps)
                     wandb.log({f"{polid}/time_elapsed": int(time.time() - policy.start_time)}, step=num_timesteps)
                     wandb.log({f"{polid}/total_timesteps": policy.num_timesteps}, step=num_timesteps)
-            
+                    wandb.log({f"{polid}/value_loss": policy.value_loss}, step=num_timesteps)
                     policy.logger.record("policy_id", polid, exclude="tensorboard")
                     policy.logger.record(
                         "time/iterations", num_timesteps, exclude="tensorboard"
