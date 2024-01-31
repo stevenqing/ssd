@@ -274,7 +274,28 @@ class Coin3Agent(Agent):
         return BASE_ACTIONS[action_number]
 
     def get_done(self):
+        apple_pos,apple_type = self.count_apples()
+        if apple_pos == [[0,0],[0,0],[0,0]]:
+            return True
         return False
+
+    def count_apples(self):
+        # Return apples pos and type
+        apple_pos = [[0,0],[0,0],[0,0]]
+        apple_type = [0,0,0]
+        for row in range(1,np.shape(self.full_map)[0]):
+           for col in range(1,np.shape(self.full_map)[1]):
+               char = self.full_map[row, col]
+               if char == b'A':
+                   apple_pos[0] = [int(row),int(col)]
+                   apple_type[0] = 1
+               elif char == b'B':
+                   apple_pos[1] = [int(row),int(col)]
+                   apple_type[1] = 2
+               elif char == b'C':
+                   apple_pos[2] = [int(row),int(col)]
+                   apple_type[2] = 3
+        return apple_pos, apple_type
 
     def consume(self, char, pos=[0,0]):
         """Defines how an agent interacts with the char it is standing on"""
