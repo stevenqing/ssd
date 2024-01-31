@@ -274,10 +274,6 @@ class Coin3Agent(Agent):
         return BASE_ACTIONS[action_number]
 
     def get_done(self):
-        apples_pos,apples_type = self.count_apples()
-        if apples_pos == [[0,0],[0,0],[0,0]]:
-            
-            return True
         return False
 
     def consume(self, char, pos=[0,0]):
