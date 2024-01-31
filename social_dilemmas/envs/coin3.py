@@ -119,7 +119,7 @@ class Coin3Env(MapEnv):
                 break
             if [row, col] not in agent_positions and [row, col] not in current_apples:
                 spawn_prob = 0.1
-                rand_num = np.random.choice([1,0.1],p=[0.9,0.1])
+                rand_num = np.random.choice([1,0.1],p=[1,0]) # do not spawn apples
                 if rand_num == spawn_prob:
                     num = random.randint(0,2)
                     if num == 0:

@@ -274,6 +274,10 @@ class Coin3Agent(Agent):
         return BASE_ACTIONS[action_number]
 
     def get_done(self):
+        apples_pos,apples_type = self.count_apples()
+        if apples_pos == [[0,0],[0,0],[0,0]]:
+            
+            return True
         return False
 
     def consume(self, char, pos=[0,0]):
@@ -283,25 +287,24 @@ class Coin3Agent(Agent):
         agent3 = "agent-" + str(2)
         if char == b"A":
             if self.agent_id == agent1:
-                self.reward_this_turn += 2
+                self.reward_this_turn += 1
             else:
                 self.reward_this_turn += 1
-                self.penalty_1 -= 3
+                self.penalty_1 -= 2
             return b" "
         elif char == b"B":
             if self.agent_id == agent2:
-                self.reward_this_turn += 2
+                self.reward_this_turn += 1
             else:
                 self.reward_this_turn += 1
-                self.penalty_2 -= 3
-            self.reward_this_turn += 1
+                self.penalty_2 -= 2
             return b" "
         elif char == b"C":
             if self.agent_id == agent3:
-                self.reward_this_turn += 2
+                self.reward_this_turn += 1
             else:    
                 self.reward_this_turn += 1
-                self.penalty_3 -= 3
+                self.penalty_3 -= 2
             return b" "
         else:
             return char

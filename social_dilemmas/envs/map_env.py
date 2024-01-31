@@ -424,7 +424,6 @@ class MapEnv(MultiAgentEnv):
         
         
         store_trajs = {'vector_states':[],'actions':[],'rewards':[]}
-        store_rewards = []
         all_rewards = []
         observations = {}
         rewards = {}
@@ -505,7 +504,7 @@ class MapEnv(MultiAgentEnv):
                 self.prev_rewards = all_rewards
             else:
                 observations[agent.agent_id] = {"curr_obs": rgb_arr,"vector_state": vector_state}
-            store_rewards.append(rewards[agent.agent_id])
+
             if self.env_name == 'LBF10':
                 dones[agent.agent_id] = agent.get_done(self.timestep,apple_pos_list)
             else:
