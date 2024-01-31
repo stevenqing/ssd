@@ -52,7 +52,7 @@ class Coin3Env(MapEnv):
 
     @property
     def action_space(self):
-        return DiscreteWithDType(7, dtype=np.uint8)
+        return DiscreteWithDType(4, dtype=np.uint8)
 
     def setup_agents(self):
         map_with_agents = self.get_map_with_agents()
@@ -111,13 +111,15 @@ class Coin3Env(MapEnv):
                 if char == b'A' or char == b'B' or char == b'C':
                     current_apples.append([row, col])
         if len(current_apples) <= 1:
+            # row = random.randint(1,np.shape(self.world_map)[0]-1)
+            # col = random.randint(1,np.shape(self.world_map)[1]-1)
             while [row, col] not in agent_positions and [row, col] not in current_apples:
                 row = random.randint(1,np.shape(self.world_map)[0]-2)
                 col = random.randint(1,np.shape(self.world_map)[1]-2)
                 break
             if [row, col] not in agent_positions and [row, col] not in current_apples:
                 spawn_prob = 0.1
-                rand_num = np.random.choice([1,0.1],p=[0.9,0.1]) # do not spawn apples
+                rand_num = np.random.choice([1,0.1],p=[1,0])
                 if rand_num == spawn_prob:
                     num = random.randint(0,2)
                     if num == 0:
@@ -126,7 +128,6 @@ class Coin3Env(MapEnv):
                         new_apple_points.append((row, col, b"B"))
                     else:
                         new_apple_points.append((row, col, b"C"))
-            
         return new_apple_points
 
     def count_apples(self):
