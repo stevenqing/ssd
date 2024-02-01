@@ -248,7 +248,7 @@ class LBF10Agent(Agent):
     # defined in two places
     def action_map(self, action_number):
         """Maps action_number to a desired action in the map"""
-        return COIN_ACTIONS[action_number]
+        return BASE_ACTIONS[action_number]
 
 
     def count_apples(self):
