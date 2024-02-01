@@ -221,7 +221,8 @@ class LBF10Agent(Agent):
         self.view_len = view_len
         super().__init__(agent_id, start_pos, start_orientation, full_map, view_len, view_len)
         self.update_agent_pos(start_pos)
-        self.agent_level = self.init_level(max_level=3)
+        # self.agent_level = self.init_level(max_level=3)
+        self.agent_level = int(agent_id[-1])
         self.level_consumed = 0
         self.surroundings_chars = []
         self.surroundings = []
