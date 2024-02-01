@@ -128,7 +128,7 @@ class LBF10Env(MapEnv):
                 col = random.randint(1,np.shape(self.world_map)[1]-2)
                 break
             spawn_prob = 0.1
-            rand_num = np.random.choice([1,0.1],p=[0.9,0.1])
+            rand_num = np.random.choice([1,0.1],p=[1,0])
             if rand_num == spawn_prob:
                 num = random.randint(0,2)
                 if num == 0:
