@@ -219,24 +219,44 @@ def main(args):
     )
 
     tensorboard_log = f"./results/{env_name}_ppo_paramsharing"
-
-    model = PPO(
-        "CnnPolicy",
-        env=env,
-        learning_rate=lr,
-        n_steps=rollout_len,
-        batch_size=batch_size,
-        n_epochs=n_epochs,
-        gamma=gamma,
-        gae_lambda=gae_lambda,
-        ent_coef=ent_coef,
-        max_grad_norm=grad_clip,
-        target_kl=target_kl,
-        policy_kwargs=policy_kwargs,
-        tensorboard_log=tensorboard_log,
-        verbose=verbose,
-        model=model,
-    )
+    if args.model == 'baseline':
+        model = PPO(
+            "CnnPolicy",
+            env=env,
+            learning_rate=lr,
+            n_steps=rollout_len,
+            batch_size=batch_size,
+            n_epochs=n_epochs,
+            gamma=gamma,
+            gae_lambda=gae_lambda,
+            ent_coef=ent_coef,
+            max_grad_norm=grad_clip,
+            target_kl=target_kl,
+            policy_kwargs=policy_kwargs,
+            tensorboard_log=tensorboard_log,
+            verbose=verbose,
+            model=model,
+            num_agents=num_agents,
+        )
+    else:
+        model = PPO(
+            "RewardPolicy",
+            env=env,
+            learning_rate=lr,
+            n_steps=rollout_len,
+            batch_size=batch_size,
+            n_epochs=n_epochs,
+            gamma=gamma,
+            gae_lambda=gae_lambda,
+            ent_coef=ent_coef,
+            max_grad_norm=grad_clip,
+            target_kl=target_kl,
+            policy_kwargs=policy_kwargs,
+            tensorboard_log=tensorboard_log,
+            verbose=verbose,
+            model=model,
+            num_agents=num_agents,
+        )
     model.learn(total_timesteps=total_timesteps)
 
     logdir = model.logger.dir

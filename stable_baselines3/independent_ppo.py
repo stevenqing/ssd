@@ -307,21 +307,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                 all_actions[polid] = all_actions[polid].cpu().numpy()
             rollout_all_actions = all_actions
             for polid, policy in enumerate(self.policies):
-                if self.model == 'causal':
-                    cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid)
-                    policy.rollout_buffer.add_sw(
-                        all_last_obs[polid],
-                        all_actions[polid],
-                        all_rewards[polid],
-                        all_last_episode_starts[polid],
-                        all_values[polid],
-                        all_log_probs[polid],
-                        all_last_obs,
-                        rollout_all_actions,
-                        all_rewards,
-                        cf_rewards,
-                    )
-                else:
+                if self.model == 'baseline':
                     policy.rollout_buffer.add(
                         all_last_obs[polid],
                         all_actions[polid],
@@ -330,6 +316,34 @@ class IndependentPPO(OnPolicyAlgorithm):
                         all_values[polid],
                         all_log_probs[polid],
                     )
+                else:
+                    if self.model == 'team':
+                        policy.rollout_buffer.add_sw(
+                            all_last_obs[polid],
+                            all_actions[polid],
+                            all_rewards[polid],
+                            all_last_episode_starts[polid],
+                            all_values[polid],
+                            all_log_probs[polid],
+                            all_last_obs,
+                            rollout_all_actions,
+                            all_rewards,
+                            cf_rewards=None,
+                        )
+                    else:
+                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid)
+                        policy.rollout_buffer.add_sw(
+                            all_last_obs[polid],
+                            all_actions[polid],
+                            all_rewards[polid],
+                            all_last_episode_starts[polid],
+                            all_values[polid],
+                            all_log_probs[polid],
+                            all_last_obs,
+                            rollout_all_actions,
+                            all_rewards,
+                            cf_rewards,
+                        )
             all_last_obs = all_obs
             all_last_episode_starts = all_dones
 
@@ -337,13 +351,18 @@ class IndependentPPO(OnPolicyAlgorithm):
             for polid, policy in enumerate(self.policies):
                 obs_tensor = obs_as_tensor(all_last_obs[polid], policy.device)
                 _, value, _ = policy.policy.forward(obs_tensor)
-                if self.model == 'causal':
-                        policy.rollout_buffer.compute_sw_returns_and_advantage(
-                        last_values=value, dones=all_dones[polid], alpha=self.alpha
+                if self.model == 'baseline':
+                        policy.rollout_buffer.compute_returns_and_advantage(
+                        last_values=value, dones=all_dones[polid]
                     )
                 else:
-                    policy.rollout_buffer.compute_returns_and_advantage(
-                        last_values=value, dones=all_dones[polid]
+                    if self.model == 'team':
+                        policy.rollout_buffer.compute_sw_returns_and_advantage(
+                        last_values=value, dones=all_dones[polid], alpha=self.alpha, use_team_reward=True
+                    )
+                    else:
+                        policy.rollout_buffer.compute_sw_returns_and_advantage(
+                        last_values=value, dones=all_dones[polid], alpha=self.alpha
                     )
 
         for callback in callbacks:

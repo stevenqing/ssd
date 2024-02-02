@@ -160,7 +160,6 @@ class PPO(OnPolicyAlgorithm):
         self.normalize_advantage = normalize_advantage
         self.target_kl = target_kl
         self.num_agents = num_agents
-        
         if _init_setup_model:
             self._setup_model()
 
@@ -201,6 +200,7 @@ class PPO(OnPolicyAlgorithm):
         for epoch in range(self.n_epochs):
             approx_kl_divs = []
             # Do a complete pass on the rollout buffer
+
             if self.model == 'causal':
                 for rollout_data in self.rollout_buffer.get_sw(self.batch_size):
                     all_last_obs = rollout_data.all_last_obs
@@ -285,6 +285,7 @@ class PPO(OnPolicyAlgorithm):
                     # Clip grad norm
                     th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
                     self.policy.optimizer.step()
+
             else:
                 for rollout_data in self.rollout_buffer.get(self.batch_size):
                     actions = rollout_data.actions
@@ -296,8 +297,8 @@ class PPO(OnPolicyAlgorithm):
                     if self.use_sde:
                         self.policy.reset_noise(self.batch_size)
 
-
-                    values, log_prob, entropy = self.policy.evaluate_actions(rollout_data.observations, actions)
+                    if self.model == 'baseline':
+                        values, log_prob, entropy = self.policy.evaluate_actions(rollout_data.observations, actions)
                     values = values.flatten()
                     # Normalize advantage
                     advantages = rollout_data.advantages
@@ -363,6 +364,7 @@ class PPO(OnPolicyAlgorithm):
                     # Clip grad norm
                     th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
                     self.policy.optimizer.step()
+
 
             if not continue_training:
                 break

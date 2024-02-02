@@ -916,6 +916,8 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
         :param actions: Actions
         :return: estimated value, log likelihood of taking those actions
             and entropy of the action distribution.
+
+        Haven't check out the use_all_obs yet, aims to use the observations iteratively.
         """
         # Preprocess the observation if needed
         features,all_actions_one_hot, predicted_reward = [],[],[]

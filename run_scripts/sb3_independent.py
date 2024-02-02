@@ -239,7 +239,7 @@ def main(args):
             alpha=alpha,
             model=args.model,
         )
-    elif model == 'causal':
+    else:
         model = IndependentPPO(
             "RewardPolicy",
             num_agents=num_agents,
