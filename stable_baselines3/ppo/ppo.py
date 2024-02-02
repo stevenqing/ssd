@@ -214,7 +214,6 @@ class PPO(OnPolicyAlgorithm):
                     if self.use_sde:
                         self.policy.reset_noise(self.batch_size)
 
-
                     values, log_prob, entropy, predicted_reward = self.policy.evaluate_actions(rollout_data.observations, actions, all_last_obs, all_actions)
 
                     values = values.flatten()

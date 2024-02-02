@@ -813,6 +813,7 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
         )
         self.num_agents = num_agents
         self._build(lr_schedule)
+        
     def _build_mlp_extractor(self) -> None:
         """
         Create the policy and value networks.
