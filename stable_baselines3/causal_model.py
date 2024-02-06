@@ -18,7 +18,7 @@ class MaskActivation(nn.Module):
         return x
     
 class CausalModel(nn.Module):
-    def __init__(self, input_dim, num_agents, enable_causality=True, dynamic_mask=True):
+    def __init__(self, input_dim, num_agents, enable_causality=False, dynamic_mask=False):
         super(CausalModel, self).__init__()
         self.enable_causality = enable_causality
         self.layers = nn.Sequential(
