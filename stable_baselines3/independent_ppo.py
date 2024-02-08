@@ -163,6 +163,9 @@ class IndependentPPO(OnPolicyAlgorithm):
                     wandb.log({f"{polid}/ep_len_mean": policy.ep_info_buffer[-1]["l"]}, step=num_timesteps)
                     wandb.log({f"{polid}/time_elapsed": int(time.time() - policy.start_time)}, step=num_timesteps)
                     wandb.log({f"{polid}/total_timesteps": policy.num_timesteps}, step=num_timesteps)
+
+                    ep_cf_reward = np.sum(policy.rollout_buffer.cf_rewards)
+                    wandb.log({f"{polid}/cf_reward": ep_cf_reward}, step=num_timesteps)
                     policy.logger.record("policy_id", polid, exclude="tensorboard")
                     policy.logger.record(
                         "time/iterations", num_timesteps, exclude="tensorboard"
@@ -198,6 +201,7 @@ class IndependentPPO(OnPolicyAlgorithm):
 
                 policy.train()
             wandb.log({"SW_ep_rew_mean": SW_ep_rew_mean/self.num_agents}, step=num_timesteps)
+            wandb.log({"SW_ep_rew_total": SW_ep_rew_mean}, step=num_timesteps)
         for callback in callbacks:
             callback.on_training_end()
 
