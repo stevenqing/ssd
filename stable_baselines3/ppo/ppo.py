@@ -7,7 +7,7 @@ from gym import spaces
 from torch.nn import functional as F
 import wandb
 from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
-from stable_baselines3.common.policies import ActorCriticCnnPolicy, ActorCriticPolicy, BasePolicy, MultiInputActorCriticPolicy, RewardCNNActorCriticPolicy, VectorActorCriticPolicy
+from stable_baselines3.common.policies import ActorCriticCnnPolicy, ActorCriticPolicy, BasePolicy, MultiInputActorCriticPolicy, RewardCNNActorCriticPolicy, VectorActorCriticPolicy, RewardVectorActorCriticPolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import explained_variance, get_schedule_fn
 
@@ -72,6 +72,7 @@ class PPO(OnPolicyAlgorithm):
         "MultiInputPolicy": MultiInputActorCriticPolicy,
         "RewardPolicy": RewardCNNActorCriticPolicy,
         "VectorPolicy": VectorActorCriticPolicy,
+        "RewardVectorPolicy": RewardVectorActorCriticPolicy,
     }
 
     def __init__(

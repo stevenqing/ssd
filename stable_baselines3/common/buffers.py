@@ -510,9 +510,9 @@ class RolloutBuffer(BaseBuffer):
         self.values[self.pos] = value.clone().cpu().numpy().flatten()
         self.log_probs[self.pos] = log_prob.clone().cpu().numpy()
 
-        self.all_last_obs[self.pos] = np.transpose(np.array(all_last_obs).copy(),(1,0,2,3,4))
-        self.all_actions[self.pos] = np.transpose(np.array(all_actions).copy(),(1,0,2))
-        self.all_rewards[self.pos] = np.transpose(np.array(all_rewards).copy(),(1,0))
+        self.all_last_obs[self.pos] = np.transpose(np.array(all_last_obs).copy(), (1, 0, 2))
+        self.all_actions[self.pos] = np.transpose(np.array(all_actions).copy(), (1, 0, 2))
+        self.all_rewards[self.pos] = np.transpose(np.array(all_rewards).copy(), (1, 0))
         self.cf_rewards[self.pos] = np.array(cf_rewards).copy()
 
         self.pos += 1

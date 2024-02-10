@@ -286,7 +286,7 @@ def main(args):
         )
     else:
         model = IndependentPPO(
-            "RewardPolicy",
+            "RewardVectorPolicy",
             num_agents=num_agents,
             env=env,
             learning_rate=lr,

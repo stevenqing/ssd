@@ -61,7 +61,7 @@
                 "--env",
                 "lbf10",
                 "--model",
-                "baseline",
+                "causal",
                 "--num-agents",
                 "3",
                 "--num-cpus",
