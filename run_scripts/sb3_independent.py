@@ -19,6 +19,15 @@ from social_dilemmas.envs.pettingzoo_env import parallel_env
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
+ENV_TO_VEC = {
+    'coin3': 104,
+    'lbf10': 64,
+    'CLEANUP': 30,
+    'HARVEST': 20,
+}
+
+
+
 def set_seed(seed: int = 42) -> None:
     np.random.seed(seed)
     random.seed(seed)
@@ -197,6 +206,9 @@ def main(args):
     num_cpus = args.num_cpus
     num_envs = args.num_envs
 
+    input_size = ENV_TO_VEC[env_name]
+
+
     target_kl = args.kl_threshold
     # Training
     num_frames = 6  # number of frames to stack together; use >4 to avoid automatic VecTransposeImage
@@ -245,7 +257,7 @@ def main(args):
     policy_kwargs = dict(
         features_extractor_class=CustomVectorMLP,
         features_extractor_kwargs=dict(
-            features_dim=features_dim, num_frames=num_frames, fcnet_hiddens=fcnet_hiddens
+            input_size=input_size, features_dim=features_dim, num_frames=num_frames, fcnet_hiddens=fcnet_hiddens
         ),
         net_arch=[features_dim],
         num_agents=args.num_agents,
