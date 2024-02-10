@@ -235,7 +235,7 @@ def main(args):
                          entity=args.user_name, 
                          notes=socket.gethostname(),
                          name=str(env_name) +"_"+ str(model),
-                         group=str(env_name) +"_"+ str(model)+ "_independent_" + str(args.seed),
+                         group="Vector" + "_" + str(env_name) +"_"+ str(model)+ "_independent_" + str(args.seed),
                          dir="./",
                          job_type="training",
                          reinit=True)
