@@ -40,19 +40,23 @@ class Coin3Env(MapEnv):
         )
         self.env_name = env_name
         self.apple_points = []
+        self.apple_state = {}
         # The initial position of the apples are determined
         for row in range(self.base_map.shape[0]):
             for col in range(self.base_map.shape[1]):
                 if self.base_map[row, col] == b"A":
+                    self.apple_state[(row, col)] = 1
                     self.apple_points.append([row, col, "A"])
                 elif self.base_map[row, col] == b"B":
+                    self.apple_state[(row, col)] = 1
                     self.apple_points.append([row, col, "B"])
                 elif self.base_map[row, col] == b"C":
+                    self.apple_state[(row, col)] = 1
                     self.apple_points.append([row, col, "C"])
 
     @property
     def action_space(self):
-        return DiscreteWithDType(4, dtype=np.uint8)
+        return DiscreteWithDType(7, dtype=np.uint8) # maybe 4
 
     def setup_agents(self):
         map_with_agents = self.get_map_with_agents()
@@ -129,6 +133,23 @@ class Coin3Env(MapEnv):
                     else:
                         new_apple_points.append((row, col, b"C"))
         return new_apple_points
+
+    def get_apple_state(self):
+        apple_type = []
+        for apple_pos in self.apple_state.keys():
+            if self.world_map[apple_pos[0], apple_pos[1]] == b"A" or self.world_map[apple_pos[0], apple_pos[1]] == b"B" or self.world_map[apple_pos[0], apple_pos[1]] == b"C":
+                self.apple_state[apple_pos] = 1
+                if self.world_map[apple_pos[0], apple_pos[1]] == b"A":
+                    apple_type.append(1)
+                elif self.world_map[apple_pos[0], apple_pos[1]] == b"B":    
+                    apple_type.append(2)
+                else:
+                    apple_type.append(3)
+            else:
+                self.apple_state[apple_pos] = 0
+        return np.array(list(self.apple_state.keys())), np.array(list(self.apple_state.values())), np.array(apple_type)
+
+
 
     def count_apples(self):
         # Return apples pos and type

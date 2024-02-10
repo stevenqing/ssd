@@ -1,0 +1,75 @@
+wandb_version: 1
+
+env_name:
+  desc: null
+  value: coin3
+num_agents:
+  desc: null
+  value: 3
+num_cpus:
+  desc: null
+  value: 3
+num_envs:
+  desc: null
+  value: 2
+kl_threshold:
+  desc: null
+  value: 0.01
+rollout_len:
+  desc: null
+  value: 1000
+total_timesteps:
+  desc: null
+  value: 500000000.0
+use_collective_reward:
+  desc: null
+  value: false
+inequity_averse_reward:
+  desc: null
+  value: false
+alpha:
+  desc: null
+  value: 0.55
+beta:
+  desc: null
+  value: 0.05
+seed:
+  desc: null
+  value: 42
+user_name:
+  desc: null
+  value: '1160677229'
+model:
+  desc: null
+  value: baseline
+_wandb:
+  desc: null
+  value:
+    python_version: 3.8.10
+    cli_version: 0.16.2
+    framework: torch
+    is_jupyter_run: false
+    is_kaggle_kernel: false
+    start_time: 1707586169.098436
+    t:
+      1:
+      - 1
+      - 2
+      - 3
+      - 30
+      - 55
+      2:
+      - 1
+      - 2
+      - 3
+      - 30
+      - 55
+      3:
+      - 13
+      - 16
+      - 23
+      4: 3.8.10
+      5: 0.16.2
+      8:
+      - 5
+      13: linux-x86_64

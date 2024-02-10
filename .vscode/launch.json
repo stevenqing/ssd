@@ -64,6 +64,8 @@
                 "baseline",
                 "--num-agents",
                 "3",
+                "--num-cpus",
+                "3",
                 "--rollout-len",
                 "1000",
                 "--user_name",
