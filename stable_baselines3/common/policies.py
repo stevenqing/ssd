@@ -629,6 +629,8 @@ class ActorCriticPolicy(BasePolicy):
         :param deterministic: Whether to sample or use deterministic actions
         :return: action, value and log probability of the action
         """
+
+
         # Preprocess the observation if needed
         features = self.extract_features(obs)
         if self.share_features_extractor:
@@ -741,9 +743,9 @@ class ActorCriticPolicy(BasePolicy):
         return self.value_net(latent_vf)
     
 
-class VAEReturnActorCriticPolicy(ActorCriticPolicy):
+class VectorActorCriticPolicy(ActorCriticPolicy):
     """
-    Policy class for reward prediction.
+    Policy class for Vector input.
 
     :param observation_space: Observation space
     :param action_space: Action space
@@ -909,7 +911,7 @@ class VAEReturnActorCriticPolicy(ActorCriticPolicy):
         actions = actions.reshape((-1,) + self.action_space.shape)
         return actions, values, log_prob
 
-    def evaluate_actions(self, obs: th.Tensor, actions: th.Tensor, all_last_obs: th.Tensor, all_actions: th.Tensor, use_all_obs=True) -> Tuple[th.Tensor, th.Tensor, Optional[th.Tensor]]:
+    def evaluate_actions(self, obs: th.Tensor, actions: th.Tensor) -> Tuple[th.Tensor, th.Tensor, Optional[th.Tensor]]:
         """
         Evaluate actions according to the current policy,
         given the observations.
@@ -918,48 +920,24 @@ class VAEReturnActorCriticPolicy(ActorCriticPolicy):
         :param actions: Actions
         :return: estimated value, log likelihood of taking those actions
             and entropy of the action distribution.
-
-        Haven't check out the use_all_obs yet, aims to use the observations iteratively.
         """
         # Preprocess the observation if needed
-        features,all_actions_one_hot, predicted_reward = [],[],[]
-        obs_features = self.extract_features(obs)
-        for i in range(self.num_agents):
-            features.append(self.extract_features(all_last_obs[:,i,:]))
-            all_actions_one_hot.append(F.one_hot(all_actions[:,i,:], num_classes=self.action_space.n))
-        features = th.stack(features,dim=0)
-        all_actions_one_hot = th.stack(all_actions_one_hot,dim=0)
-        all_actions_one_hot = th.squeeze(all_actions_one_hot)
-        if use_all_obs:
-            features = th.permute(features,(1,0,2))
-            features = th.reshape(features,(features.shape[0],-1))
-            all_actions_one_hot = th.permute(all_actions_one_hot,(1,0,2))
-            all_actions_one_hot = th.reshape(all_actions_one_hot,(all_actions_one_hot.shape[0],-1))
-            obs_action = th.cat((features,all_actions_one_hot),dim=-1)
-
-            predicted_reward = self.reward_net(obs_action)[0]
-            predicted_reward = th.squeeze(predicted_reward)
-        else:
-            obs_action = th.cat((features,all_actions_one_hot),dim=-1)
-            for i in range(self.num_agents):
-                predicted_reward.append(th.squeeze(self.reward_net(obs_action[i])[0]))
-            predicted_reward = th.stack(predicted_reward,dim=0)
-
+        features = self.extract_features(obs)
         if self.share_features_extractor:
-            latent_pi, latent_vf = self.mlp_extractor(obs_features)
+            latent_pi, latent_vf = self.mlp_extractor(features)
         else:
-            pi_features, vf_features = obs_features
+            pi_features, vf_features = features
             latent_pi = self.mlp_extractor.forward_actor(pi_features)
             latent_vf = self.mlp_extractor.forward_critic(vf_features)
         distribution = self._get_action_dist_from_latent(latent_pi)
         log_prob = distribution.log_prob(actions)
         values = self.value_net(latent_vf)
         entropy = distribution.entropy()
-        return values, log_prob, entropy, predicted_reward
+        return values, log_prob, entropy
 
 
 
-class RewardActorCriticPolicy(ActorCriticPolicy):
+class RewardCNNActorCriticPolicy(ActorCriticPolicy):
     """
     Policy class for reward prediction.
 
