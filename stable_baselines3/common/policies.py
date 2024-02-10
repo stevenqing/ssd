@@ -1024,6 +1024,7 @@ class RewardVectorActorCriticPolicy(ActorCriticPolicy):
             activation_fn=self.activation_fn,
             device=self.device,
         )
+        
 
 
 
@@ -1099,7 +1100,7 @@ class RewardVectorActorCriticPolicy(ActorCriticPolicy):
         """
         net_kwargs = net_kwargs.copy()
 
-        reward_features_extractor = self.make_features_extractor()
+        self.reward_features_extractor = self.make_features_extractor()
         net_kwargs.update(dict(features_extractor=features_extractor, features_dim=features_extractor.features_dim))
         return net_kwargs
 
@@ -1125,7 +1126,7 @@ class RewardVectorActorCriticPolicy(ActorCriticPolicy):
                 DeprecationWarning,
             )
 
-        features_extractor = features_extractor or self.features_extractor
+        features_extractor = features_extractor or self.reward_features_extractor
         assert features_extractor is not None, "No features extractor was set"
         preprocessed_obs = preprocess_obs(obs, self.observation_space, normalize_images=self.normalize_images)
         return features_extractor(preprocessed_obs)
