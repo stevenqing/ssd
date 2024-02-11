@@ -1151,7 +1151,8 @@ class RewardVectorActorCriticPolicy(ActorCriticPolicy):
         features,all_actions_one_hot, predicted_reward = [],[],[]
         
         for i in range(self.num_agents):
-            features.append(self.extract_reward_features(all_last_obs[:,i,:]))
+            # features.append(self.extract_reward_features(all_last_obs[:,i,:]))
+            features.append(self.extract_features(all_last_obs[:,i,:]))
             all_actions_one_hot.append(F.one_hot(all_actions[:,i,:], num_classes=self.action_space.n))
         features = th.stack(features,dim=0)
         all_actions_one_hot = th.stack(all_actions_one_hot,dim=0)
