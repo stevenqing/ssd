@@ -1053,8 +1053,8 @@ class RewardVectorActorCriticPolicy(ActorCriticPolicy):
             raise NotImplementedError(f"Unsupported distribution '{self.action_dist}'.")
 
         self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf, 1)
-        # self.reward_net = CausalModel(self.mlp_extractor.latent_dim_vf+self.action_space.n,self.num_agents) # use individual training
-        self.reward_net = CausalModel((self.mlp_extractor.latent_dim_vf+self.action_space.n) * self.num_agents,self.num_agents) # use global training
+        self.reward_net = CausalModel(self.mlp_extractor.latent_dim_vf+self.action_space.n * self.num_agents,self.num_agents) # use individual training
+        # self.reward_net = CausalModel((self.mlp_extractor.latent_dim_vf+self.action_space.n) * self.num_agents,self.num_agents) # use global training
         # Init weights: use orthogonal initialization
         # with small initial weight for the output
         if self.ortho_init:
@@ -1135,7 +1135,7 @@ class RewardVectorActorCriticPolicy(ActorCriticPolicy):
         actions = actions.reshape((-1,) + self.action_space.shape)
         return actions, values, log_prob
 
-    def evaluate_actions(self, obs: th.Tensor, actions: th.Tensor, all_last_obs: th.Tensor, all_actions: th.Tensor, use_all_obs=True) -> Tuple[th.Tensor, th.Tensor, Optional[th.Tensor]]:
+    def evaluate_actions(self, obs: th.Tensor, actions: th.Tensor, all_last_obs: th.Tensor, all_actions: th.Tensor, use_all_obs=False) -> Tuple[th.Tensor, th.Tensor, Optional[th.Tensor]]:
         """
         Evaluate actions according to the current policy,
         given the observations.
@@ -1167,10 +1167,12 @@ class RewardVectorActorCriticPolicy(ActorCriticPolicy):
             predicted_reward = self.reward_net(obs_action)[0]
             predicted_reward = th.squeeze(predicted_reward)
         else:
-            obs_action = th.cat((features,all_actions_one_hot),dim=-1)
-            for i in range(self.num_agents):
-                predicted_reward.append(th.squeeze(self.reward_net(obs_action[i])[0]))
-            predicted_reward = th.stack(predicted_reward,dim=0)
+            indivi_features = self.extract_features(obs)
+            all_actions_one_hot = th.permute(all_actions_one_hot,(1,0,2))
+            all_actions_one_hot = th.reshape(all_actions_one_hot,(all_actions_one_hot.shape[0],-1))
+            obs_action = th.cat((indivi_features,all_actions_one_hot),dim=-1)
+
+            predicted_reward = th.squeeze(self.reward_net(obs_action)[0])
         
         obs_features = self.extract_features(obs)
         if self.share_features_extractor:
