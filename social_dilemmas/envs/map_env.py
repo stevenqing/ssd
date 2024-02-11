@@ -400,16 +400,15 @@ class MapEnv(MultiAgentEnv):
                     # Update the map
                     new_char = b" "
                     self.single_update_map(apple[0],apple[1],new_char)
-                    for agent in self.agents.values():
-                        if agent.agent_id in agent_id:
-                            agent.reward += apple_type_list[i] * 10 / total_agent_level
+                    for reward_agent in self.agents.values():
+                        if reward_agent.agent_id in agent_id:
+                            reward_agent.reward += apple_type_list[i] * 10 / total_agent_level
         else:
             for agent in self.agents.values():
                 pos = agent.pos
                 new_char = agent.consume(self.world_map[pos[0], pos[1]])
                 self.single_update_map(pos[0], pos[1], new_char)
 
-        
         # execute custom moves like firing
         self.update_custom_moves(agent_actions)
 

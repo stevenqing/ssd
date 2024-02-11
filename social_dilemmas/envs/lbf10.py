@@ -180,12 +180,12 @@ class LBF10Env(MapEnv):
                    apple_pos[0] = [int(row),int(col)]
                    apple_type[0] = 1
                    apple_pos_list.append([int(row),int(col)])
-                   apple_type_list.append(3)
+                   apple_type_list.append(1)
                elif char == b'B':
                    apple_pos[1] = [int(row),int(col)]
                    apple_type[1] = 2
                    apple_pos_list.append([int(row),int(col)])
-                   apple_type_list.append(3)
+                   apple_type_list.append(2)
                elif char == b'C':
                    apple_pos[2] = [int(row),int(col)]
                    apple_type[2] = 3
