@@ -1083,26 +1083,6 @@ class RewardVectorActorCriticPolicy(ActorCriticPolicy):
         # Setup optimizer with initial learning rate
         self.optimizer = self.optimizer_class(self.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)
 
-    def _update_reward_features_extractor(
-        self,
-        net_kwargs: Dict[str, Any],
-        features_extractor: Optional[BaseFeaturesExtractor] = None,
-    ) -> Dict[str, Any]:
-        """
-        Update the network keyword arguments and create a new features extractor object if needed.
-        If a ``features_extractor`` object is passed, then it will be shared.
-
-        :param net_kwargs: the base network keyword arguments, without the ones
-            related to features extractor
-        :param features_extractor: a features extractor object.
-            If None, a new object will be created.
-        :return: The updated keyword arguments
-        """
-        net_kwargs = net_kwargs.copy()
-
-        self.reward_features_extractor = self.make_features_extractor()
-        net_kwargs.update(dict(features_extractor=features_extractor, features_dim=features_extractor.features_dim))
-        return net_kwargs
 
     def make_reward_features_extractor(self) -> BaseFeaturesExtractor:
         """Helper method to create a features extractor."""

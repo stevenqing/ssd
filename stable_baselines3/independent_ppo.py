@@ -164,7 +164,8 @@ class IndependentPPO(OnPolicyAlgorithm):
                     wandb.log({f"{polid}/time_elapsed": int(time.time() - policy.start_time)}, step=num_timesteps)
                     wandb.log({f"{polid}/total_timesteps": policy.num_timesteps}, step=num_timesteps)
 
-                    ep_cf_reward = np.sum(policy.rollout_buffer.cf_rewards)
+                    ep_cf_reward = np.mean(policy.rollout_buffer.cf_rewards, axis=0)
+                    ep_cf_reward = np.sum(ep_cf_reward)
                     wandb.log({f"{polid}/cf_reward": ep_cf_reward}, step=num_timesteps)
                     policy.logger.record("policy_id", polid, exclude="tensorboard")
                     policy.logger.record(

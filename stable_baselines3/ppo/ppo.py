@@ -162,6 +162,7 @@ class PPO(OnPolicyAlgorithm):
         self.normalize_advantage = normalize_advantage
         self.target_kl = target_kl
         self.num_agents = num_agents
+        self.parameter = None
         if _init_setup_model:
             self._setup_model()
 
@@ -177,6 +178,10 @@ class PPO(OnPolicyAlgorithm):
             self.clip_range_vf = get_schedule_fn(self.clip_range_vf)
         self.policy.num_agents = self.num_agents
 
+    def compare_parameters(self,param_before, param_after):
+        for (name1, p1), (name2, p2) in zip(param_before.items(), param_after.items()):
+            if not th.equal(p1, p2):
+                print(f"Parameter {name1} has changed.")
 
     def train(self) -> None:
         """
@@ -286,7 +291,6 @@ class PPO(OnPolicyAlgorithm):
                     # Clip grad norm
                     th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
                     self.policy.optimizer.step()
-
             else:
                 for rollout_data in self.rollout_buffer.get(self.batch_size):
                     actions = rollout_data.actions
