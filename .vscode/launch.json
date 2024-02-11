@@ -53,7 +53,7 @@
             "name": "Python: main",
             "type": "python",
             "request": "launch",
-            "program": "run_scripts/sb3_independent.py",
+            "program": "run_scripts/sb3_train.py",
             "console": "integratedTerminal",
             "python": "/home/shuqingshi/miniconda3/envs/ssd/bin/python",
             "justMyCode": false,
