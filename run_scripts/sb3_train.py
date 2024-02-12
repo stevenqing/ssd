@@ -207,7 +207,8 @@ def main(args):
     beta = args.beta
     num_cpus = args.num_cpus
     num_envs = args.num_envs
-
+    optimizer_class = torch.optim.Adam
+    input_size = ENV_TO_VEC[env_name]
     target_kl = args.kl_threshold
     # Training
       # number of cpus
@@ -216,7 +217,9 @@ def main(args):
     features_dim = (
         128  # output layer of cnn extractor AND shared layer for policy and value functions
     )
-    fcnet_hiddens = [1024, 128]  # Two hidden layers for cnn extractor
+    CNN_fcnet_hiddens = [1024, 128]  # Two hidden layers for cnn extractor
+    VECTOR_fcnet_hiddens = [1024, 256, 128]  # Three hidden layers for vector extractor
+    
     ent_coef = 0.001  # entropy coefficient in loss
     batch_size = rollout_len * num_envs // 2  # This is from the rllib baseline implementation
     lr = 0.0001
@@ -256,18 +259,23 @@ def main(args):
     args = wandb.config # for wandb sweep
 
     policy_kwargs = dict(
-        features_extractor_class=CustomCNN,
-        features_extractor_kwargs=dict(
-            features_dim=features_dim, num_frames=num_frames, fcnet_hiddens=fcnet_hiddens
+        CNN_features_extractor_class=CustomCNN,
+        CNN_features_extractor_kwargs=dict(
+            features_dim=features_dim, num_frames=num_frames, fcnet_hiddens=CNN_fcnet_hiddens
+        ),
+        VECTOR_features_extractor_class=CustomVectorMLP,
+        VECTOR_features_extractor_kwargs=dict(
+            input_size=input_size, features_dim=features_dim, num_frames=num_frames, fcnet_hiddens=VECTOR_fcnet_hiddens
         ),
         net_arch=[features_dim],
         num_agents=args.num_agents,
+        optimizer_class=optimizer_class,
     )
 
     tensorboard_log = f"./results/{env_name}_ppo_paramsharing"
     if args.model == 'baseline':
         model = PPO(
-            "MultiInputPolicy",
+            "CNNVectorPolicy",
             env=env,
             learning_rate=lr,
             n_steps=rollout_len,
