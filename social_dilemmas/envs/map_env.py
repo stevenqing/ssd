@@ -73,15 +73,26 @@ DEFAULT_COLOURS = {
 #         |
 
 ENV_TO_VEC = {
-    'COIN3': 15,
-    'LBF10': 18,
+    'COIN3': 104,
+    'LBF10': 64,
     'CLEANUP': 30,
     'HARVEST': 20,
 }
 
 INIT_VEC = {
-    'COIN3': np.array([1, 7, 1, 1, 7, 6, 3, 3, 5, 5, 6, 2, 1, 2, 3]).astype(np.int32),
-    'LBF10': np.array([1, 7, 1, 1, 7, 6, 1, 1, 1, 3, 3, 5, 5, 6, 2, 1, 2, 3]).astype(np.int32),
+    'COIN3': np.array([  0, -11,   9,   0,   1,  -8,   1,  -7,   1,  -6,   1,  -5,   2,
+        -8,   2,  -7,   2,  -6,   2,  -5,   4,  -8,   4,  -7,   4,  -6,
+         4,  -2,   4,  -1,   5,  -8,   5,  -7,   5,  -6,   5,  -2,   5,
+        -1,   6,  -8,   6,  -7,   6,  -2,   6,  -1,   7,  -7,   7,  -2,
+         7,  -1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,
+         1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,
+         1,   3,   3,   3,   3,   3,   3,   3,   3,   2,   2,   2,   1,
+         1,   2,   2,   2,   1,   1,   2,   2,   1,   1,   2,   1,   1]).astype(np.int32),
+    'LBF10': np.array([-14, -13, -14,   1, -13,  -5, -12, -10, -11,  -3, -11,   1, -10,
+        -8,  -8,  -6,  -8,  -1,  -6, -11,  -6,  -2,  -5,  -6,  -4, -11,
+        -4,  -1,  -2,  -6,  -1, -13,   0,  -7,   1,   1,   1,   1,   1,
+         1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,
+         1,   1,   2,   2,   3,   2,   3,   3,   2,   3,   3,   2]).astype(np.int32),
     'CLEANUP': np.array([8, 4, 10, 5, 9, 10, 9, 12, 9, 13, # agent pos
                          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, # apple_pos(initial is zero)
                          1, 2, 1, 6, 1, 8, 1, 9, 1, 11 # waste_pos
@@ -247,10 +258,10 @@ class MapEnv(MultiAgentEnv):
                     dtype=np.int32,
                 ),
                 "vector_state": Box(
-                    low=0,
-                    high=100,
-                    shape=(ENV_TO_VEC[self.env_name],), #TODO: settle for coin3, need to change that later
-                    dtype=np.int32,
+                    low=-20,
+                    high=20,
+                    shape=(ENV_TO_VEC[self.env_name],), # let vector input to be vector state
+                    dtype=np.int8,
                 ),
                 "prev_rewards":  Box(
                 low=-100,
@@ -451,6 +462,23 @@ class MapEnv(MultiAgentEnv):
                 levels.append(agent.agent_level)
 
 
+        # Add agents' state (0,1)
+        if self.env_name == 'COIN3' or 'LBF10':
+            apple_key, apple_state, apple_kind = self.get_apple_state()
+            total_ego_vector_state = {}
+            for total_agent in self.agents.values():
+                current_agent = total_agent
+                ego_view_agent = []
+                for agent in self.agents.values():
+                    if agent.agent_id != current_agent.agent_id:
+                        ego_pos = agent.pos - current_agent.pos 
+                        ego_view_agent.append(ego_pos)
+                ego_view_agent = np.array(ego_view_agent).flatten()
+                ego_apple_key = (apple_key - current_agent.pos).flatten()
+                ego_vector_state = np.concatenate((ego_view_agent,ego_apple_key,apple_state,apple_kind))
+                total_ego_vector_state[total_agent.agent_id] = ego_vector_state
+
+
         for agent in self.agents.values():
             agent.full_map = map_with_agents
             rgb_arr = self.color_view(agent)
@@ -496,14 +524,14 @@ class MapEnv(MultiAgentEnv):
                     "prev_visible_agents": agent.prev_visible_agents,
                     "agent_id_matrix": self.agent_id_matrix,
                     "prev_vector_state": self.prev_vector_state,
-                    "vector_state": vector_state,
+                    "vector_state": total_ego_vector_state[agent.agent_id],
                     "prev_rewards": self.prev_rewards,
                 }
                 agent.prev_visible_agents = visible_agents
                 self.prev_vector_state = vector_state
                 self.prev_rewards = all_rewards
             else:
-                observations[agent.agent_id] = {"curr_obs": rgb_arr,"vector_state": vector_state}
+                observations[agent.agent_id] = {"curr_obs": rgb_arr,"vector_state": total_ego_vector_state[agent.agent_id]}
 
             if self.env_name == 'LBF10':
                 dones[agent.agent_id] = agent.get_done(self.timestep,apple_pos_list)
@@ -618,7 +646,7 @@ class MapEnv(MultiAgentEnv):
                 self.prev_rewards = np.array([0 for _ in range(self.num_agents)]).astype(np.int8)
                 self.prev_vector_state = INIT_VEC[self.env_name]
             else:
-                observations[agent.agent_id] = {"curr_obs": rgb_arr}
+                observations[agent.agent_id] = {"curr_obs": rgb_arr, "vector_state": INIT_VEC[self.env_name]}
         return observations
 
     def seed(self, seed=None):

@@ -41,13 +41,17 @@ class LBF10Env(MapEnv):
         self.env_name = env_name
         self.apple_points = []
         self.max_level = max_level
+        self.apple_state = {}
         for row in range(self.base_map.shape[0]):
             for col in range(self.base_map.shape[1]):
                 if self.base_map[row, col] == b"A":
+                    self.apple_state[(row, col)] = 1
                     self.apple_points.append([row, col, "A"])
                 elif self.base_map[row, col] == b"B":
+                    self.apple_state[(row, col)] = 1
                     self.apple_points.append([row, col, "B"])
                 elif self.base_map[row, col] == b"C":
+                    self.apple_state[(row, col)] = 1
                     self.apple_points.append([row, col, "C"])
 
     @property
@@ -146,6 +150,23 @@ class LBF10Env(MapEnv):
         round_pos = [[row,col],[row+1,col],[row-1,col],[row,col+1],[row,col-1],[row,col+1]]
         return round_pos
 
+    def get_apple_state(self):
+        apple_type = []
+        for apple_pos in self.apple_state.keys():
+            if self.world_map[apple_pos[0], apple_pos[1]] == b"A" or self.world_map[apple_pos[0], apple_pos[1]] == b"B" or self.world_map[apple_pos[0], apple_pos[1]] == b"C":
+                self.apple_state[apple_pos] = 1
+                if self.world_map[apple_pos[0], apple_pos[1]] == b"A":
+                    apple_type.append(1)
+                elif self.world_map[apple_pos[0], apple_pos[1]] == b"B":    
+                    apple_type.append(2)
+                else:
+                    apple_type.append(3)
+            else:
+                self.apple_state[apple_pos] = 0
+        return np.array(list(self.apple_state.keys())), np.array(list(self.apple_state.values())), np.array(apple_type)
+
+
+
     def count_apples(self):
         # Return apples pos and type
         apple_pos = [[0,0],[0,0],[0,0]]
@@ -159,12 +180,12 @@ class LBF10Env(MapEnv):
                    apple_pos[0] = [int(row),int(col)]
                    apple_type[0] = 1
                    apple_pos_list.append([int(row),int(col)])
-                   apple_type_list.append(3)
+                   apple_type_list.append(1)
                elif char == b'B':
                    apple_pos[1] = [int(row),int(col)]
                    apple_type[1] = 2
                    apple_pos_list.append([int(row),int(col)])
-                   apple_type_list.append(3)
+                   apple_type_list.append(2)
                elif char == b'C':
                    apple_pos[2] = [int(row),int(col)]
                    apple_type[2] = 3

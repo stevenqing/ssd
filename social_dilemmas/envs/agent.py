@@ -222,7 +222,7 @@ class LBF10Agent(Agent):
         super().__init__(agent_id, start_pos, start_orientation, full_map, view_len, view_len)
         self.update_agent_pos(start_pos)
         # self.agent_level = self.init_level(max_level=3)
-        self.agent_level = int(agent_id[-1]) + 1
+        self.agent_level = int(agent_id[-1]) if int(agent_id[-1]) > 0 else 1
         self.level_consumed = 0
         self.surroundings_chars = []
         self.surroundings = []
@@ -273,8 +273,7 @@ class LBF10Agent(Agent):
 
 
     def get_done(self,timestep, apple_pos_list):
-        apple_pos,apple_type = self.count_apples()
-        if apple_pos == [[0,0],[0,0],[0,0]]:
+        if apple_pos_list == []:
             return True
         return False
 
@@ -307,7 +306,7 @@ class Coin3Agent(Agent):
     # defined in two places
     def action_map(self, action_number):
         """Maps action_number to a desired action in the map"""
-        return COIN_ACTIONS[action_number]
+        return BASE_ACTIONS[action_number]
 
     def get_done(self):
         apple_pos,apple_type = self.count_apples()
