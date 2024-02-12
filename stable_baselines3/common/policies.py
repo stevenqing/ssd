@@ -1301,6 +1301,7 @@ class MultiInputActorCriticPolicy(ActorCriticPolicy):
         normalize_images: bool = True,
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
+        num_agents: int = 3,
     ):
         super().__init__(
             observation_space,
@@ -1321,6 +1322,7 @@ class MultiInputActorCriticPolicy(ActorCriticPolicy):
             optimizer_class,
             optimizer_kwargs,
         )
+        self.num_agents = num_agents
         self._build(lr_schedule)
 
 

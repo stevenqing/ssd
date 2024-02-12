@@ -839,6 +839,7 @@ class DictRolloutBuffer(RolloutBuffer):
         gae_lambda: float = 1,
         gamma: float = 0.99,
         n_envs: int = 1,
+        num_agents: int=3,
     ):
 
         super(RolloutBuffer, self).__init__(buffer_size, observation_space, action_space, device, n_envs=n_envs)
@@ -850,6 +851,7 @@ class DictRolloutBuffer(RolloutBuffer):
         self.observations, self.actions, self.rewards, self.advantages = None, None, None, None
         self.returns, self.episode_starts, self.values, self.log_probs = None, None, None, None
         self.generator_ready = False
+        self.agent_number = num_agents
         self.reset()
 
     def reset(self) -> None:

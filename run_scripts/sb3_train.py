@@ -3,6 +3,7 @@ import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import gym
+from gym import spaces
 import supersuit as ss
 import torch
 import torch.nn.functional as F
@@ -17,6 +18,14 @@ import random
 from social_dilemmas.envs.pettingzoo_env import parallel_env
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
+ENV_TO_VEC = {
+    'coin3': 104,
+    'lbf10': 64,
+    'CLEANUP': 30,
+    'HARVEST': 20,
+}
+
 
 def set_seed(seed: int = 42) -> None:
     np.random.seed(seed)
@@ -108,6 +117,42 @@ def parse_args():
     return args
 
 
+
+
+class CustomVectorMLP(BaseFeaturesExtractor):
+    """
+#     :param observation_space: (gym.Space)
+#     :param features_dim: (int) Number of features extracted.
+#         This corresponds to the number of unit for the last layer.
+#     """
+
+    def __init__(
+        self,
+        observation_space: gym.spaces.Box,
+        features_dim=128,
+        input_size=104,
+        num_frames=6,
+        fcnet_hiddens=[1024, 256, 128],
+    ):
+        super(CustomVectorMLP, self).__init__(observation_space, features_dim)
+        # We assume CxHxW images (channels first)
+        # Re-ordering will be done by pre-preprocessing or wrapper
+
+        flat_out = num_frames * input_size
+
+        self.fc1 = nn.Linear(in_features=flat_out, out_features=fcnet_hiddens[0])
+        self.fc2 = nn.Linear(in_features=fcnet_hiddens[0], out_features=fcnet_hiddens[1])
+        self.fc3 = nn.Linear(in_features=fcnet_hiddens[1], out_features=fcnet_hiddens[2])
+
+    def forward(self, observations) -> torch.Tensor:
+        # Convert to tensor, rescale to [0, 1], and convert from B x H x W x C to B x C x H x W
+        features = F.relu(self.fc1(observations))
+        features = F.relu(self.fc2(features))
+        features = F.relu(self.fc3(features))
+        return features
+
+
+
 # Use this with lambda wrapper returning observations only
 class CustomCNN(BaseFeaturesExtractor):
     """
@@ -190,7 +235,7 @@ def main(args):
         alpha=alpha,
         beta=beta,
     )
-    env = ss.observation_lambda_v0(env, lambda x, _: x["curr_obs"], lambda s: s["curr_obs"])
+    env = ss.observation_lambda_v0(env, lambda x, _: {"curr_obs": x["curr_obs"], "vector_state": x["vector_state"]}, lambda s: spaces.Dict({"curr_obs": s["curr_obs"], "vector_state": s["vector_state"]}))
     env = ss.frame_stack_v1(env, num_frames)
     env = ss.pettingzoo_env_to_vec_env_v1(env)
     env = ss.concat_vec_envs_v1(
@@ -222,7 +267,7 @@ def main(args):
     tensorboard_log = f"./results/{env_name}_ppo_paramsharing"
     if args.model == 'baseline':
         model = PPO(
-            "CnnPolicy",
+            "MultiInputPolicy",
             env=env,
             learning_rate=lr,
             n_steps=rollout_len,
