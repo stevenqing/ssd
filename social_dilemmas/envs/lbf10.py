@@ -42,17 +42,21 @@ class LBF10Env(MapEnv):
         self.apple_points = []
         self.max_level = max_level
         self.apple_state = {}
+        self.apple_type = []
         for row in range(self.base_map.shape[0]):
             for col in range(self.base_map.shape[1]):
                 if self.base_map[row, col] == b"A":
                     self.apple_state[(row, col)] = 1
                     self.apple_points.append([row, col, "A"])
+                    self.apple_type.append(1)
                 elif self.base_map[row, col] == b"B":
                     self.apple_state[(row, col)] = 1
                     self.apple_points.append([row, col, "B"])
+                    self.apple_type.append(2)
                 elif self.base_map[row, col] == b"C":
                     self.apple_state[(row, col)] = 1
                     self.apple_points.append([row, col, "C"])
+                    self.apple_type.append(3)
 
     @property
     def action_space(self):
@@ -151,16 +155,10 @@ class LBF10Env(MapEnv):
         return round_pos
 
     def get_apple_state(self):
-        apple_type = []
+        apple_type = self.apple_type
         for apple_pos in self.apple_state.keys():
             if self.world_map[apple_pos[0], apple_pos[1]] == b"A" or self.world_map[apple_pos[0], apple_pos[1]] == b"B" or self.world_map[apple_pos[0], apple_pos[1]] == b"C":
                 self.apple_state[apple_pos] = 1
-                if self.world_map[apple_pos[0], apple_pos[1]] == b"A":
-                    apple_type.append(1)
-                elif self.world_map[apple_pos[0], apple_pos[1]] == b"B":    
-                    apple_type.append(2)
-                else:
-                    apple_type.append(3)
             else:
                 self.apple_state[apple_pos] = 0
         return np.array(list(self.apple_state.keys())), np.array(list(self.apple_state.values())), np.array(apple_type)
