@@ -48,7 +48,7 @@ class RolloutBufferSamples(NamedTuple):
     returns: th.Tensor
 
 
-class DictRolloutBufferSamples(NamedTuple):
+class RewardDictRolloutBufferSamples(NamedTuple):
     observations: TensorDict
     all_last_obs: list
     actions: th.Tensor
@@ -59,6 +59,14 @@ class DictRolloutBufferSamples(NamedTuple):
     all_actions: th.Tensor
     all_rewards: th.Tensor
     cf_rewards: th.Tensor
+
+class DictRolloutBufferSamples(NamedTuple):
+    observations: TensorDict
+    actions: th.Tensor
+    old_values: th.Tensor
+    old_log_prob: th.Tensor
+    advantages: th.Tensor
+    returns: th.Tensor
 
 
 class ReplayBufferSamples(NamedTuple):

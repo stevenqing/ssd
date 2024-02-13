@@ -12,7 +12,8 @@ from stable_baselines3.common.type_aliases import (
     DictRolloutBufferSamples,
     ReplayBufferSamples,
     RolloutBufferSamples,
-    RewardRolloutBufferSamples
+    RewardRolloutBufferSamples,
+    RewardDictRolloutBufferSamples
 )
 from stable_baselines3.common.utils import get_device
 from stable_baselines3.common.vec_env import VecNormalize
@@ -1014,7 +1015,7 @@ class DictRolloutBuffer(RolloutBuffer):
         all_last_obs_list = []
         for agent_number in range(self.agent_number):
             all_last_obs_list.append({key: self.to_torch(all_last_obs[batch_inds]) for (key, all_last_obs) in self.all_last_obs[agent_number].items()})
-        return DictRolloutBufferSamples(
+        return RewardDictRolloutBufferSamples(
             observations={key: self.to_torch(obs[batch_inds]) for (key, obs) in self.observations.items()},
             all_last_obs=all_last_obs_list,
             actions=self.to_torch(self.actions[batch_inds]),
