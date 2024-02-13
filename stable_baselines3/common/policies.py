@@ -1628,6 +1628,7 @@ class MultiInput_CNNVector_REWARDActorCriticPolicy(ActorCriticPolicy):
             optimizer_kwargs,
             num_agents,
         )
+        self.optimizer_class = th.optim.Adam
         self.num_agents = num_agents
         self.CNN_features_extractor = CNN_features_extractor_class
         self.VECTOR_features_extractor = VECTOR_features_extractor_class
@@ -1635,15 +1636,16 @@ class MultiInput_CNNVector_REWARDActorCriticPolicy(ActorCriticPolicy):
         self.VECTOR_features_extractor_kwargs = VECTOR_features_extractor_kwargs
 
         self.share_features_extractor = share_features_extractor
-        self.CNN_features_extractor = self.make_features_extractor(self.observation_space, self.CNN_features_extractor, self.CNN_features_extractor_kwargs)
-        self.VECTOR_features_extractor = self.make_features_extractor(self.observation_space, self.VECTOR_features_extractor, self.VECTOR_features_extractor_kwargs)
-        self.features_dim = self.features_extractor.features_dim
+        self.CNN_features_extractor = self.make_features_extractor(self.observation_space['curr_obs'], self.CNN_features_extractor, self.CNN_features_extractor_kwargs)
+        self.VECTOR_features_extractor = self.make_features_extractor(self.observation_space['vector_state'], self.VECTOR_features_extractor, self.VECTOR_features_extractor_kwargs)
+        
+        self.features_dim = self.CNN_features_extractor.features_dim
         if self.share_features_extractor:
-            self.pi_features_extractor = self.features_extractor
-            self.vf_features_extractor = self.features_extractor
+            self.pi_features_extractor = self.CNN_features_extractor
+            self.vf_features_extractor = self.CNN_features_extractor
         else:
             self.pi_features_extractor = self.features_extractor
-            self.vf_features_extractor = self.make_features_extractor(self.observation_space, self.CNN_features_extractor, self.CNN_features_extractor_kwargs)
+            self.vf_features_extractor = self.make_features_extractor(self.observation_space['curr_obs'], self.CNN_features_extractor, self.CNN_features_extractor_kwargs)
             # if the features extractor is not shared, there cannot be shared layers in the mlp_extractor
             # TODO(antonin): update the check once we change net_arch behavior
             if isinstance(net_arch, list) and len(net_arch) > 0:
@@ -1656,9 +1658,32 @@ class MultiInput_CNNVector_REWARDActorCriticPolicy(ActorCriticPolicy):
 
         self._build(lr_schedule)
 
-    def make_features_extractor(self,features_extractor_class,feature_extractor_kwargs) -> BaseFeaturesExtractor:
+    def make_features_extractor(self,observation_space, features_extractor_class,feature_extractor_kwargs) -> BaseFeaturesExtractor:
         """Helper method to create a features extractor."""
-        return features_extractor_class(self.observation_space, **feature_extractor_kwargs)
+        return features_extractor_class(observation_space, **feature_extractor_kwargs)
+
+    def extract_features(self, key: str, obs: th.Tensor, features_extractor: Optional[BaseFeaturesExtractor] = None) -> th.Tensor:
+        """
+        Preprocess the observation if needed and extract features.
+
+         :param obs: The observation
+         :param features_extractor: The features extractor to use. If it is set to None,
+            the features extractor of the policy is used.
+         :return: The features
+        """
+        if features_extractor is None:
+            warnings.warn(
+                (
+                    "When calling extract_features(), you should explicitely pass a features_extractor as parameter. "
+                    "This will be mandatory in Stable-Baselines v1.8.0"
+                ),
+                DeprecationWarning,
+            )
+
+        features_extractor = features_extractor or self.CNN_features_extractor
+        assert features_extractor is not None, "No features extractor was set"
+        preprocessed_obs = preprocess_obs(obs, self.observation_space[key], normalize_images=self.normalize_images)
+        return features_extractor(preprocessed_obs)
 
 
     def _build(self, lr_schedule: Schedule) -> None:
@@ -1687,8 +1712,7 @@ class MultiInput_CNNVector_REWARDActorCriticPolicy(ActorCriticPolicy):
             raise NotImplementedError(f"Unsupported distribution '{self.action_dist}'.")
 
         self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf, 1)
-        # self.reward_net = CausalModel(self.mlp_extractor.latent_dim_vf+self.action_space.n,self.num_agents) # use individual training
-        self.reward_net = CausalModel((self.mlp_extractor.latent_dim_vf+self.action_space.n) * self.num_agents,self.num_agents) # use global training
+        self.reward_net = CausalModel(self.mlp_extractor.latent_dim_vf+self.action_space.n * self.num_agents,self.num_agents) # use individual training
         # Init weights: use orthogonal initialization
         # with small initial weight for the output
         if self.ortho_init:
@@ -1697,11 +1721,11 @@ class MultiInput_CNNVector_REWARDActorCriticPolicy(ActorCriticPolicy):
             # features_extractor/mlp values are
             # originally from openai/baselines (default gains/init_scales).
             module_gains = {
-                self.features_extractor: np.sqrt(2),
+                self.CNN_features_extractor: np.sqrt(2),
+                self.VECTOR_features_extractor: np.sqrt(2),
                 self.mlp_extractor: np.sqrt(2),
                 self.action_net: 0.01,
                 self.value_net: 1,
-                self.reward_net: 1,
             }
             if not self.share_features_extractor:
                 # Note(antonin): this is to keep SB3 results
@@ -1715,6 +1739,94 @@ class MultiInput_CNNVector_REWARDActorCriticPolicy(ActorCriticPolicy):
 
         # Setup optimizer with initial learning rate
         self.optimizer = self.optimizer_class(self.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)
+
+    def forward(self, obs: th.Tensor, deterministic: bool = False) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
+        """
+        Forward pass in all the networks (actor and critic)
+
+        :param obs: Observation
+        :param deterministic: Whether to sample or use deterministic actions
+        :return: action, value and log probability of the action
+        """
+        # Preprocess the observation if needed
+        features = self.extract_features('curr_obs', obs['curr_obs'], self.CNN_features_extractor)
+        if self.share_features_extractor:
+            latent_pi, latent_vf = self.mlp_extractor(features)
+        else:
+            pi_features, vf_features = features
+            latent_pi = self.mlp_extractor.forward_actor(pi_features)
+            latent_vf = self.mlp_extractor.forward_critic(vf_features)
+        # Evaluate the values for the given observations
+        values = self.value_net(latent_vf)
+        distribution = self._get_action_dist_from_latent(latent_pi)
+        actions = distribution.get_actions(deterministic=deterministic)
+        log_prob = distribution.log_prob(actions)
+        actions = actions.reshape((-1,) + self.action_space.shape)
+        return actions, values, log_prob
+
+    def predict_values(self, obs: th.Tensor) -> th.Tensor:
+        """
+        Get the estimated values according to the current policy given the observations.
+
+        :param obs: Observation
+        :return: the estimated values.
+        """
+        features = self.extract_features('curr_obs', obs['curr_obs'], self.vf_features_extractor)
+        latent_vf = self.mlp_extractor.forward_critic(features)
+        return self.value_net(latent_vf)
+
+    def evaluate_actions(self, obs: th.Tensor, actions: th.Tensor, all_last_obs: th.Tensor, all_actions: th.Tensor, use_all_obs=False) -> Tuple[th.Tensor, th.Tensor, Optional[th.Tensor]]:
+        """
+        Evaluate actions according to the current policy,
+        given the observations.
+
+        :param obs: Observation
+        :param actions: Actions
+        :return: estimated value, log likelihood of taking those actions
+            and entropy of the action distribution.
+
+        Haven't check out the use_all_obs yet, aims to use the observations iteratively.
+        """
+        # Preprocess the observation if needed
+        features,all_actions_one_hot, predicted_reward = [],[],[]
+        for i in range(self.num_agents):
+            # features.append(self.extract_reward_features(all_last_obs[:,i,:]))
+            if use_all_obs:
+                features.append(self.extract_features('vector_state',all_last_obs[i]['vector_state'], self.VECTOR_features_extractor))
+            all_actions_one_hot.append(F.one_hot(all_actions[:,i,:], num_classes=self.action_space.n))
+        if use_all_obs:
+            features = th.stack(features,dim=0)
+        all_actions_one_hot = th.stack(all_actions_one_hot,dim=0)
+        all_actions_one_hot = th.squeeze(all_actions_one_hot)
+        if use_all_obs:
+            features = th.permute(features,(1,0,2))
+            features = th.reshape(features,(features.shape[0],-1))
+            all_actions_one_hot = th.permute(all_actions_one_hot,(1,0,2))
+            all_actions_one_hot = th.reshape(all_actions_one_hot,(all_actions_one_hot.shape[0],-1))
+            obs_action = th.cat((features,all_actions_one_hot),dim=-1)
+
+            predicted_reward = self.reward_net(obs_action)[0]
+            predicted_reward = th.squeeze(predicted_reward)
+        else:
+            indivi_features = self.extract_features('vector_state', obs['vector_state'], self.VECTOR_features_extractor)
+            all_actions_one_hot = th.permute(all_actions_one_hot,(1,0,2))
+            all_actions_one_hot = th.reshape(all_actions_one_hot,(all_actions_one_hot.shape[0],-1))
+            obs_action = th.cat((indivi_features,all_actions_one_hot),dim=-1)
+
+            predicted_reward = th.squeeze(self.reward_net(obs_action)[0])
+        
+        obs_features = self.extract_features('curr_obs',obs['curr_obs'], self.CNN_features_extractor)
+        if self.share_features_extractor:
+            latent_pi, latent_vf = self.mlp_extractor(obs_features)
+        else:
+            pi_features, vf_features = obs_features
+            latent_pi = self.mlp_extractor.forward_actor(pi_features)
+            latent_vf = self.mlp_extractor.forward_critic(vf_features)
+        distribution = self._get_action_dist_from_latent(latent_pi)
+        log_prob = distribution.log_prob(actions)
+        values = self.value_net(latent_vf)
+        entropy = distribution.entropy()
+        return values, log_prob, entropy, predicted_reward
 
 
 

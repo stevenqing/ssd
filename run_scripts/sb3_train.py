@@ -294,7 +294,7 @@ def main(args):
         )
     else:
         model = PPO(
-            "RewardPolicy",
+            "CNNVectorRewardPolicy",
             env=env,
             learning_rate=lr,
             n_steps=rollout_len,

@@ -16,8 +16,16 @@ from torch import nn
 import numpy as np
 import random
 from social_dilemmas.envs.pettingzoo_env import parallel_env
-
+from gym import spaces
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
+ENV_TO_VEC = {
+    'coin3': 104,
+    'lbf10': 64,
+    'CLEANUP': 30,
+    'HARVEST': 20,
+}
+
 
 def set_seed(seed: int = 42) -> None:
     np.random.seed(seed)
@@ -109,6 +117,39 @@ def parse_args():
     return args
 
 
+class CustomVectorMLP(BaseFeaturesExtractor):
+    """
+#     :param observation_space: (gym.Space)
+#     :param features_dim: (int) Number of features extracted.
+#         This corresponds to the number of unit for the last layer.
+#     """
+
+    def __init__(
+        self,
+        observation_space: gym.spaces.Box,
+        features_dim=128,
+        input_size=104,
+        num_frames=6,
+        fcnet_hiddens=[1024, 256, 128],
+    ):
+        super(CustomVectorMLP, self).__init__(observation_space, features_dim)
+        # We assume CxHxW images (channels first)
+        # Re-ordering will be done by pre-preprocessing or wrapper
+
+        flat_out = num_frames * input_size
+
+        self.fc1 = nn.Linear(in_features=flat_out, out_features=fcnet_hiddens[0])
+        self.fc2 = nn.Linear(in_features=fcnet_hiddens[0], out_features=fcnet_hiddens[1])
+        self.fc3 = nn.Linear(in_features=fcnet_hiddens[1], out_features=fcnet_hiddens[2])
+
+    def forward(self, observations) -> torch.Tensor:
+        # Convert to tensor, rescale to [0, 1], and convert from B x H x W x C to B x C x H x W
+        features = F.relu(self.fc1(observations))
+        features = F.relu(self.fc2(features))
+        features = F.relu(self.fc3(features))
+        return features
+
+
 # Use this with lambda wrapper returning observations only
 class CustomCNN(BaseFeaturesExtractor):
     """
@@ -152,7 +193,7 @@ class CustomCNN(BaseFeaturesExtractor):
 def main(args):
     # Config
     set_seed(args.seed)
-    model=args.model
+    model = args.model
     env_name = args.env_name
     num_agents = args.num_agents
     rollout_len = args.rollout_len
@@ -163,14 +204,19 @@ def main(args):
     beta = args.beta
     num_cpus = args.num_cpus
     num_envs = args.num_envs
-
+    optimizer_class = torch.optim.Adam
+    input_size = ENV_TO_VEC[env_name]
     target_kl = args.kl_threshold
     # Training
+      # number of cpus
+      # number of parallel multi-agent environments
     num_frames = 6  # number of frames to stack together; use >4 to avoid automatic VecTransposeImage
     features_dim = (
         128  # output layer of cnn extractor AND shared layer for policy and value functions
     )
-    fcnet_hiddens = [1024, 128]  # Two hidden layers for cnn extractor
+    CNN_fcnet_hiddens = [1024, 128]  # Two hidden layers for cnn extractor
+    VECTOR_fcnet_hiddens = [1024, 256, 128]  # Three hidden layers for vector extractor
+    
     ent_coef = 0.001  # entropy coefficient in loss
     batch_size = rollout_len * num_envs // 2  # This is from the rllib baseline implementation
     lr = 0.0001
@@ -179,6 +225,7 @@ def main(args):
     gamma = 0.99
     grad_clip = 40
     verbose = 3
+
 
     env = parallel_env(
         max_cycles=rollout_len,
@@ -189,7 +236,7 @@ def main(args):
         alpha=alpha,
         beta=beta,
     )
-    env = ss.observation_lambda_v0(env, lambda x, _: x["curr_obs"], lambda s: s["curr_obs"])
+    env = ss.observation_lambda_v0(env, lambda x, _: {"curr_obs": x["curr_obs"], "vector_state": x["vector_state"]}, lambda s: spaces.Dict({"curr_obs": s["curr_obs"], "vector_state": s["vector_state"]}))
     env = ss.frame_stack_v1(env, num_frames)
     env = ss.pettingzoo_env_to_vec_env_v1(env)
     env = ss.concat_vec_envs_v1(
@@ -210,18 +257,23 @@ def main(args):
     args = wandb.config # for wandb sweep
 
     policy_kwargs = dict(
-        features_extractor_class=CustomCNN,
-        features_extractor_kwargs=dict(
-            features_dim=features_dim, num_frames=num_frames, fcnet_hiddens=fcnet_hiddens
+        CNN_features_extractor_class=CustomCNN,
+        CNN_features_extractor_kwargs=dict(
+            features_dim=features_dim, num_frames=num_frames, fcnet_hiddens=CNN_fcnet_hiddens
+        ),
+        VECTOR_features_extractor_class=CustomVectorMLP,
+        VECTOR_features_extractor_kwargs=dict(
+            input_size=input_size, features_dim=features_dim, num_frames=num_frames, fcnet_hiddens=VECTOR_fcnet_hiddens
         ),
         net_arch=[features_dim],
         num_agents=args.num_agents,
+        optimizer_class=optimizer_class,
     )
 
     tensorboard_log = f"./results/{env_name}_ppo_independent"
     if model == 'baseline':
         model = IndependentPPO(
-            "CnnPolicy",
+            "CNNVectorPolicy",
             num_agents=num_agents,
             env=env,
             learning_rate=lr,
@@ -241,7 +293,7 @@ def main(args):
         )
     else:
         model = IndependentPPO(
-            "RewardPolicy",
+            "CNNVectorRewardPolicy",
             num_agents=num_agents,
             env=env,
             learning_rate=lr,

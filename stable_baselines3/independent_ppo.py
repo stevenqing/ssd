@@ -206,10 +206,9 @@ class IndependentPPO(OnPolicyAlgorithm):
             callback.on_training_end()
 
     def collect_rollouts(self, last_obs, callbacks):
-
+        all_obs = [{}] * self.num_agents
+        all_last_obs = [{}] * self.num_agents
         all_last_episode_starts = [None] * self.num_agents
-        all_obs = [None] * self.num_agents
-        all_last_obs = [None] * self.num_agents
         all_rewards = [None] * self.num_agents
         all_dones = [None] * self.num_agents
         all_infos = [None] * self.num_agents
@@ -217,15 +216,18 @@ class IndependentPPO(OnPolicyAlgorithm):
 
         for polid, policy in enumerate(self.policies):
             for envid in range(self.num_envs):
-                assert (
-                    last_obs[envid * self.num_agents + polid] is not None
-                ), f"No previous observation was provided for env_{envid}_policy_{polid}"
-            all_last_obs[polid] = np.array(
-                [
-                    last_obs[envid * self.num_agents + polid]
-                    for envid in range(self.num_envs)
-                ]
-            )
+                for key in last_obs.keys():
+                    assert (
+                        last_obs[key][envid * self.num_agents + polid] is not None
+                    ), f"No previous observation was provided for env_{envid}_policy_{polid}"
+            for key in last_obs.keys():
+                all_last_obs[polid][key] = np.array(
+                    [
+                        last_obs[key][envid * self.num_agents + polid]
+                        for envid in range(self.num_envs)
+                    ]
+                )
+
             policy.policy.set_training_mode(False)
             policy.rollout_buffer.agent_number = self.num_agents
             policy.rollout_buffer.model = self.model
@@ -266,12 +268,13 @@ class IndependentPPO(OnPolicyAlgorithm):
             obs, rewards, dones, infos = self.env.step(all_clipped_actions)
 
             for polid in range(self.num_agents):
-                all_obs[polid] = np.array(
-                    [
-                        obs[envid * self.num_agents + polid]
-                        for envid in range(self.num_envs)
-                    ]
-                )
+                for key in obs.keys():
+                    all_obs[polid][key] = np.array(
+                        [
+                            obs[key][envid * self.num_agents + polid]
+                            for envid in range(self.num_envs)
+                        ]
+                    )
                 all_rewards[polid] = np.array(
                     [
                         rewards[envid * self.num_agents + polid]
@@ -335,7 +338,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                             cf_rewards=None,
                         )
                     else:
-                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid)
+                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs[polid],all_actions,polid, 'vector_state')
                         policy.rollout_buffer.add_sw(
                             all_last_obs[polid],
                             all_actions[polid],
@@ -378,18 +381,20 @@ class IndependentPPO(OnPolicyAlgorithm):
         return obs
 
 
-    def compute_cf_rewards(self,policy,all_last_obs,all_actions,polid):
+    def compute_cf_rewards(self, policy, obs, all_actions, polid, key='vector_state'):
         all_cf_rewards = []
-
-        all_last_obs = obs_as_tensor(np.array(all_last_obs), policy.device)
+        obs = obs_as_tensor(obs[key], policy.device)
         all_actions = obs_as_tensor(np.transpose(np.array(all_actions),(1,0,2)), policy.device)
         
         # extract obs features
-        all_obs_features = []
-        for i in range(self.num_agents):
-            all_obs_features.append(policy.policy.extract_features(all_last_obs[i]))
-        all_obs_features = th.stack(all_obs_features,dim=0).permute(1,0,2)
-        all_obs_features = all_obs_features.reshape(all_obs_features.shape[0],-1)
+        # all_obs_features = []
+        # for i in range(self.num_agents):
+        #     all_obs_features.append(policy.policy.extract_features(key, all_last_obs[i], policy.policy.VECTOR_features_extractor))
+        # all_obs_features = th.stack(all_obs_features,dim=0).permute(1,0,2)
+        # all_obs_features = all_obs_features.reshape(all_obs_features.shape[0],-1)
+        indivi_obs_features = policy.policy.extract_features(key, obs, policy.policy.VECTOR_features_extractor)
+
+
         index = 0
         all_actions_one_hot = F.one_hot(all_actions, num_classes=self.action_space.n).repeat(1,1,(self.num_agents-1) * self.action_space.n,1)
         for i in range(self.num_agents):
@@ -400,7 +405,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         # Need to double check here, to see if the cf is correct, (num_envs, num_agents, num_cf, num_action_space)
         all_actions_one_hot = all_actions_one_hot.permute(0,2,1,3)
         all_actions_one_hot = all_actions_one_hot.reshape(all_actions_one_hot.shape[0],all_actions_one_hot.shape[1],-1).permute(1,0,2)
-        all_obs_features = all_obs_features.repeat(all_actions_one_hot.shape[0],1,1)
+        all_obs_features = indivi_obs_features.repeat(all_actions_one_hot.shape[0],1,1)
         
         all_obs_actions_features = th.cat((all_obs_features,all_actions_one_hot),dim=-1).permute(1,0,2)
         all_obs_actions_features = all_obs_actions_features.reshape(-1,all_obs_actions_features.shape[-1])
