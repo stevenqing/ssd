@@ -6,7 +6,7 @@ import multiprocessing as mp
 import numpy as np
 import traceback
 import gym.vector
-
+from gym.spaces import Dict
 
 def compress_info(infos):
     non_empty_infs = [(i, info) for i, info in enumerate(infos) if info]
@@ -34,13 +34,21 @@ def async_loop(vec_env_constr, inpt_p, pipe, shared_obs, shared_actions, shared_
             comp_infos = []
             if instr == "reset":
                 obs = vec_env.reset()
-                shared_obs.np_arr[env_start_idx:env_end_idx] = obs
+                if isinstance(obs, dict):
+                    for k in obs.keys():
+                        shared_obs[k].np_arr[env_start_idx:env_end_idx] = obs[k]
+                else:
+                    shared_obs.np_arr[env_start_idx:env_end_idx] = obs
                 shared_dones.np_arr[env_start_idx:env_end_idx] = False
                 shared_rews.np_arr[env_start_idx:env_end_idx] = 0.0
             elif instr == "step":
                 actions = shared_actions.np_arr[env_start_idx:env_end_idx]
                 observations, rewards, dones, infos = vec_env.step(actions)
-                shared_obs.np_arr[env_start_idx:env_end_idx] = observations
+                if isinstance(observations, dict):
+                    for k in observations.keys():
+                        shared_obs[k].np_arr[env_start_idx:env_end_idx] = observations[k]
+                else:
+                    shared_obs.np_arr[env_start_idx:env_end_idx] = observations
                 shared_dones.np_arr[env_start_idx:env_end_idx] = dones
                 shared_rews.np_arr[env_start_idx:env_end_idx] = rewards
                 comp_infos = compress_info(infos)
@@ -75,7 +83,10 @@ class ProcConcatVec(gym.vector.VectorEnv):
         self.num_envs = num_envs = tot_num_envs
         self.metadata = metadata
 
-        self.shared_obs = SharedArray((num_envs,) + self.observation_space.shape, dtype=self.observation_space.dtype)
+        if isinstance(self.observation_space, Dict):
+            self.shared_obs = {k: SharedArray((num_envs,) + v.shape, dtype=v.dtype) for k, v in self.observation_space.spaces.items()}
+        else:
+            self.shared_obs = SharedArray((num_envs,) + self.observation_space.shape, dtype=self.observation_space.dtype)
         act_space_wrap = SpaceWrapper(self.action_space)
         self.shared_act = SharedArray((num_envs,) + act_space_wrap.shape, dtype=act_space_wrap.dtype)
         self.shared_rews = SharedArray((num_envs,), dtype=np.float32)
@@ -114,8 +125,10 @@ class ProcConcatVec(gym.vector.VectorEnv):
             pipe.send("reset")
 
         self._receive_info()
-
-        observations = self.shared_obs.np_arr
+        if isinstance(self.observation_space, Dict):
+            observations = {k: self.shared_obs[k].np_arr for k in self.shared_obs.keys()}
+        else:
+            observations = self.shared_obs.np_arr
         return observations.copy()
 
     def step_async(self, actions):
@@ -137,7 +150,10 @@ class ProcConcatVec(gym.vector.VectorEnv):
     def step_wait(self):
         compressed_infos = self._receive_info()
         infos = decompress_info(self.num_envs, self.idx_starts, compressed_infos)
-        observations = self.shared_obs.np_arr
+        if isinstance(self.observation_space, Dict):
+            observations = {k: self.shared_obs[k].np_arr for k in self.shared_obs.keys()}
+        else:
+            observations = self.shared_obs.np_arr
         rewards = self.shared_rews.np_arr
         dones = self.shared_dones.np_arr
         return observations.copy(), rewards.copy(), dones.copy(), copy.deepcopy(infos)

@@ -36,6 +36,9 @@ class ConcatVecEnv(gym.vector.VectorEnv):
         for venv, obs in zip(self.vec_envs, obs_list):
             endidx = idx + venv.num_envs
             if isinstance(obs,dict):
+                keys_to_remove = [k for k, v in obs.items() if v is None]
+                for k in keys_to_remove:
+                    del obs[k]
                 for key in obs.keys():
                     self.obs_buffer[key][idx:endidx] = obs[key]
             else:

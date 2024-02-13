@@ -1653,9 +1653,6 @@ class MultiInput_CNNVector_REWARDActorCriticPolicy(ActorCriticPolicy):
                     "Error: if the features extractor is not shared, there cannot be shared layers in the mlp_extractor"
                 )
 
-
-
-
         self._build(lr_schedule)
 
     def make_features_extractor(self,observation_space, features_extractor_class,feature_extractor_kwargs) -> BaseFeaturesExtractor:

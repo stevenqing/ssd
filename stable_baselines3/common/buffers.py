@@ -992,7 +992,8 @@ class DictRolloutBuffer(RolloutBuffer):
             all_last_obs_list = copy.deepcopy(self.all_last_obs)
             for agent_number in range(self.agent_number):
                 for key in self.all_last_obs[agent_number].keys():
-                    self.all_last_obs[agent_number][key] = all_last_obs_list[agent_number][key][:,agent_number]
+                    obs_list = all_last_obs_list[agent_number][key].reshape(-1,*all_last_obs_list[agent_number][key].shape[2:])
+                    self.all_last_obs[agent_number][key] = obs_list[:,agent_number]
                 #TODO:Might be wrong in vector state and online branch, Here is right, need to fix the other branch
             _tensor_names = ["actions", "values", "log_probs", "advantages", "returns", "all_actions", "all_rewards", "cf_rewards"]
 
