@@ -20,7 +20,7 @@ from gym import spaces
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
 ENV_TO_VEC = {
-    'coin3': 104,
+    'coin3': 21,
     'lbf10': 64,
     'CLEANUP': 30,
     'HARVEST': 20,

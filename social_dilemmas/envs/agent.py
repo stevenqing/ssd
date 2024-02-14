@@ -301,6 +301,7 @@ class Coin3Agent(Agent):
         super().__init__(agent_id, start_pos, start_orientation, full_map, view_len, view_len)
         self.update_agent_pos(start_pos)
         self.full_map = full_map
+        self.agent_state = [0,0,0,0]
 
     # Ugh, this is gross, this leads to the actions basically being
     # defined in two places
@@ -339,6 +340,7 @@ class Coin3Agent(Agent):
         agent3 = "agent-" + str(2)
         if char == b"A":
             self.reward_this_turn += 1
+            self.agent_state[0] = 1
             if self.agent_id == agent2:
                 self.penalty_1 -= 2
             elif self.agent_id == agent3:
@@ -346,6 +348,7 @@ class Coin3Agent(Agent):
             return b" "
         elif char == b"B":
             self.reward_this_turn += 1
+            self.agent_state[1] = 1
             if self.agent_id == agent1:
                 self.penalty_2 -= 2
             elif self.agent_id == agent3:
@@ -353,12 +356,14 @@ class Coin3Agent(Agent):
             return b" "
         elif char == b"C":
             self.reward_this_turn += 1
+            self.agent_state[2] = 1
             if self.agent_id == agent1:
                 self.penalty_3 -= 2
             elif self.agent_id == agent2:
                 self.penalty_3 -= 2
             return b" "
         else:
+            self.agent_state[3] = 1
             return char
 
 

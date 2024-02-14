@@ -73,21 +73,15 @@ DEFAULT_COLOURS = {
 #         |
 
 ENV_TO_VEC = {
-    'COIN3': 104,
+    'COIN3': 21,
     'LBF10': 64,
     'CLEANUP': 30,
     'HARVEST': 20,
 }
 
 INIT_VEC = {
-    'COIN3': np.array([  0, -11,   9,   0,   1,  -8,   1,  -7,   1,  -6,   1,  -5,   2,
-        -8,   2,  -7,   2,  -6,   2,  -5,   4,  -8,   4,  -7,   4,  -6,
-         4,  -2,   4,  -1,   5,  -8,   5,  -7,   5,  -6,   5,  -2,   5,
-        -1,   6,  -8,   6,  -7,   6,  -2,   6,  -1,   7,  -7,   7,  -2,
-         7,  -1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,
-         1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,
-         1,   3,   3,   3,   3,   3,   3,   3,   3,   2,   2,   2,   1,
-         1,   2,   2,   2,   1,   1,   2,   2,   1,   1,   2,   1,   1]).astype(np.int32),
+    'COIN3': np.array([0., 0., 0., 1., 1., 0., 0., 0., 0., 0., 1., 0., 1., 0., 0., 0., 0.,
+       1., 0., 0., 1.]).astype(np.int32),
     'LBF10': np.array([-14, -13, -14,   1, -13,  -5, -12, -10, -11,  -3, -11,   1, -10,
         -8,  -8,  -6,  -8,  -1,  -6, -11,  -6,  -2,  -5,  -6,  -4, -11,
         -4,  -1,  -2,  -6,  -1, -13,   0,  -7,   1,   1,   1,   1,   1,
@@ -225,12 +219,6 @@ class MapEnv(MultiAgentEnv):
                     low=0,
                     high=len(self.all_actions),
                     shape=(self.num_agents,),
-                    dtype=np.uint8,
-                ),
-                "cf_actions": Box(
-                    low=0,
-                    high=len(self.all_actions),
-                    shape=(len(self.all_actions) * (self.num_agents-1), self.num_agents),
                     dtype=np.uint8,
                 ),
                 "visible_agents": Box(
@@ -458,26 +446,32 @@ class MapEnv(MultiAgentEnv):
 
         if self.env_name == 'LBF10':
             levels = []
-            for agent in self.agents.values():
+            for agent in self.agents.values(): 
                 levels.append(agent.agent_level)
 
 
         # Add agents' state (0,1)
-        if self.env_name == 'COIN3' or 'LBF10':
-            apple_key, apple_state, apple_kind = self.get_apple_state()
-            total_ego_vector_state = {}
-            for total_agent in self.agents.values():
-                current_agent = total_agent
-                ego_view_agent = []
-                for agent in self.agents.values():
-                    if agent.agent_id != current_agent.agent_id:
-                        ego_pos = agent.pos - current_agent.pos 
-                        ego_view_agent.append(ego_pos)
-                ego_view_agent = np.array(ego_view_agent).flatten()
-                ego_apple_key = (apple_key - current_agent.pos).flatten()
-                ego_vector_state = np.concatenate((ego_view_agent,ego_apple_key,apple_state,apple_kind))
-                total_ego_vector_state[total_agent.agent_id] = ego_vector_state
+        # if self.env_name == 'COIN3' or 'LBF10':
+        #     apple_key, apple_state, apple_kind = self.get_apple_state()
+        #     total_ego_vector_state = {}
+        #     for total_agent in self.agents.values():
+        #         current_agent = total_agent
+        #         ego_view_agent = []
+        #         for agent in self.agents.values():
+        #             if agent.agent_id != current_agent.agent_id:
+        #                 ego_pos = agent.pos - current_agent.pos 
+        #                 ego_view_agent.append(ego_pos)
+        #         ego_view_agent = np.array(ego_view_agent).flatten()
+        #         ego_apple_key = (apple_key - current_agent.pos).flatten()
+        #         ego_vector_state = np.concatenate((ego_view_agent,ego_apple_key,apple_state,apple_kind))
+        #         total_ego_vector_state[total_agent.agent_id] = ego_vector_state
 
+        if self.env_name == 'COIN3':
+            total_agent_state = []
+            for agent in self.agents.values():
+                total_agent_state.append(agent.agent_state)
+            total_agent_state = np.concatenate((np.array(total_agent_state),np.eye(3)),axis=-1)
+            total_agent_state = np.reshape(total_agent_state,(-1,))
 
         for agent in self.agents.values():
             agent.full_map = map_with_agents
@@ -512,26 +506,24 @@ class MapEnv(MultiAgentEnv):
                     [actions[key] for key in sorted(actions.keys())]
                 ).astype(np.uint8)
                 agent_actions = np.array([actions[key] for key in sorted(actions.keys()) if key == agent.agent_id]).astype(np.uint8)
-                cf_actions = self.get_cf_actions(prev_actions,agent_actions,agent.agent_id)
                 visible_agents = self.find_visible_agents(agent.agent_id)
                 observations[agent.agent_id] = {
                     "curr_obs": rgb_arr,
                     "all_rewards": all_rewards,
                     "other_agent_actions": prev_actions,
                     "all_actions": all_actions,
-                    "cf_actions": cf_actions,
                     "visible_agents": visible_agents,
                     "prev_visible_agents": agent.prev_visible_agents,
                     "agent_id_matrix": self.agent_id_matrix,
                     "prev_vector_state": self.prev_vector_state,
-                    "vector_state": total_ego_vector_state[agent.agent_id],
+                    "vector_state": total_agent_state, # total_ego_vector_state[agent.agent_id],
                     "prev_rewards": self.prev_rewards,
                 }
                 agent.prev_visible_agents = visible_agents
                 self.prev_vector_state = vector_state
                 self.prev_rewards = all_rewards
             else:
-                observations[agent.agent_id] = {"curr_obs": rgb_arr,"vector_state": total_ego_vector_state[agent.agent_id]}
+                observations[agent.agent_id] = {"curr_obs": rgb_arr,"vector_state": total_agent_state}
 
             if self.env_name == 'LBF10':
                 dones[agent.agent_id] = agent.get_done(self.timestep,apple_pos_list)
@@ -633,7 +625,6 @@ class MapEnv(MultiAgentEnv):
                     "all_rewards": np.array([0 for _ in range(self.num_agents)]).astype(np.int8),
                     "other_agent_actions": prev_actions,
                     "all_actions": np.array([4 for _ in range(self.num_agents)]).astype(np.uint8),
-                    "cf_actions": np.array([[4 for _ in range(self.num_agents)] for _ in range(len(self.all_actions) * (self.num_agents-1))]).astype(np.uint8),
                     "visible_agents": visible_agents,
                     "prev_visible_agents": visible_agents,
                     "agent_id_matrix": self.agent_id_matrix,
