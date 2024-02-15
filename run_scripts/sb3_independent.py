@@ -21,7 +21,7 @@ from gym import spaces
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
 ENV_TO_VEC = {
-    'coin3': 21,
+    'coin3': {'reward_input':12, 'type_input':9},
     'lbf10': 64,
     'CLEANUP': 30,
     'HARVEST': 20,
@@ -131,7 +131,8 @@ class CustomVectorMLP(BaseFeaturesExtractor):
         self,
         observation_space: gym.spaces.Box,
         features_dim=128,
-        input_size=104,
+        reward_input_size=12,
+        agent_type_input_size=3,
         num_frames=6,
         fcnet_hiddens=[1024, 256, 128],
     ):
@@ -139,17 +140,36 @@ class CustomVectorMLP(BaseFeaturesExtractor):
         # We assume CxHxW images (channels first)
         # Re-ordering will be done by pre-preprocessing or wrapper
 
-        flat_out = num_frames * input_size
+        # flat_out = num_frames * input_size
+        self.num_frames = num_frames
+        self.reward_input_size = reward_input_size
+        self.agent_type_input_size = agent_type_input_size
 
-        self.fc1 = nn.Linear(in_features=flat_out, out_features=fcnet_hiddens[0])
-        self.fc2 = nn.Linear(in_features=fcnet_hiddens[0], out_features=fcnet_hiddens[1])
-        self.fc3 = nn.Linear(in_features=fcnet_hiddens[1], out_features=fcnet_hiddens[2])
+        reward_flat_out = num_frames * reward_input_size
+        agent_type_flat_out = num_frames * agent_type_input_size
+
+        self.reward_fc1 = nn.Linear(in_features=reward_flat_out, out_features=fcnet_hiddens[2])
+        self.reward_fc2 = nn.Linear(in_features=fcnet_hiddens[2], out_features=fcnet_hiddens[3])
+        
+        self.type_fc1 = nn.Linear(in_features=agent_type_flat_out, out_features=fcnet_hiddens[2])
+        self.type_fc2 = nn.Linear(in_features=fcnet_hiddens[2], out_features=fcnet_hiddens[3])
 
     def forward(self, observations) -> torch.Tensor:
         # Convert to tensor, rescale to [0, 1], and convert from B x H x W x C to B x C x H x W
-        features = F.relu(self.fc1(observations))
-        features = F.relu(self.fc2(features))
-        features = F.relu(self.fc3(features))
+        observations = observations.reshape(observations.shape[0],self.num_frames,-1)
+        reward_input = observations[:,:,:self.reward_input_size]
+        type_input = observations[:,:,self.reward_input_size:]
+
+        reward_input = reward_input.reshape(reward_input.shape[0],-1)
+        type_input = type_input.reshape(type_input.shape[0],-1)
+
+        reward_features = F.relu(self.reward_fc1(reward_input))
+        reward_features = F.relu(self.reward_fc2(reward_features))
+
+        type_features = F.relu(self.type_fc1(type_input))
+        type_features = F.relu(self.type_fc2(type_features))
+
+        features = torch.cat((reward_features,type_features),-1)
         return features
 
 
@@ -208,7 +228,10 @@ def main(args):
     num_cpus = args.num_cpus
     num_envs = args.num_envs
     optimizer_class = torch.optim.Adam
-    input_size = ENV_TO_VEC[env_name]
+    
+    
+    reward_input_size = ENV_TO_VEC[env_name]['reward_input']
+    agent_type_input_size = ENV_TO_VEC[env_name]['type_input']
     target_kl = args.kl_threshold
     using_reward_timestep = args.using_reward_timestep
     # Training
@@ -219,7 +242,7 @@ def main(args):
         128  # output layer of cnn extractor AND shared layer for policy and value functions
     )
     CNN_fcnet_hiddens = [1024, 128]  # Two hidden layers for cnn extractor
-    VECTOR_fcnet_hiddens = [1024, 256, 128]  # Three hidden layers for vector extractor
+    VECTOR_fcnet_hiddens = [1024, 256, 128, 64]  # Three hidden layers for vector extractor
     
     ent_coef = 0.001  # entropy coefficient in loss
     batch_size = rollout_len * num_envs // 2  # This is from the rllib baseline implementation
@@ -253,7 +276,7 @@ def main(args):
                          entity=args.user_name, 
                          notes=socket.gethostname(),
                          name=str(env_name) +"_"+ str(model),
-                         group="Vec_" + str(env_name) +"_"+ str(model)+ "_independent_" + str(args.seed) + "_" + str(args.alpha),
+                         group="Vec_" + str(env_name) +"_"+ str(model)+ "_independent_multi_input_" + str(args.seed) + "_" + str(args.alpha),
                          dir="./",
                          job_type="training",
                          reinit=True)
@@ -267,7 +290,7 @@ def main(args):
         ),
         VECTOR_features_extractor_class=CustomVectorMLP,
         VECTOR_features_extractor_kwargs=dict(
-            input_size=input_size, features_dim=features_dim, num_frames=num_frames, fcnet_hiddens=VECTOR_fcnet_hiddens
+            reward_input_size=reward_input_size, agent_type_input_size=agent_type_input_size, features_dim=features_dim, num_frames=num_frames, fcnet_hiddens=VECTOR_fcnet_hiddens
         ),
         net_arch=[features_dim],
         num_agents=args.num_agents,
