@@ -150,7 +150,7 @@ class IndependentPPO(OnPolicyAlgorithm):
             policy._last_episode_starts = np.ones((self.num_envs,), dtype=bool)
 
         while num_timesteps < total_timesteps:
-            last_obs = self.collect_rollouts(last_obs, callbacks)
+            last_obs = self.collect_rollouts(last_obs, callbacks,num_timesteps)
             num_timesteps += self.num_envs * self.n_steps
             SW_ep_rew_mean = 0
             for polid, policy in enumerate(self.policies):
@@ -207,7 +207,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         for callback in callbacks:
             callback.on_training_end()
 
-    def collect_rollouts(self, last_obs, callbacks):
+    def collect_rollouts(self, last_obs, callbacks,num_timesteps):
 
         all_last_episode_starts = [None] * self.num_agents
         all_obs = [None] * self.num_agents

@@ -278,7 +278,7 @@ def main(args):
     args = wandb.config # for wandb sweep
 
     policy_kwargs = dict(
-        features_extractor_class=CBAM,
+        features_extractor_class=CustomCNN,
         features_extractor_kwargs=dict(
             features_dim=features_dim, num_frames=num_frames, fcnet_hiddens=fcnet_hiddens
         ),
