@@ -49,6 +49,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         device: Union[th.device, str] = "auto",
         alpha: float = 0.5,
         model: str = 'baseline',
+        using_reward_timestep: int = 2000000
     ):
         self.env = env
         self.num_agents = num_agents
@@ -61,6 +62,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         self._logger = None
         self.alpha = alpha
         self.model = model
+        self.using_reward_timestep = using_reward_timestep
         env_fn = lambda: DummyGymEnv(self.observation_space, self.action_space)
         dummy_env = DummyVecEnv([env_fn] * self.num_envs)
         self.policies = [
@@ -336,6 +338,8 @@ class IndependentPPO(OnPolicyAlgorithm):
                         )
                     else:
                         cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid)
+                        if num_timesteps <= self.using_reward_timestep:
+                            cf_rewards = np.zeros_like(cf_rewards)
                         policy.rollout_buffer.add_sw(
                             all_last_obs[polid],
                             all_actions[polid],

@@ -105,6 +105,7 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--user_name", type=str, default="1160677229")
     parser.add_argument("--model", type=str, default='baseline')
+    parser.add_argument("--using_reward_timestep", type=int, default=2000000)
     args = parser.parse_args()
     return args
 
@@ -230,7 +231,7 @@ def main(args):
     beta = args.beta
     num_cpus = args.num_cpus
     num_envs = args.num_envs
-
+    using_reward_timestep = args.using_reward_timestep
     target_kl = args.kl_threshold
     # Training
     num_frames = 6  # number of frames to stack together; use >4 to avoid automatic VecTransposeImage
@@ -306,6 +307,7 @@ def main(args):
             verbose=verbose,
             alpha=alpha,
             model=args.model,
+            using_reward_timestep=using_reward_timestep
         )
     else:
         model = IndependentPPO(
@@ -326,6 +328,7 @@ def main(args):
             verbose=verbose,
             alpha=alpha,
             model=args.model,
+            using_reward_timestep=using_reward_timestep
         )
     model.learn(total_timesteps=total_timesteps)
 
