@@ -276,7 +276,7 @@ def main(args):
                          entity=args.user_name, 
                          notes=socket.gethostname(),
                          name=str(env_name) +"_"+ str(model),
-                         group="Vec_" + str(env_name) +"_"+ str(model)+ "_independent_multi_input_" + str(args.seed) + "_" + str(args.alpha),
+                         group="Vec_" + str(env_name) +"_"+ str(model)+ "_multi_input_" + str(args.seed) + "_" + str(args.alpha),
                          dir="./",
                          job_type="training",
                          reinit=True)
