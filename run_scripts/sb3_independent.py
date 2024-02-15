@@ -269,7 +269,7 @@ def main(args):
                          entity=args.user_name, 
                          notes=socket.gethostname(),
                          name=str(env_name) +"_"+ str(model),
-                         group=str(env_name) +"_"+ str(model)+ "_independent_" + str(args.seed),
+                         group=str(env_name) +"_causal_image_"+ str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
                          dir="./",
                          job_type="training",
                          reinit=True)
