@@ -202,7 +202,7 @@ class PPO(OnPolicyAlgorithm):
             # Do a complete pass on the rollout buffer
 
             if self.model == 'causal':
-                for rollout_data in self.rollout_buffer.get_sw(self.batch_size):
+                for rollout_data in self.rollout_buffer.get_sw_traj(self.batch_size):
                     all_last_obs = rollout_data.all_last_obs
                     all_rewards = rollout_data.all_rewards
                     actions = rollout_data.actions
@@ -366,6 +366,8 @@ class PPO(OnPolicyAlgorithm):
 
             if not continue_training:
                 break
+
+                
 
         self._n_updates += self.n_epochs
         explained_var = explained_variance(self.rollout_buffer.values.flatten(), self.rollout_buffer.returns.flatten())

@@ -12,7 +12,8 @@ from stable_baselines3.common.type_aliases import (
     DictRolloutBufferSamples,
     ReplayBufferSamples,
     RolloutBufferSamples,
-    RewardRolloutBufferSamples
+    RewardRolloutBufferSamples,
+    RewardTrajsRolloutBufferSamples
 )
 from stable_baselines3.common.utils import get_device
 from stable_baselines3.common.vec_env import VecNormalize
@@ -359,6 +360,8 @@ class RolloutBuffer(BaseBuffer):
         self.agent_number = num_agents
         self.observations, self.actions, self.rewards, self.advantages = None, None, None, None
         self.all_last_obs, self.all_actions, self.all_rewards, self.cf_rewards = None, None, None, None
+        self.all_last_obs_traj, self.all_actions_traj, self.all_rewards_traj = None, None, None
+        self.previous_all_last_obs_traj, self.previous_all_actions_traj, self.previous_all_rewards_traj = None, None, None
         self.returns, self.episode_starts, self.values, self.log_probs = None, None, None, None
         self.generator_ready = False
         self.model = model
@@ -380,6 +383,13 @@ class RolloutBuffer(BaseBuffer):
         self.all_actions = np.zeros((self.buffer_size, self.n_envs, self.agent_number, self.action_dim), dtype=np.float32)
         self.all_rewards = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
         self.cf_rewards = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
+
+        self.all_last_obs_traj = self.all_last_obs.copy()
+        self.all_actions_traj = self.all_actions.copy()
+        self.all_rewards_traj = self.all_rewards.copy()
+        self.previous_all_last_obs_traj = self.all_last_obs.copy()
+        self.previous_all_actions_traj = self.all_actions.copy()
+        self.previous_all_rewards_traj = self.all_rewards.copy()
 
         super().reset()
     
@@ -520,6 +530,77 @@ class RolloutBuffer(BaseBuffer):
             self.full = True
 
 
+    def add_sw_traj(
+        self,
+        obs: np.ndarray,
+        action: np.ndarray,
+        reward: np.ndarray,
+        episode_start: np.ndarray,
+        value: th.Tensor,
+        log_prob: th.Tensor,
+        all_last_obs: np.ndarray,
+        all_actions: np.ndarray,
+        all_rewards: np.ndarray,
+        cf_rewards: np.ndarray,
+        all_last_obs_traj: np.ndarray,
+        all_actions_traj: np.ndarray,
+        all_rewards_traj: np.ndarray,
+        prev_all_last_obs_traj: np.ndarray,
+        prev_all_actions_traj: np.ndarray,
+        prev_all_rewards_traj: np.ndarray,
+    ) -> None:
+        """
+        :param obs: Observation
+        :param action: Action
+        :param reward:
+        :param episode_start: Start of episode signal.
+        :param value: estimated value of the current state
+            following the current policy.
+        :param log_prob: log probability of the action
+            following the current policy.
+        """
+        if len(log_prob.shape) == 0:
+            # Reshape 0-d tensor to avoid error
+            log_prob = log_prob.reshape(-1, 1)
+
+        # Reshape needed when using multiple envs with discrete observations
+        # as numpy cannot broadcast (n_discrete,) to (n_discrete, 1)
+        if isinstance(self.observation_space, spaces.Discrete):
+            obs = obs.reshape((self.n_envs,) + self.obs_shape)
+
+        # Same reshape, for actions
+        action = action.reshape((self.n_envs, self.action_dim))
+
+        all_last_obs = np.array(all_last_obs)
+        all_actions = np.array(all_actions)
+        all_rewards = np.array(all_rewards)
+
+        self.observations[self.pos] = np.array(obs).copy()
+        self.actions[self.pos] = np.array(action).copy()
+        self.rewards[self.pos] = np.array(reward).copy()
+        self.episode_starts[self.pos] = np.array(episode_start).copy()
+        self.values[self.pos] = value.clone().cpu().numpy().flatten()
+        self.log_probs[self.pos] = log_prob.clone().cpu().numpy()
+
+        self.all_last_obs[self.pos] = np.transpose(np.array(all_last_obs).copy(),(1,0,2,3,4))
+        self.all_actions[self.pos] = np.transpose(np.array(all_actions).copy(),(1,0,2))
+        self.all_rewards[self.pos] = np.transpose(np.array(all_rewards).copy(),(1,0))
+        self.cf_rewards[self.pos] = np.array(cf_rewards).copy()
+
+        if isinstance(all_last_obs_traj, np.ndarray):
+            self.all_last_obs_traj = np.transpose(all_last_obs_traj.copy(),(0,2,1,3,4,5))
+            self.all_actions_traj = np.transpose(all_actions_traj.copy(),(0,2,1))
+            self.all_rewards_traj = np.transpose(all_rewards_traj.copy(),(0,2,1))
+
+            self.previous_all_last_obs_traj = np.transpose(prev_all_last_obs_traj.copy(),(0,2,1,3,4,5))
+            self.previous_all_actions_traj = np.transpose(prev_all_actions_traj.copy(),(0,2,1))
+            self.previous_all_rewards_traj = np.transpose(prev_all_rewards_traj.copy(),(0,2,1))
+
+
+        self.pos += 1
+        if self.pos == self.buffer_size:
+            self.full = True
+
     def add(
         self,
         obs: np.ndarray,
@@ -600,6 +681,66 @@ class RolloutBuffer(BaseBuffer):
             self.returns[batch_inds].flatten(),
         )
         return RolloutBufferSamples(*tuple(map(self.to_torch, data)))
+
+
+    def get_sw_traj(self, batch_size: Optional[int] = None) -> Generator[RolloutBufferSamples, None, None]:
+        assert self.full, ""
+        indices = np.random.permutation(self.buffer_size * self.n_envs)
+        # Prepare the data
+        if not self.generator_ready:
+
+            _tensor_names = [
+                "observations",
+                "actions",
+                "values",
+                "log_probs",
+                "advantages",
+                "returns",
+                "all_last_obs",
+                "all_actions",
+                "all_rewards",
+                "cf_rewards",
+                "all_last_obs_traj",
+                "all_actions_traj",
+                "all_rewards_traj",
+                "previous_all_last_obs_traj",
+                "previous_all_actions_traj",
+                "previous_all_rewards_traj",
+            ]
+
+            for tensor in _tensor_names:
+                self.__dict__[tensor] = self.swap_and_flatten(self.__dict__[tensor])
+            self.generator_ready = True
+
+        # Return everything, don't create minibatches
+        if batch_size is None:
+            batch_size = self.buffer_size * self.n_envs
+
+        start_idx = 0
+        while start_idx < self.buffer_size * self.n_envs:
+            yield self._get_sw_traj_samples(indices[start_idx : start_idx + batch_size])
+            start_idx += batch_size
+
+    def _get_sw_traj_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> RolloutBufferSamples:
+        data = (
+            self.observations[batch_inds],
+            self.actions[batch_inds],
+            self.values[batch_inds].flatten(),
+            self.log_probs[batch_inds].flatten(),
+            self.advantages[batch_inds].flatten(),
+            self.returns[batch_inds].flatten(),
+            self.all_last_obs[batch_inds],
+            self.all_actions[batch_inds],
+            self.all_rewards[batch_inds],
+            self.cf_rewards[batch_inds],
+            self.all_last_obs_traj,
+            self.all_actions_traj,
+            self.all_rewards_traj,
+            self.previous_all_last_obs_traj,
+            self.previous_all_actions_traj,
+            self.previous_all_rewards_traj,
+        )
+        return RewardTrajsRolloutBufferSamples(*tuple(map(self.to_torch, data)))
 
 
     def get_sw(self, batch_size: Optional[int] = None) -> Generator[RolloutBufferSamples, None, None]:

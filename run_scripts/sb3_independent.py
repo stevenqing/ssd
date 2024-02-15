@@ -50,7 +50,7 @@ def parse_args():
     parser.add_argument(
         "--num-cpus",
         type=int,
-        default=4,
+        default=1,
         help="The number of cpus",
     )
     parser.add_argument(

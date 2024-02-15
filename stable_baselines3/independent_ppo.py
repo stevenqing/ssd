@@ -91,6 +91,9 @@ class IndependentPPO(OnPolicyAlgorithm):
             )
             for _ in range(self.num_agents)
         ]
+        self.previous_all_last_obs_traj = None
+        self.previous_all_actions_traj = None
+        self.previous_all_rewards_traj = None
 
     def learn(
         self,
@@ -215,6 +218,8 @@ class IndependentPPO(OnPolicyAlgorithm):
         all_rewards = [None] * self.num_agents
         all_dones = [None] * self.num_agents
         all_infos = [None] * self.num_agents
+
+        all_obs_trajs,all_actions_trajs,all_rewards_trajs = [],[],[]
         steps = 0
 
         for polid, policy in enumerate(self.policies):
@@ -266,7 +271,36 @@ class IndependentPPO(OnPolicyAlgorithm):
                 np.vstack(all_clipped_actions).transpose().reshape(-1)
             )  # reshape as (env, action)
             obs, rewards, dones, infos = self.env.step(all_clipped_actions)
-
+            
+            if dones.any():
+                all_obs_trajs.append(all_last_obs)
+                all_actions_trajs.append(np.array([action.numpy() for action in all_actions]))
+                for polid in range(self.num_agents):
+                    all_rewards[polid] = np.array(
+                    [
+                        rewards[envid * self.num_agents + polid]
+                        for envid in range(self.num_envs)
+                    ]
+                )
+                all_rewards_trajs.append(all_rewards)
+                if self.previous_all_last_obs_traj is None or self.previous_all_actions_traj is None or self.previous_all_rewards_traj is None:
+                    self.previous_all_last_obs_traj = np.array(all_obs_trajs)
+                    self.previous_all_actions_traj = np.array(all_actions_trajs)
+                    self.previous_all_rewards_traj = np.array(all_rewards_trajs) 
+                all_obs_trajs,all_actions_trajs,all_rewards_trajs = np.array(all_obs_trajs),np.array(all_actions_trajs),np.array(all_rewards_trajs)
+            else:
+                all_obs_trajs.append(all_last_obs)
+                all_actions_trajs.append(np.array([action.numpy() for action in all_actions]))
+                for polid in range(self.num_agents):
+                    all_rewards[polid] = np.array(
+                    [
+                        rewards[envid * self.num_agents + polid]
+                        for envid in range(self.num_envs)
+                    ]
+                )
+                all_rewards_trajs.append(all_rewards)
+                all_rewards = [None] * self.num_agents
+            ############################################
             for polid in range(self.num_agents):
                 all_obs[polid] = np.array(
                     [
@@ -306,6 +340,7 @@ class IndependentPPO(OnPolicyAlgorithm):
 
             steps += 1
 
+
             # add data to the rollout buffers
             for polid, policy in enumerate(self.policies):
                 if isinstance(self.action_space, Discrete):
@@ -340,7 +375,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                         cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid)
                         if num_timesteps <= self.using_reward_timestep:
                             cf_rewards = np.zeros_like(cf_rewards)
-                        policy.rollout_buffer.add_sw(
+                        policy.rollout_buffer.add_sw_traj( # add_sw
                             all_last_obs[polid],
                             all_actions[polid],
                             all_rewards[polid],
@@ -351,7 +386,19 @@ class IndependentPPO(OnPolicyAlgorithm):
                             rollout_all_actions,
                             all_rewards,
                             cf_rewards,
+                            all_obs_trajs,
+                            all_actions_trajs,
+                            all_rewards_trajs,
+                            self.previous_all_last_obs_traj,
+                            self.previous_all_actions_traj,
+                            self.previous_all_rewards_traj,
                         )
+            if isinstance(all_obs_trajs, np.ndarray):
+                self.previous_all_last_obs_traj = all_obs_trajs
+                self.previous_all_actions_traj = all_actions_trajs
+                self.previous_all_rewards_traj = all_rewards_trajs
+                all_obs_trajs,all_actions_trajs,all_rewards_trajs = [],[],[]
+
             all_last_obs = all_obs
             all_last_episode_starts = all_dones
 

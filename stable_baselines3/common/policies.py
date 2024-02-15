@@ -1127,6 +1127,20 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
         actions = actions.reshape((-1,) + self.action_space.shape)
         return actions, values, log_prob
 
+
+    def comparing_trajs(self, all_obs: th.Tensor, prev_all_obs: th.Tensor, all_actions: th.Tensor, prev_all_actions: th.Tensor) -> th.Tensor:
+        """
+        Compare the trajectories of the agents.
+
+        :param all_obs: Observation
+        :param prev_all_obs: Previous observation
+        :param all_actions: Actions
+        :param prev_all_actions: Previous actions
+        :return: the estimated values.
+        """
+        return True
+
+
     def evaluate_actions(self, obs: th.Tensor, actions: th.Tensor, all_last_obs: th.Tensor, all_actions: th.Tensor, use_all_obs=True) -> Tuple[th.Tensor, th.Tensor, Optional[th.Tensor]]:
         """
         Evaluate actions according to the current policy,
