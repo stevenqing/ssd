@@ -217,7 +217,7 @@ class PPO(OnPolicyAlgorithm):
                         self.policy.reset_noise(self.batch_size)
 
                     values, log_prob, entropy, predicted_reward = self.policy.evaluate_actions(rollout_data.observations, actions, all_last_obs, all_actions)
-                    wandb.log({f"time/fps": predicted_reward}, step=self.num_timesteps)
+                    wandb.log({f"time/predicted_reward": predicted_reward}, step=self.num_timesteps)
                     values = values.flatten()
                     # Normalize advantage
                     advantages = rollout_data.advantages

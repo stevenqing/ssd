@@ -10,6 +10,7 @@ import torch.nn.functional as F
 import wandb
 import socket
 from stable_baselines3.independent_ppo import IndependentPPO
+from stable_baselines3.causal_ppo import Causal_IndependentPPO
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
 from torch import nn
@@ -113,6 +114,8 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--user_name", type=str, default="1160677229")
     parser.add_argument("--model", type=str, default='baseline')
+    parser.add_argument("--causal", type=bool, default=False)
+    parser.add_argument("--using_reward_timestep", type=int, default=2000000)
     args = parser.parse_args()
     return args
 
@@ -207,6 +210,7 @@ def main(args):
     optimizer_class = torch.optim.Adam
     input_size = ENV_TO_VEC[env_name]
     target_kl = args.kl_threshold
+    using_reward_timestep = args.using_reward_timestep
     # Training
       # number of cpus
       # number of parallel multi-agent environments
@@ -271,28 +275,9 @@ def main(args):
     )
 
     tensorboard_log = f"./results/{env_name}_ppo_independent"
-    if model == 'baseline':
-        model = IndependentPPO(
-            "CNNVectorPolicy",
-            num_agents=num_agents,
-            env=env,
-            learning_rate=lr,
-            n_steps=rollout_len,
-            batch_size=batch_size,
-            n_epochs=n_epochs,
-            gamma=gamma,
-            gae_lambda=gae_lambda,
-            ent_coef=ent_coef,
-            max_grad_norm=grad_clip,
-            target_kl=target_kl,
-            policy_kwargs=policy_kwargs,
-            tensorboard_log=tensorboard_log,
-            verbose=verbose,
-            alpha=alpha,
-            model=args.model,
-        )
-    else:
-        model = IndependentPPO(
+
+    if args.causal:
+        model = Causal_IndependentPPO(
             "CNNVectorRewardPolicy",
             num_agents=num_agents,
             env=env,
@@ -311,6 +296,49 @@ def main(args):
             alpha=alpha,
             model=args.model,
         )
+    else:
+        if model == 'baseline':
+            model = IndependentPPO(
+                "CNNVectorPolicy",
+                num_agents=num_agents,
+                env=env,
+                learning_rate=lr,
+                n_steps=rollout_len,
+                batch_size=batch_size,
+                n_epochs=n_epochs,
+                gamma=gamma,
+                gae_lambda=gae_lambda,
+                ent_coef=ent_coef,
+                max_grad_norm=grad_clip,
+                target_kl=target_kl,
+                policy_kwargs=policy_kwargs,
+                tensorboard_log=tensorboard_log,
+                verbose=verbose,
+                alpha=alpha,
+                model=args.model,
+                using_reward_timestep=using_reward_timestep
+            )
+        else:
+            model = IndependentPPO(
+                "CNNVectorRewardPolicy",
+                num_agents=num_agents,
+                env=env,
+                learning_rate=lr,
+                n_steps=rollout_len,
+                batch_size=batch_size,
+                n_epochs=n_epochs,
+                gamma=gamma,
+                gae_lambda=gae_lambda,
+                ent_coef=ent_coef,
+                max_grad_norm=grad_clip,
+                target_kl=target_kl,
+                policy_kwargs=policy_kwargs,
+                tensorboard_log=tensorboard_log,
+                verbose=verbose,
+                alpha=alpha,
+                model=args.model,
+                using_reward_timestep=using_reward_timestep
+            )
     model.learn(total_timesteps=total_timesteps)
 
     logdir = model.logger.dir
