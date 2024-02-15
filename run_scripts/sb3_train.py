@@ -165,6 +165,8 @@ class CBAM(BaseFeaturesExtractor):
         x = x.permute(0, 3, 1, 2)
         x = self.ca(x)
         x = self.sa(x)
+
+        # flatten features
         features = torch.flatten(F.relu(x), start_dim=1)
         features = F.relu(self.fc1(features))
         features = F.relu(self.fc2(features))
