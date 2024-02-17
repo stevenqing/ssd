@@ -266,25 +266,25 @@ class PPO(OnPolicyAlgorithm):
                             reweighted_actions = all_actions_traj[reweighted_index].unsqueeze(-1)
 
                             reweighted_add_reward = (int(prev_rewards_traj.sum()) - int(all_rewards_traj.sum()))/self.batch_size
-                            reweighted_reward = all_rewards_traj.view(-1,1).scatter(0,th.tensor(list(sample_index)).unsqueeze(-1),reweighted_add_reward,reduce='add')
+                            reweighted_reward = all_rewards_traj.cuda().view(-1,1).scatter(0,th.tensor(list(sample_index)).cuda().unsqueeze(-1),reweighted_add_reward,reduce='add')
                             reweighted_reward = reweighted_reward.view(self.batch_size,-1)
 
-
-                            actions_list = np.arange(self.action_space.n)
-                            batch_reweighted_actions = np.random.choice(actions_list, self.batch_size, p=reweighted_actions_prob)
-                            
-                            
-                            reweighted_index = [np.random.choice(list(np.array(reweighted_action_index[x][:,0].cpu())),1,equal_weight_list[x]) for x in batch_reweighted_actions]
-                            reweighted_obs = th.permute(all_obs_traj[np.array(reweighted_index)],(0,2,1,3,4,5)).squeeze()
-                            reweighted_actions = th.permute(all_actions_traj[np.array(reweighted_index)],(0,2,1))
-                            reweighted_rewards = th.permute(all_rewards_traj[np.array(reweighted_index)],(0,2,1)).squeeze()
-                            
-                            add_reward_agent_index = [random.choice(th.where(reweighted_actions[x] == batch_reweighted_actions[x])[0].tolist()) for x in batch_reweighted_actions]
-                            reweighted_add_reward = (int(prev_rewards_traj.sum()) - int(all_rewards_traj.sum()))/self.batch_size
-                            for x in range(self.batch_size):
-                                reweighted_rewards[x][add_reward_agent_index[x]] += reweighted_add_reward
                             predicted_trajs_reweighted_reward = self.policy.get_trajs_reweighted_reward(reweighted_obs,reweighted_actions)
-                            reweighted_reward_losses = F.mse_loss(reweighted_rewards, predicted_trajs_reweighted_reward)
+                            reweighted_reward_losses = F.mse_loss(reweighted_reward, predicted_trajs_reweighted_reward)
+
+                            # actions_list = np.arange(self.action_space.n)
+                            # batch_reweighted_actions = np.random.choice(actions_list, self.batch_size, p=reweighted_actions_prob)
+                                                       
+                            # reweighted_index = [np.random.choice(list(np.array(reweighted_action_index[x][:,0].cpu())),1,equal_weight_list[x]) for x in batch_reweighted_actions]
+                            # reweighted_obs = th.permute(all_obs_traj[np.array(reweighted_index)],(0,2,1,3,4,5)).squeeze()
+                            # reweighted_actions = th.permute(all_actions_traj[np.array(reweighted_index)],(0,2,1))
+                            # reweighted_rewards = th.permute(all_rewards_traj[np.array(reweighted_index)],(0,2,1)).squeeze()
+                            
+                            # add_reward_agent_index = [random.choice(th.where(reweighted_actions[x] == batch_reweighted_actions[x])[0].tolist()) for x in batch_reweighted_actions]
+                            # reweighted_add_reward = (int(prev_rewards_traj.sum()) - int(all_rewards_traj.sum()))/self.batch_size
+                            # for x in range(self.batch_size):
+                            #     reweighted_rewards[x][add_reward_agent_index[x]] += reweighted_add_reward
+
                         
                         wandb.log({f"train/predicted_reward": predicted_reward}, step=self.num_timesteps)
                         values = values.flatten()
