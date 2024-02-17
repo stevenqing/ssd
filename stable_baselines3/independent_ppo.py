@@ -274,7 +274,7 @@ class IndependentPPO(OnPolicyAlgorithm):
             
             if dones.any():
                 all_obs_trajs.append(all_last_obs)
-                all_actions_trajs.append(np.array([action.numpy() for action in all_actions]))
+                all_actions_trajs.append(np.array([action.cpu().numpy() for action in all_actions]))
                 for polid in range(self.num_agents):
                     all_rewards[polid] = np.array(
                     [
