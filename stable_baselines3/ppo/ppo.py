@@ -100,6 +100,7 @@ class PPO(OnPolicyAlgorithm):
         _init_setup_model: bool = True,
         model: str = 'baseline',
         num_agents: int = 3,
+        enable_trajs_learning: bool = False,
     ):
 
         super().__init__(
@@ -160,6 +161,7 @@ class PPO(OnPolicyAlgorithm):
         self.normalize_advantage = normalize_advantage
         self.target_kl = target_kl
         self.num_agents = num_agents
+        self.enable_trajs_learning = enable_trajs_learning
         if _init_setup_model:
             self._setup_model()
 
@@ -202,134 +204,218 @@ class PPO(OnPolicyAlgorithm):
             # Do a complete pass on the rollout buffer
 
             if self.model == 'causal':
-                for rollout_data in self.rollout_buffer.get_sw_traj(self.batch_size): # calculate the loss for each batcn
-                    all_last_obs = rollout_data.all_last_obs
-                    all_rewards = rollout_data.all_rewards
-                    actions = rollout_data.actions
-                    if isinstance(self.action_space, spaces.Discrete):
-                        # Convert discrete action from float to long
-                        actions = rollout_data.actions.long().flatten()
-                        all_actions = rollout_data.all_actions.long()
-                    # Re-sample the noise matrix because the log_std has changed
-                    if self.use_sde:
-                        self.policy.reset_noise(self.batch_size)
-                    
-
-                    values, log_prob, entropy, predicted_reward = self.policy.evaluate_actions(rollout_data.observations, actions, all_last_obs, all_actions)
-                    
-                    # enabling traj learning
-                    reweighted_reward_losses = 0
-                    if not th.equal(rollout_data.prev_action_traj,rollout_data.all_action_traj):
-                        prev_obs_traj = rollout_data.prev_obs_traj
-                        prev_actions_traj = rollout_data.prev_action_traj
-                        prev_rewards_traj = rollout_data.prev_rewards_traj
-                        all_obs_traj = rollout_data.all_obs_traj
-                        all_actions_traj = rollout_data.all_action_traj
-                        all_rewards_traj = rollout_data.all_rewards_traj
+                if self.enable_trajs_learning:
+                    for rollout_data in self.rollout_buffer.get_sw_traj(self.batch_size): # calculate the loss for each batcn
+                        all_last_obs = rollout_data.all_last_obs
+                        all_rewards = rollout_data.all_rewards
+                        actions = rollout_data.actions
+                        if isinstance(self.action_space, spaces.Discrete):
+                            # Convert discrete action from float to long
+                            actions = rollout_data.actions.long().flatten()
+                            all_actions = rollout_data.all_actions.long()
+                        # Re-sample the noise matrix because the log_std has changed
+                        if self.use_sde:
+                            self.policy.reset_noise(self.batch_size)
                         
-                        reweighted_actions_list,reweighted_action_index,equal_weight_list = [],[],[]
-                        for i in range(self.action_space.n):
-                            tmp = (prev_actions_traj == i).sum() - (all_actions_traj == i).sum()
-                            reweighted_actions_list.append(int(tmp))
-                            # (action_sapce, difference between prev and now action)
-                            reweighted_action_index.append(th.nonzero(all_actions_traj == i))
 
-                            shape = th.nonzero(all_actions_traj == i).shape[0]
-                            equal_weight = [1/shape for _ in np.arange(shape)]
-                            # (action_space, fot each difference list random sampling)
-                            equal_weight_list.append(equal_weight)
-                        if int(prev_rewards_traj.sum()) < int(all_rewards_traj.sum()):
-                            reweighted_actions_list = [-x for x in reweighted_actions_list]
-                            reweighted_actions_list = [x if x >= 0 else 0 for x in reweighted_actions_list]
+                        values, log_prob, entropy, predicted_reward = self.policy.evaluate_actions(rollout_data.observations, actions, all_last_obs, all_actions)
+                        
+                        # enabling traj learning
+                        reweighted_reward_losses = 0
+                        if not th.equal(rollout_data.prev_action_traj,rollout_data.all_action_traj):
+                            prev_obs_traj = rollout_data.prev_obs_traj
+                            prev_actions_traj = rollout_data.prev_action_traj
+                            prev_rewards_traj = rollout_data.prev_rewards_traj
+                            all_obs_traj = rollout_data.all_obs_traj
+                            all_actions_traj = rollout_data.all_action_traj
+                            all_rewards_traj = rollout_data.all_rewards_traj
+                            
+                            reweighted_actions_list,reweighted_action_index,equal_weight_list = [],[],[]
+                            for i in range(self.action_space.n):
+                                tmp = (prev_actions_traj == i).sum() - (all_actions_traj == i).sum()
+                                reweighted_actions_list.append(int(tmp))
+                                # (action_sapce, difference between prev and now action)
+                                reweighted_action_index.append(th.nonzero(all_actions_traj == i))
+
+                                shape = th.nonzero(all_actions_traj == i).shape[0]
+                                equal_weight = [1/shape for _ in np.arange(shape)]
+                                # (action_space, fot each difference list random sampling)
+                                equal_weight_list.append(equal_weight)
+                            if int(prev_rewards_traj.sum()) < int(all_rewards_traj.sum()):
+                                reweighted_actions_list = [-x for x in reweighted_actions_list]
+                                reweighted_actions_list = [x if x >= 0 else 0 for x in reweighted_actions_list]
+                            else:
+                                reweighted_actions_list = [x if x >= 0 else 0 for x in reweighted_actions_list]
+                            reweighted_actions_prob = [x/sum(reweighted_actions_list) for x in reweighted_actions_list]
+                            actions_list = np.arange(self.action_space.n)
+                            batch_reweighted_actions = np.random.choice(actions_list, self.batch_size, p=reweighted_actions_prob)
+                            
+                            
+                            reweighted_index = [np.random.choice(list(np.array(reweighted_action_index[x][:,0].cpu())),1,equal_weight_list[x]) for x in batch_reweighted_actions]
+                            reweighted_obs = th.permute(all_obs_traj[np.array(reweighted_index)],(0,2,1,3,4,5)).squeeze()
+                            reweighted_actions = th.permute(all_actions_traj[np.array(reweighted_index)],(0,2,1))
+                            reweighted_rewards = th.permute(all_rewards_traj[np.array(reweighted_index)],(0,2,1)).squeeze()
+                            
+                            add_reward_agent_index = [random.choice(th.where(reweighted_actions[x] == batch_reweighted_actions[x])[0].tolist()) for x in batch_reweighted_actions]
+                            reweighted_add_reward = (int(prev_rewards_traj.sum()) - int(all_rewards.sum()))/self.batch_size
+                            for x in range(self.batch_size):
+                                reweighted_rewards[x][add_reward_agent_index[x]] += reweighted_add_reward
+                            predicted_trajs_reweighted_reward = self.policy.get_trajs_reweighted_reward(reweighted_obs,reweighted_actions)
+                            reweighted_reward_losses = F.mse_loss(reweighted_rewards, predicted_trajs_reweighted_reward)
+                        
+                        wandb.log({f"train/predicted_reward": predicted_reward}, step=self.num_timesteps)
+                        values = values.flatten()
+                        # Normalize advantage
+                        advantages = rollout_data.advantages
+                        # Normalization does not make sense if mini batchsize == 1, see GH issue #325
+                        if self.normalize_advantage and len(advantages) > 1:
+                            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+
+                        # ratio between old and new policy, should be one at the first iteration
+                        ratio = th.exp(log_prob - rollout_data.old_log_prob)
+
+                        # clipped surrogate loss
+                        policy_loss_1 = advantages * ratio
+                        policy_loss_2 = advantages * th.clamp(ratio, 1 - clip_range, 1 + clip_range)
+                        policy_loss = -th.min(policy_loss_1, policy_loss_2).mean()
+
+                        # Logging
+                        pg_losses.append(policy_loss.item())
+                        clip_fraction = th.mean((th.abs(ratio - 1) > clip_range).float()).item()
+                        clip_fractions.append(clip_fraction)
+
+                        if self.clip_range_vf is None:
+                            # No clipping
+                            values_pred = values
                         else:
-                            reweighted_actions_list = [x if x >= 0 else 0 for x in reweighted_actions_list]
-                        reweighted_actions_prob = [x/sum(reweighted_actions_list) for x in reweighted_actions_list]
-                        actions_list = np.arange(self.action_space.n)
-                        batch_reweighted_actions = np.random.choice(actions_list, self.batch_size, p=reweighted_actions_prob)
+                            # Clip the difference between old and new value
+                            # NOTE: this depends on the reward scaling
+                            values_pred = rollout_data.old_values + th.clamp(
+                                values - rollout_data.old_values, -clip_range_vf, clip_range_vf
+                            )
+                        # Value loss using the TD(gae_lambda) target
+                        value_loss = F.mse_loss(rollout_data.returns, values_pred)
+                        value_losses.append(value_loss.item())
 
-                        reweighted_index = [np.random.choice(list(np.array(reweighted_action_index[x][:,0].cpu())),1,equal_weight_list[x]) for x in batch_reweighted_actions]
-                        reweighted_obs = th.permute(all_obs_traj[np.array(reweighted_index)],(0,2,1,3,4,5)).squeeze()
-                        reweighted_actions = th.permute(all_actions_traj[np.array(reweighted_index)],(0,2,1))
-                        reweighted_rewards = th.permute(all_rewards_traj[np.array(reweighted_index)],(0,2,1)).squeeze()
-                        
-                        add_reward_agent_index = [random.choice(th.where(reweighted_actions[x] == batch_reweighted_actions[x])[0].tolist()) for x in batch_reweighted_actions]
-                        reweighted_add_reward = (int(prev_rewards_traj.sum()) - int(all_rewards.sum()))/self.batch_size
-                        for x in range(self.batch_size):
-                            reweighted_rewards[x][add_reward_agent_index[x]] += reweighted_add_reward
-                        predicted_trajs_reweighted_reward = self.policy.get_trajs_reweighted_reward(reweighted_obs,reweighted_actions)
-                        reweighted_reward_losses = F.mse_loss(reweighted_rewards, predicted_trajs_reweighted_reward)
-                    
-                    wandb.log({f"train/predicted_reward": predicted_reward}, step=self.num_timesteps)
-                    values = values.flatten()
-                    # Normalize advantage
-                    advantages = rollout_data.advantages
-                    # Normalization does not make sense if mini batchsize == 1, see GH issue #325
-                    if self.normalize_advantage and len(advantages) > 1:
-                        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+                        # Entropy loss favor exploration
+                        if entropy is None:
+                            # Approximate entropy when no analytical form
+                            entropy_loss = -th.mean(-log_prob)
+                        else:
+                            entropy_loss = -th.mean(entropy)
 
-                    # ratio between old and new policy, should be one at the first iteration
-                    ratio = th.exp(log_prob - rollout_data.old_log_prob)
+                        entropy_losses.append(entropy_loss.item())
 
-                    # clipped surrogate loss
-                    policy_loss_1 = advantages * ratio
-                    policy_loss_2 = advantages * th.clamp(ratio, 1 - clip_range, 1 + clip_range)
-                    policy_loss = -th.min(policy_loss_1, policy_loss_2).mean()
+                        # Reward loss
+                        reward_losses = F.mse_loss(all_rewards, predicted_reward)
+                        if reweighted_reward_losses != 0:
+                            loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + reward_losses + reweighted_reward_losses
+                        else:
+                            loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + reward_losses
 
-                    # Logging
-                    pg_losses.append(policy_loss.item())
-                    clip_fraction = th.mean((th.abs(ratio - 1) > clip_range).float()).item()
-                    clip_fractions.append(clip_fraction)
+                        # Calculate approximate form of reverse KL Divergence for early stopping
+                        # see issue #417: https://github.com/DLR-RM/stable-baselines3/issues/417
+                        # and discussion in PR #419: https://github.com/DLR-RM/stable-baselines3/pull/419
+                        # and Schulman blog: http://joschu.net/blog/kl-approx.html
+                        with th.no_grad():
+                            log_ratio = log_prob - rollout_data.old_log_prob
+                            approx_kl_div = th.mean((th.exp(log_ratio) - 1) - log_ratio).cpu().numpy()
+                            approx_kl_divs.append(approx_kl_div)
 
-                    if self.clip_range_vf is None:
-                        # No clipping
-                        values_pred = values
-                    else:
-                        # Clip the difference between old and new value
-                        # NOTE: this depends on the reward scaling
-                        values_pred = rollout_data.old_values + th.clamp(
-                            values - rollout_data.old_values, -clip_range_vf, clip_range_vf
-                        )
-                    # Value loss using the TD(gae_lambda) target
-                    value_loss = F.mse_loss(rollout_data.returns, values_pred)
-                    value_losses.append(value_loss.item())
+                        if self.target_kl is not None and approx_kl_div > 1.5 * self.target_kl:
+                            continue_training = False
+                            if self.verbose >= 1:
+                                print(f"Early stopping at step {epoch} due to reaching max kl: {approx_kl_div:.2f}")
+                            break
 
-                    # Entropy loss favor exploration
-                    if entropy is None:
-                        # Approximate entropy when no analytical form
-                        entropy_loss = -th.mean(-log_prob)
-                    else:
-                        entropy_loss = -th.mean(entropy)
+                        # Optimization step
+                        self.policy.optimizer.zero_grad()
+                        loss.backward()
+                        # Clip grad norm
+                        th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
+                        self.policy.optimizer.step()
+                else:
+                    for rollout_data in self.rollout_buffer.get_sw(self.batch_size):
+                        all_last_obs = rollout_data.all_last_obs
+                        all_rewards = rollout_data.all_rewards
+                        actions = rollout_data.actions
+                        if isinstance(self.action_space, spaces.Discrete):
+                            # Convert discrete action from float to long
+                            actions = rollout_data.actions.long().flatten()
+                            all_actions = rollout_data.all_actions.long()
+                        # Re-sample the noise matrix because the log_std has changed
+                        if self.use_sde:
+                            self.policy.reset_noise(self.batch_size)
 
-                    entropy_losses.append(entropy_loss.item())
+                        values, log_prob, entropy, predicted_reward = self.policy.evaluate_actions(rollout_data.observations, actions, all_last_obs, all_actions)
+                        values = values.flatten()
+                        # Normalize advantage
+                        advantages = rollout_data.advantages
+                        # Normalization does not make sense if mini batchsize == 1, see GH issue #325
+                        if self.normalize_advantage and len(advantages) > 1:
+                            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
-                    # Reward loss
-                    reward_losses = F.mse_loss(all_rewards, predicted_reward)
-                    if reweighted_reward_losses != 0:
-                        loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + reward_losses + reweighted_reward_losses
-                    else:
+                        # ratio between old and new policy, should be one at the first iteration
+                        ratio = th.exp(log_prob - rollout_data.old_log_prob)
+
+                        # clipped surrogate loss
+                        policy_loss_1 = advantages * ratio
+                        policy_loss_2 = advantages * th.clamp(ratio, 1 - clip_range, 1 + clip_range)
+                        policy_loss = -th.min(policy_loss_1, policy_loss_2).mean()
+
+                        # Logging
+                        pg_losses.append(policy_loss.item())
+                        clip_fraction = th.mean((th.abs(ratio - 1) > clip_range).float()).item()
+                        clip_fractions.append(clip_fraction)
+
+                        if self.clip_range_vf is None:
+                            # No clipping
+                            values_pred = values
+                        else:
+                            # Clip the difference between old and new value
+                            # NOTE: this depends on the reward scaling
+                            values_pred = rollout_data.old_values + th.clamp(
+                                values - rollout_data.old_values, -clip_range_vf, clip_range_vf
+                            )
+                        # Value loss using the TD(gae_lambda) target
+                        value_loss = F.mse_loss(rollout_data.returns, values_pred)
+                        value_losses.append(value_loss.item())
+
+                        # Entropy loss favor exploration
+                        if entropy is None:
+                            # Approximate entropy when no analytical form
+                            entropy_loss = -th.mean(-log_prob)
+                        else:
+                            entropy_loss = -th.mean(entropy)
+
+                        entropy_losses.append(entropy_loss.item())
+
+                        # Reward loss
+                        reward_losses = F.mse_loss(all_rewards, predicted_reward)
+
                         loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + reward_losses
 
-                    # Calculate approximate form of reverse KL Divergence for early stopping
-                    # see issue #417: https://github.com/DLR-RM/stable-baselines3/issues/417
-                    # and discussion in PR #419: https://github.com/DLR-RM/stable-baselines3/pull/419
-                    # and Schulman blog: http://joschu.net/blog/kl-approx.html
-                    with th.no_grad():
-                        log_ratio = log_prob - rollout_data.old_log_prob
-                        approx_kl_div = th.mean((th.exp(log_ratio) - 1) - log_ratio).cpu().numpy()
-                        approx_kl_divs.append(approx_kl_div)
+                        # Calculate approximate form of reverse KL Divergence for early stopping
+                        # see issue #417: https://github.com/DLR-RM/stable-baselines3/issues/417
+                        # and discussion in PR #419: https://github.com/DLR-RM/stable-baselines3/pull/419
+                        # and Schulman blog: http://joschu.net/blog/kl-approx.html
+                        with th.no_grad():
+                            log_ratio = log_prob - rollout_data.old_log_prob
+                            approx_kl_div = th.mean((th.exp(log_ratio) - 1) - log_ratio).cpu().numpy()
+                            approx_kl_divs.append(approx_kl_div)
 
-                    if self.target_kl is not None and approx_kl_div > 1.5 * self.target_kl:
-                        continue_training = False
-                        if self.verbose >= 1:
-                            print(f"Early stopping at step {epoch} due to reaching max kl: {approx_kl_div:.2f}")
-                        break
+                        if self.target_kl is not None and approx_kl_div > 1.5 * self.target_kl:
+                            continue_training = False
+                            if self.verbose >= 1:
+                                print(f"Early stopping at step {epoch} due to reaching max kl: {approx_kl_div:.2f}")
+                            break
 
-                    # Optimization step
-                    self.policy.optimizer.zero_grad()
-                    loss.backward()
-                    # Clip grad norm
-                    th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
-                    self.policy.optimizer.step()
+                        # Optimization step
+                        self.policy.optimizer.zero_grad()
+                        loss.backward()
+                        # Clip grad norm
+                        th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
+                        self.policy.optimizer.step()
 
             else:
                 for rollout_data in self.rollout_buffer.get(self.batch_size):

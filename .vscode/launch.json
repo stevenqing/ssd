@@ -59,17 +59,19 @@
             "justMyCode": false,
             "args": [
                 "--env",
-                "harvest",
+                "coin3",
                 "--model",
                 "causal",
                 "--num-agents",
-                "5",
+                "3",
                 "--rollout-len",
                 "1000",
                 "--user_name",
                 "1160677229",
                 "--num-envs",
                 "2",
+                "--enable_trajs_learning",
+                "0"
             ],
         },
     ]

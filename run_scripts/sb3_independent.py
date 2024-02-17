@@ -106,6 +106,8 @@ def parse_args():
     parser.add_argument("--user_name", type=str, default="1160677229")
     parser.add_argument("--model", type=str, default='baseline')
     parser.add_argument("--using_reward_timestep", type=int, default=2000000)
+    parser.add_argument("--extractor", type=str, default='cnn')
+    parser.add_argument("--enable_trajs_learning", type=int, default=0,choices=[0, 1])
     args = parser.parse_args()
     return args
 
@@ -221,6 +223,7 @@ def main(args):
     # Config
     set_seed(args.seed)
     model=args.model
+    extractor = args.extractor
     env_name = args.env_name
     num_agents = args.num_agents
     rollout_len = args.rollout_len
@@ -232,6 +235,10 @@ def main(args):
     num_cpus = args.num_cpus
     num_envs = args.num_envs
     using_reward_timestep = args.using_reward_timestep
+    if args.enable_trajs_learning == 0:
+        enable_trajs_learning = False
+    else:
+        enable_trajs_learning = True
     target_kl = args.kl_threshold
     # Training
     num_frames = 6  # number of frames to stack together; use >4 to avoid automatic VecTransposeImage
@@ -264,27 +271,46 @@ def main(args):
         env, num_vec_envs=num_envs, num_cpus=num_cpus, base_class="stable_baselines3"
     )
     env = VecMonitor(env)
-
-    run = wandb.init(config=args,
-                         project="SSD_pytorch",
-                         entity=args.user_name, 
-                         notes=socket.gethostname(),
-                         name=str(env_name) +"_"+ str(model),
-                         group=str(env_name) +"_trajs_motive_"+ str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
-                         dir="./",
-                         job_type="training",
-                         reinit=True)
+    if enable_trajs_learning:
+        run = wandb.init(config=args,
+                            project="SSD_pytorch",
+                            entity=args.user_name, 
+                            notes=socket.gethostname(),
+                            name=str(env_name) + "_" + str(extractor) + "_" + str(model),
+                            group=str(env_name) +"_trajs_motive_" + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
+                            dir="./",
+                            job_type="training",
+                            reinit=True)
+    else:
+        run = wandb.init(config=args,
+                            project="SSD_pytorch",
+                            entity=args.user_name, 
+                            notes=socket.gethostname(),
+                            name=str(env_name) +"_" + str(extractor) + "_" + str(model),
+                            group=str(env_name) +  str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
+                            dir="./",
+                            job_type="training",
+                            reinit=True)
     
     args = wandb.config # for wandb sweep
-
-    policy_kwargs = dict(
-        features_extractor_class=CustomCNN,
-        features_extractor_kwargs=dict(
-            features_dim=features_dim, num_frames=num_frames, fcnet_hiddens=fcnet_hiddens
-        ),
-        net_arch=[features_dim],
-        num_agents=args.num_agents,
-    )
+    if extractor == 'cbam':
+        policy_kwargs = dict(
+            features_extractor_class=CBAM,
+            features_extractor_kwargs=dict(
+                features_dim=features_dim, num_frames=num_frames, fcnet_hiddens=fcnet_hiddens
+            ),
+            net_arch=[features_dim],
+            num_agents=args.num_agents,
+        )
+    else:
+        policy_kwargs = dict(
+            features_extractor_class=CustomCNN,
+            features_extractor_kwargs=dict(
+                features_dim=features_dim, num_frames=num_frames, fcnet_hiddens=fcnet_hiddens
+            ),
+            net_arch=[features_dim],
+            num_agents=args.num_agents,
+        )
 
 
     tensorboard_log = f"./results/{env_name}_ppo_independent"
@@ -307,7 +333,8 @@ def main(args):
             verbose=verbose,
             alpha=alpha,
             model=args.model,
-            using_reward_timestep=using_reward_timestep
+            using_reward_timestep=using_reward_timestep,
+            enable_trajs_learning=enable_trajs_learning
         )
     else:
         model = IndependentPPO(
@@ -328,7 +355,8 @@ def main(args):
             verbose=verbose,
             alpha=alpha,
             model=args.model,
-            using_reward_timestep=using_reward_timestep
+            using_reward_timestep=using_reward_timestep,
+            enable_trajs_learning=enable_trajs_learning
         )
     model.learn(total_timesteps=total_timesteps)
 
