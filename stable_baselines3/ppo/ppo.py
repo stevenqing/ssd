@@ -230,12 +230,16 @@ class PPO(OnPolicyAlgorithm):
                             all_actions_traj = rollout_data.all_action_traj
                             all_rewards_traj = rollout_data.all_rewards_traj
                             
-                            reweighted_actions_list,reweighted_action_index,equal_weight_list = [],[],[]
+                            reweighted_actions_list,reweighted_action_index,equal_weight_list,reweighted_shape = [],None,[],[]
                             for i in range(self.action_space.n):
                                 tmp = (prev_actions_traj == i).sum() - (all_actions_traj == i).sum()
                                 reweighted_actions_list.append(int(tmp))
                                 # (action_sapce, difference between prev and now action)
-                                reweighted_action_index.append(th.nonzero(all_actions_traj == i))
+                                if reweighted_action_index == None:
+                                    reweighted_action_index = th.nonzero(all_actions_traj == i)
+                                else:
+                                    reweighted_action_index = th.cat([reweighted_action_index,th.nonzero(all_actions_traj == i)],0)
+                                reweighted_shape.append(th.nonzero(all_actions_traj == i).shape[0])
 
                                 shape = th.nonzero(all_actions_traj == i).shape[0]
                                 equal_weight = [1/shape for _ in np.arange(shape)]
@@ -246,7 +250,26 @@ class PPO(OnPolicyAlgorithm):
                                 reweighted_actions_list = [x if x >= 0 else 0 for x in reweighted_actions_list]
                             else:
                                 reweighted_actions_list = [x if x >= 0 else 0 for x in reweighted_actions_list]
-                            reweighted_actions_prob = [x/sum(reweighted_actions_list) for x in reweighted_actions_list]
+                            reweighted_actions_prob = th.tensor([reweighted_actions_list[x]/(sum(reweighted_actions_list) * reweighted_shape[x]) for x in range(len(reweighted_actions_list))]) # within 8
+                            total_reweighted_actions_prob = None
+                            for i in range(self.action_space.n):
+                                tmp = reweighted_actions_prob[i].repeat(reweighted_shape[i])
+                                if total_reweighted_actions_prob == None:
+                                    total_reweighted_actions_prob = tmp
+                                else:
+                                    total_reweighted_actions_prob = th.cat([total_reweighted_actions_prob,tmp])
+                            sample_index = th.utils.data.WeightedRandomSampler(total_reweighted_actions_prob,self.batch_size,replacement=True)
+                            total_action_index = reweighted_action_index[list(sample_index)]
+                            reweighted_index = total_action_index[:,0]
+
+                            reweighted_obs = all_obs_traj[reweighted_index]
+                            reweighted_actions = all_actions_traj[reweighted_index].unsqueeze(-1)
+
+                            reweighted_add_reward = (int(prev_rewards_traj.sum()) - int(all_rewards_traj.sum()))/self.batch_size
+                            reweighted_reward = all_rewards_traj.view(-1,1).scatter(0,th.tensor(list(sample_index)).unsqueeze(-1),reweighted_add_reward,reduce='add')
+                            reweighted_reward = reweighted_reward.view(self.batch_size,-1)
+
+
                             actions_list = np.arange(self.action_space.n)
                             batch_reweighted_actions = np.random.choice(actions_list, self.batch_size, p=reweighted_actions_prob)
                             
@@ -257,7 +280,7 @@ class PPO(OnPolicyAlgorithm):
                             reweighted_rewards = th.permute(all_rewards_traj[np.array(reweighted_index)],(0,2,1)).squeeze()
                             
                             add_reward_agent_index = [random.choice(th.where(reweighted_actions[x] == batch_reweighted_actions[x])[0].tolist()) for x in batch_reweighted_actions]
-                            reweighted_add_reward = (int(prev_rewards_traj.sum()) - int(all_rewards.sum()))/self.batch_size
+                            reweighted_add_reward = (int(prev_rewards_traj.sum()) - int(all_rewards_traj.sum()))/self.batch_size
                             for x in range(self.batch_size):
                                 reweighted_rewards[x][add_reward_agent_index[x]] += reweighted_add_reward
                             predicted_trajs_reweighted_reward = self.policy.get_trajs_reweighted_reward(reweighted_obs,reweighted_actions)
