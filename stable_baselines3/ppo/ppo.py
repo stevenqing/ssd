@@ -258,6 +258,7 @@ class PPO(OnPolicyAlgorithm):
                             reweighted_rewards[x][add_reward_agent_index[x]] += reweighted_add_reward
                         predicted_trajs_reweighted_reward = self.policy.get_trajs_reweighted_reward(reweighted_obs,reweighted_actions)
                         reweighted_reward_losses = F.mse_loss(reweighted_rewards, predicted_trajs_reweighted_reward)
+                    
                     wandb.log({f"train/predicted_reward": predicted_reward}, step=self.num_timesteps)
                     values = values.flatten()
                     # Normalize advantage
@@ -429,7 +430,8 @@ class PPO(OnPolicyAlgorithm):
 
         if self.model == 'causal':
             wandb.log({f"train/reward_loss": reward_losses.item()}, step=self.num_timesteps)
-            wandb.log({f"train/reweighted_reward_loss": reweighted_reward_losses.item()}, step=self.num_timesteps)
+            if reweighted_reward_losses != 0:
+                wandb.log({f"train/reweighted_reward_loss": reweighted_reward_losses.item()}, step=self.num_timesteps)
 
 
 
