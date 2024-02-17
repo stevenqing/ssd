@@ -365,6 +365,7 @@ class RolloutBuffer(BaseBuffer):
         self.returns, self.episode_starts, self.values, self.log_probs = None, None, None, None
         self.generator_ready = False
         self.model = model
+        self.env_id = 0
         self.reset()
 
     def reset(self) -> None:
@@ -390,6 +391,7 @@ class RolloutBuffer(BaseBuffer):
         self.previous_all_last_obs_traj = self.all_last_obs.copy()
         self.previous_all_actions_traj = self.all_actions.copy()
         self.previous_all_rewards_traj = self.all_rewards.copy()
+        self.env_id = 0
 
         super().reset()
     
@@ -473,6 +475,30 @@ class RolloutBuffer(BaseBuffer):
         # TD(lambda) estimator, see Github PR #375 or "Telescoping in TD(lambda)"
         # in David Silver Lecture 4: https://www.youtube.com/watch?v=PnHCvfgC_ZA
         self.returns = self.advantages + self.values
+
+    def get_trajs_reweighted_reward(self):
+        prev_obs_traj = self.previous_all_last_obs_traj
+        prev_actions_traj = self.previous_all_actions_traj
+        prev_rewards_traj = self.previous_all_rewards_traj
+        all_obs_traj = self.all_last_obs_traj
+        all_actions_traj = self.all_actions_traj
+        all_rewards_traj = self.all_rewards_traj
+        
+        reweighted_actions_list = []
+        for i in range(self.action_space.n):
+            tmp = (prev_actions_traj == i).sum() - (all_actions_traj == i).sum()
+            reweighted_actions_list.append(int(tmp))
+        if int(prev_rewards_traj.sum()) < int(all_rewards_traj.sum()):
+            reweighted_actions_list = [-x for x in reweighted_actions_list]
+            reweighted_actions_list = [x if x >= 0 else 0 for x in reweighted_actions_list]
+        else:
+            reweighted_actions_list = [x if x >= 0 else 0 for x in reweighted_actions_list]
+        reweighted_actions_prob = [x/sum(reweighted_actions_list) for x in reweighted_actions_list]
+        actions_list = np.arange(self.action_space.n)
+        batch_reweighted_actions = np.random.choice(actions_list, self.batch_size, p=reweighted_actions_prob)
+
+        predicted_trajs_reweighted_reward = self.policy.get_trajs_reweighted_reward(reweighted_obs,reweighted_actions)
+
 
     def add_sw(
         self,
@@ -722,6 +748,8 @@ class RolloutBuffer(BaseBuffer):
             start_idx += batch_size
 
     def _get_sw_traj_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> RolloutBufferSamples:
+        index = np.arange(len(batch_inds))   #TODO: the index should be renewed, now it samples the first batch_size of samples everytime
+        
         data = (
             self.observations[batch_inds],
             self.actions[batch_inds],
@@ -733,12 +761,12 @@ class RolloutBuffer(BaseBuffer):
             self.all_actions[batch_inds],
             self.all_rewards[batch_inds],
             self.cf_rewards[batch_inds],
-            self.all_last_obs_traj,
-            self.all_actions_traj,
-            self.all_rewards_traj,
-            self.previous_all_last_obs_traj,
-            self.previous_all_actions_traj,
-            self.previous_all_rewards_traj,
+            self.all_last_obs_traj[index], # would not work in len < 1000(coin3, lbf)
+            self.all_actions_traj[index],
+            self.all_rewards_traj[index],
+            self.previous_all_last_obs_traj[index],
+            self.previous_all_actions_traj[index],
+            self.previous_all_rewards_traj[index],
         )
         return RewardTrajsRolloutBufferSamples(*tuple(map(self.to_torch, data)))
 

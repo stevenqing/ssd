@@ -1,6 +1,6 @@
 import warnings
 from typing import Any, Dict, Optional, Type, TypeVar, Union
-
+import random
 import numpy as np
 import torch as th
 from gym import spaces
@@ -202,7 +202,7 @@ class PPO(OnPolicyAlgorithm):
             # Do a complete pass on the rollout buffer
 
             if self.model == 'causal':
-                for rollout_data in self.rollout_buffer.get_sw_traj(self.batch_size):
+                for rollout_data in self.rollout_buffer.get_sw_traj(self.batch_size): # calculate the loss for each batcn
                     all_last_obs = rollout_data.all_last_obs
                     all_rewards = rollout_data.all_rewards
                     actions = rollout_data.actions
@@ -213,9 +213,52 @@ class PPO(OnPolicyAlgorithm):
                     # Re-sample the noise matrix because the log_std has changed
                     if self.use_sde:
                         self.policy.reset_noise(self.batch_size)
+                    
 
                     values, log_prob, entropy, predicted_reward = self.policy.evaluate_actions(rollout_data.observations, actions, all_last_obs, all_actions)
-                    wandb.log({f"time/fps": predicted_reward}, step=self.num_timesteps)
+                    
+                    # enabling traj learning
+                    reweighted_reward_losses = 0
+                    if not th.equal(rollout_data.prev_action_traj,rollout_data.all_action_traj):
+                        prev_obs_traj = rollout_data.prev_obs_traj
+                        prev_actions_traj = rollout_data.prev_action_traj
+                        prev_rewards_traj = rollout_data.prev_rewards_traj
+                        all_obs_traj = rollout_data.all_obs_traj
+                        all_actions_traj = rollout_data.all_action_traj
+                        all_rewards_traj = rollout_data.all_rewards_traj
+                        
+                        reweighted_actions_list,reweighted_action_index,equal_weight_list = [],[],[]
+                        for i in range(self.action_space.n):
+                            tmp = (prev_actions_traj == i).sum() - (all_actions_traj == i).sum()
+                            reweighted_actions_list.append(int(tmp))
+                            # (action_sapce, difference between prev and now action)
+                            reweighted_action_index.append(th.nonzero(all_actions_traj == i))
+
+                            shape = th.nonzero(all_actions_traj == i).shape[0]
+                            equal_weight = [1/shape for _ in np.arange(shape)]
+                            # (action_space, fot each difference list random sampling)
+                            equal_weight_list.append(equal_weight)
+                        if int(prev_rewards_traj.sum()) < int(all_rewards_traj.sum()):
+                            reweighted_actions_list = [-x for x in reweighted_actions_list]
+                            reweighted_actions_list = [x if x >= 0 else 0 for x in reweighted_actions_list]
+                        else:
+                            reweighted_actions_list = [x if x >= 0 else 0 for x in reweighted_actions_list]
+                        reweighted_actions_prob = [x/sum(reweighted_actions_list) for x in reweighted_actions_list]
+                        actions_list = np.arange(self.action_space.n)
+                        batch_reweighted_actions = np.random.choice(actions_list, self.batch_size, p=reweighted_actions_prob)
+
+                        reweighted_index = [np.random.choice(list(np.array(reweighted_action_index[x][:,0])),1,equal_weight_list[x]) for x in batch_reweighted_actions]
+                        reweighted_obs = th.permute(all_obs_traj[np.array(reweighted_index)],(0,2,1,3,4,5)).squeeze()
+                        reweighted_actions = th.permute(all_actions_traj[np.array(reweighted_index)],(0,2,1))
+                        reweighted_rewards = th.permute(all_rewards_traj[np.array(reweighted_index)],(0,2,1)).squeeze()
+                        
+                        add_reward_agent_index = [random.choice(th.where(reweighted_actions[x] == batch_reweighted_actions[x])[0].tolist()) for x in batch_reweighted_actions]
+                        reweighted_add_reward = (int(prev_rewards_traj.sum()) - int(all_rewards.sum()))/self.batch_size
+                        for x in range(self.batch_size):
+                            reweighted_rewards[x][add_reward_agent_index[x]] += reweighted_add_reward
+                        predicted_trajs_reweighted_reward = self.policy.get_trajs_reweighted_reward(reweighted_obs,reweighted_actions)
+                        reweighted_reward_losses = F.mse_loss(reweighted_rewards, predicted_trajs_reweighted_reward)
+                    wandb.log({f"train/predicted_reward": predicted_reward}, step=self.num_timesteps)
                     values = values.flatten()
                     # Normalize advantage
                     advantages = rollout_data.advantages
@@ -260,8 +303,10 @@ class PPO(OnPolicyAlgorithm):
 
                     # Reward loss
                     reward_losses = F.mse_loss(all_rewards, predicted_reward)
-
-                    loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + reward_losses
+                    if reweighted_reward_losses != 0:
+                        loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + reward_losses + reweighted_reward_losses
+                    else:
+                        loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + reward_losses
 
                     # Calculate approximate form of reverse KL Divergence for early stopping
                     # see issue #417: https://github.com/DLR-RM/stable-baselines3/issues/417
@@ -384,6 +429,7 @@ class PPO(OnPolicyAlgorithm):
 
         if self.model == 'causal':
             wandb.log({f"train/reward_loss": reward_losses.item()}, step=self.num_timesteps)
+            wandb.log({f"train/reweighted_reward_loss": reweighted_reward_losses.item()}, step=self.num_timesteps)
 
 
 
@@ -402,6 +448,10 @@ class PPO(OnPolicyAlgorithm):
         self.logger.record("train/clip_range", clip_range)
         if self.clip_range_vf is not None:
             self.logger.record("train/clip_range_vf", clip_range_vf)
+
+    # def sample_from_reweighted_list(self, obs:th.Tensor, action:th.Tensor, reweighted_list:list):
+
+
 
     def learn(
         self: SelfPPO,

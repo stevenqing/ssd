@@ -1188,6 +1188,32 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
         values = self.value_net(latent_vf)
         entropy = distribution.entropy()
         return values, log_prob, entropy, predicted_reward
+    
+    def get_trajs_reweighted_reward(self, all_last_obs:th.Tensor, all_actions:th.Tensor):
+        """
+        Get the predicted reweighted reward of the trajectory.
+
+        :param obs: Observation
+        :param actions: Actions
+        :return: the reweighted reward.
+        """
+        features,all_actions_one_hot = [],[]
+        for i in range(self.num_agents):
+            features.append(self.extract_features(all_last_obs[:,i,:]))
+            all_actions_one_hot.append(F.one_hot(all_actions[:,i,:], num_classes=self.action_space.n))
+        features = th.stack(features,dim=0)
+        all_actions_one_hot = th.stack(all_actions_one_hot,dim=0)
+        all_actions_one_hot = th.squeeze(all_actions_one_hot)
+
+        features = th.permute(features,(1,0,2))
+        features = th.reshape(features,(features.shape[0],-1))
+        all_actions_one_hot = th.permute(all_actions_one_hot,(1,0,2))
+        all_actions_one_hot = th.reshape(all_actions_one_hot,(all_actions_one_hot.shape[0],-1))
+        obs_action = th.cat((features,all_actions_one_hot),dim=-1)
+
+        predicted_reweighted_reward = self.reward_net(obs_action)[0]
+        predicted_reweighted_reward = th.squeeze(predicted_reweighted_reward)
+        return predicted_reweighted_reward
 
 class ActorCriticCnnPolicy(ActorCriticPolicy):
     """
