@@ -441,6 +441,7 @@ class PPO(OnPolicyAlgorithm):
                         self.policy.optimizer.step()
 
             else:
+                reweighted_reward_losses = 0
                 for rollout_data in self.rollout_buffer.get(self.batch_size):
                     actions = rollout_data.actions
                     if isinstance(self.action_space, spaces.Discrete):
