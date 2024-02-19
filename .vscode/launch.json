@@ -59,7 +59,7 @@
             "justMyCode": false,
             "args": [
                 "--env",
-                "harvest",
+                "cleanup",
                 "--model",
                 "causal",
                 "--num-agents",
@@ -71,7 +71,7 @@
                 "--num-envs",
                 "2",
                 "--enable_trajs_learning",
-                "1"
+                "0"
             ],
         },
     ]

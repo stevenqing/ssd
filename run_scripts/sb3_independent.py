@@ -334,7 +334,8 @@ def main(args):
             alpha=alpha,
             model=args.model,
             using_reward_timestep=using_reward_timestep,
-            enable_trajs_learning=enable_trajs_learning
+            enable_trajs_learning=enable_trajs_learning,
+            env_name=env_name
         )
     else:
         model = IndependentPPO(
@@ -356,7 +357,8 @@ def main(args):
             alpha=alpha,
             model=args.model,
             using_reward_timestep=using_reward_timestep,
-            enable_trajs_learning=enable_trajs_learning
+            enable_trajs_learning=enable_trajs_learning,
+            env_name=env_name
         )
     model.learn(total_timesteps=total_timesteps)
 

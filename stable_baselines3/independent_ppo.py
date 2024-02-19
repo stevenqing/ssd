@@ -51,8 +51,10 @@ class IndependentPPO(OnPolicyAlgorithm):
         model: str = 'baseline',
         using_reward_timestep: int = 2000000,
         enable_trajs_learning: bool = False,
+        env_name: str = 'harvest',
     ):
         self.env = env
+        self.env_name = env_name
         self.num_agents = num_agents
         self.num_envs = env.num_envs // num_agents
         self.observation_space = env.observation_space
@@ -170,13 +172,20 @@ class IndependentPPO(OnPolicyAlgorithm):
                     fps = int(policy.num_timesteps / (time.time() - policy.start_time))
                     wandb.log({f"{polid}/fps": fps}, step=num_timesteps)
                     wandb.log({f"{polid}/ep_rew_mean": safe_mean([ep_info["r"] for ep_info in policy.ep_info_buffer])}, step=num_timesteps)
-                    SW_ep_rew_mean += safe_mean([ep_info["r"] for ep_info in policy.ep_info_buffer])
                     wandb.log({f"{polid}/ep_len_mean": policy.ep_info_buffer[-1]["l"]}, step=num_timesteps)
                     wandb.log({f"{polid}/time_elapsed": int(time.time() - policy.start_time)}, step=num_timesteps)
                     wandb.log({f"{polid}/total_timesteps": policy.num_timesteps}, step=num_timesteps)
-
+                    
+                    SW_ep_rew_mean += safe_mean([ep_info["r"] for ep_info in policy.ep_info_buffer])
                     ep_cf_reward = np.sum(policy.rollout_buffer.cf_rewards)
                     wandb.log({f"{polid}/cf_reward": ep_cf_reward}, step=num_timesteps)
+
+                    if self.env_name == 'harvest':
+                        wandb.log({f"{polid}/zap_behavior": (policy.rollout_buffer.action==7).sum()}, step=num_timesteps)
+                    elif self.env_name == 'cleanup':
+                        wandb.log({f"{polid}/zap_behavior": (policy.rollout_buffer.action==7).sum()}, step=num_timesteps)
+                        wandb.log({f"{polid}/clean_behavior": (policy.rollout_buffer.action==8).sum()}, step=num_timesteps)
+
                     policy.logger.record("policy_id", polid, exclude="tensorboard")
                     policy.logger.record(
                         "time/iterations", num_timesteps, exclude="tensorboard"
