@@ -105,6 +105,8 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--user_name", type=str, default="1160677229")
     parser.add_argument("--model", type=str, default='baseline')
+    parser.add_argument("--extractor", type=str, default='cnn')
+    parser.add_argument("--enable_trajs_learning", type=int, default=0,choices=[0, 1])
     args = parser.parse_args()
     return args
 
@@ -228,8 +230,12 @@ def main(args):
     beta = args.beta
     num_cpus = args.num_cpus
     num_envs = args.num_envs
-
+    extractor = args.extractor
     target_kl = args.kl_threshold
+    if args.enable_trajs_learning == 0:
+        enable_trajs_learning = False
+    else:
+        enable_trajs_learning = True
     # Training
       # number of cpus
       # number of parallel multi-agent environments
@@ -277,14 +283,25 @@ def main(args):
     
     args = wandb.config # for wandb sweep
 
-    policy_kwargs = dict(
-        features_extractor_class=CBAM,
-        features_extractor_kwargs=dict(
-            features_dim=features_dim, num_frames=num_frames, fcnet_hiddens=fcnet_hiddens
-        ),
-        net_arch=[features_dim],
-        num_agents=args.num_agents,
-    )
+    if extractor == 'cbam':
+        policy_kwargs = dict(
+            features_extractor_class=CBAM,
+            features_extractor_kwargs=dict(
+                features_dim=features_dim, num_frames=num_frames, fcnet_hiddens=fcnet_hiddens
+            ),
+            net_arch=[features_dim],
+            num_agents=args.num_agents,
+        )
+    else:
+        policy_kwargs = dict(
+            features_extractor_class=CustomCNN,
+            features_extractor_kwargs=dict(
+                features_dim=features_dim, num_frames=num_frames, fcnet_hiddens=fcnet_hiddens
+            ),
+            net_arch=[features_dim],
+            num_agents=args.num_agents,
+        )
+
 
     tensorboard_log = f"./results/{env_name}_ppo_paramsharing"
     if args.model == 'baseline':
@@ -305,6 +322,7 @@ def main(args):
             verbose=verbose,
             model=model,
             num_agents=num_agents,
+            enable_trajs_learning=enable_trajs_learning,
         )
     else:
         model = PPO(
@@ -324,6 +342,7 @@ def main(args):
             verbose=verbose,
             model=model,
             num_agents=num_agents,
+            enable_trajs_learning=enable_trajs_learning,
         )
     model.learn(total_timesteps=total_timesteps)
 
