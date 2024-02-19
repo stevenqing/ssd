@@ -181,10 +181,10 @@ class IndependentPPO(OnPolicyAlgorithm):
                     wandb.log({f"{polid}/cf_reward": ep_cf_reward}, step=num_timesteps)
 
                     if self.env_name == 'harvest':
-                        wandb.log({f"{polid}/zap_behavior": (policy.rollout_buffer.action==7).sum()}, step=num_timesteps)
+                        wandb.log({f"{polid}/zap_behavior": (policy.rollout_buffer.actions==7).sum()}, step=num_timesteps)
                     elif self.env_name == 'cleanup':
-                        wandb.log({f"{polid}/zap_behavior": (policy.rollout_buffer.action==7).sum()}, step=num_timesteps)
-                        wandb.log({f"{polid}/clean_behavior": (policy.rollout_buffer.action==8).sum()}, step=num_timesteps)
+                        wandb.log({f"{polid}/zap_behavior": (policy.rollout_buffer.actions==7).sum()}, step=num_timesteps)
+                        wandb.log({f"{polid}/clean_behavior": (policy.rollout_buffer.actions==8).sum()}, step=num_timesteps)
 
                     policy.logger.record("policy_id", polid, exclude="tensorboard")
                     policy.logger.record(
