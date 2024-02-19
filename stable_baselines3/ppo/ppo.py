@@ -193,7 +193,7 @@ class PPO(OnPolicyAlgorithm):
             clip_range_vf = self.clip_range_vf(self._current_progress_remaining)
 
         entropy_losses = []
-        pg_losses, value_losses, reward_losses = [], [], []
+        pg_losses, value_losses, reward_losses, reweighted_reward_losses = [], [], [], None
         clip_fractions = []
         
         continue_training = True
@@ -441,7 +441,6 @@ class PPO(OnPolicyAlgorithm):
                         self.policy.optimizer.step()
 
             else:
-                reweighted_reward_losses = 0
                 for rollout_data in self.rollout_buffer.get(self.batch_size):
                     actions = rollout_data.actions
                     if isinstance(self.action_space, spaces.Discrete):
@@ -540,8 +539,9 @@ class PPO(OnPolicyAlgorithm):
 
         if self.model == 'causal':
             wandb.log({f"train/reward_loss": reward_losses.item()}, step=self.num_timesteps)
-            if reweighted_reward_losses != 0:
-                wandb.log({f"train/reweighted_reward_loss": reweighted_reward_losses.item()}, step=self.num_timesteps)
+            if not reweighted_reward_losses == None:
+                if reweighted_reward_losses != 0:
+                    wandb.log({f"train/reweighted_reward_loss": reweighted_reward_losses.item()}, step=self.num_timesteps)
 
 
 
