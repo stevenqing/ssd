@@ -636,7 +636,6 @@ class IndependentPPO(OnPolicyAlgorithm):
 
         all_actions_one_hot = all_actions[:,polid,:]
         eye_matrix = th.eye(self.action_space.n,device=all_actions_one_hot.device)
-        print(eye_matrix.device,all_actions_one_hot.device)
         all_actions_one_hot = eye_matrix[all_actions_one_hot]
         all_actions_one_hot = all_actions_one_hot.unsqueeze(1)
         all_actions_one_hot = all_actions_one_hot.repeat(1,1,sample_number,1)
