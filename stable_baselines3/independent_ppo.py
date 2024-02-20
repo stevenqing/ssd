@@ -635,7 +635,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         all_obs_features = all_obs_features.reshape(all_obs_features.shape[0],-1)
 
         all_actions_one_hot = all_actions[:,polid,:]
-        all_actions_one_hot = th.eye(self.action_space.n)[all_actions_one_hot.cuda()]
+        all_actions_one_hot = th.eye(self.action_space.n.cuda())[all_actions_one_hot.cuda()]
         all_actions_one_hot = all_actions_one_hot.unsqueeze(1)
         all_actions_one_hot = all_actions_one_hot.repeat(1,1,sample_number,1)
 
