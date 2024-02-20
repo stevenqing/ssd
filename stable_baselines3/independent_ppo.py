@@ -596,7 +596,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         with th.no_grad():
             for polid, policy in enumerate(self.policies):
                 obs_tensor = obs_as_tensor(all_last_obs[polid], policy.device)
-                _, value, _ = policy.policy.forward(obs_tensor)
+                _, value, _,_ = policy.policy.forward(obs_tensor)
                 if self.model == 'baseline':
                         policy.rollout_buffer.compute_returns_and_advantage(
                         last_values=value, dones=all_dones[polid]
@@ -643,7 +643,7 @@ class IndependentPPO(OnPolicyAlgorithm):
             if i != polid:
                 cf_action_i = self.generate_samples(all_distributions[i],sample_number)
                 all_actions_one_hot = th.cat((all_actions_one_hot,cf_action_i),dim=1)
-                
+
         # Need to double check here, to see if the cf is correct, (num_envs, num_agents, num_cf, num_action_space)
         all_actions_one_hot = all_actions_one_hot.permute(0,2,1,3)
         all_actions_one_hot = all_actions_one_hot.reshape(all_actions_one_hot.shape[0],all_actions_one_hot.shape[1],-1).permute(1,0,2)
