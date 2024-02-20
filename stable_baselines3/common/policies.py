@@ -643,7 +643,7 @@ class ActorCriticPolicy(BasePolicy):
         actions = distribution.get_actions(deterministic=deterministic)
         log_prob = distribution.log_prob(actions)
         actions = actions.reshape((-1,) + self.action_space.shape)
-        return actions, values, log_prob
+        return actions, values, log_prob, distribution
 
     def extract_features(self, obs: th.Tensor) -> Union[th.Tensor, Tuple[th.Tensor, th.Tensor]]:
         """
