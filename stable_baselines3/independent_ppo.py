@@ -663,7 +663,8 @@ class IndependentPPO(OnPolicyAlgorithm):
         for i in range(sample_number):
             all_samples.append(distribution.sample())
         all_samples = th.stack(all_samples,dim=0)
-        all_samples = th.eye(self.action_space.n)[all_samples]
+        eye_matrix = th.eye(self.action_space.n,device=all_samples.device)
+        all_samples = eye_matrix[all_samples]
         all_samples = all_samples.permute(1,0,2)
         all_samples = all_samples.unsqueeze(1)
         return all_samples
