@@ -453,6 +453,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         all_rewards = [None] * self.num_agents
         all_dones = [None] * self.num_agents
         all_infos = [None] * self.num_agents
+        all_distributions = [None] * self.num_agents
         steps = 0
 
         for polid, policy in enumerate(self.policies):
@@ -485,6 +486,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                         all_actions[polid],
                         all_values[polid],
                         all_log_probs[polid],
+                        all_distributions[polid],
                     ) = policy.policy.forward(obs_tensor)
                     clipped_actions = all_actions[polid].cpu().numpy()
                     if isinstance(self.action_space, Box):
@@ -575,7 +577,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                             cf_rewards=None,
                         )
                     else:
-                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid)
+                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions)
                         policy.rollout_buffer.add_sw(
                             all_last_obs[polid],
                             all_actions[polid],
@@ -617,7 +619,9 @@ class IndependentPPO(OnPolicyAlgorithm):
 
         return obs
 
-    def compute_cf_rewards(self,policy,all_last_obs,all_actions,polid):
+
+
+    def compute_cf_rewards(self,policy,all_last_obs,all_actions,polid,all_distributions,sample_number=10):
         all_cf_rewards = []
 
         all_last_obs = obs_as_tensor(np.array(all_last_obs), policy.device)
@@ -629,13 +633,17 @@ class IndependentPPO(OnPolicyAlgorithm):
             all_obs_features.append(policy.policy.extract_features(all_last_obs[i]))
         all_obs_features = th.stack(all_obs_features,dim=0).permute(1,0,2)
         all_obs_features = all_obs_features.reshape(all_obs_features.shape[0],-1)
-        index = 0
-        all_actions_one_hot = F.one_hot(all_actions, num_classes=self.action_space.n).repeat(1,1,(self.num_agents-1) * self.action_space.n,1)
+
+        all_actions_one_hot = all_actions[:,polid,:]
+        all_actions_one_hot = th.eye(self.action_space.n)[all_actions_one_hot]
+        all_actions_one_hot = all_actions_one_hot.unsqueeze(1)
+        all_actions_one_hot = all_actions_one_hot.repeat(1,1,sample_number,1)
+
         for i in range(self.num_agents):
             if i != polid:
-                all_actions_i = th.eye(self.action_space.n).repeat(self.num_envs,1,1)
-                all_actions_one_hot[:,i,index:index+self.action_space.n,:] = all_actions_i
-                index += self.action_space.n
+                cf_action_i = self.generate_samples(all_distributions[i],sample_number)
+                all_actions_one_hot = th.cat((all_actions_one_hot,cf_action_i),dim=1)
+                
         # Need to double check here, to see if the cf is correct, (num_envs, num_agents, num_cf, num_action_space)
         all_actions_one_hot = all_actions_one_hot.permute(0,2,1,3)
         all_actions_one_hot = all_actions_one_hot.reshape(all_actions_one_hot.shape[0],all_actions_one_hot.shape[1],-1).permute(1,0,2)
@@ -647,6 +655,48 @@ class IndependentPPO(OnPolicyAlgorithm):
         all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
         all_cf_rewards = th.mean(all_cf_rewards,dim=1).cpu().detach().numpy()
         return all_cf_rewards
+
+    def generate_samples(self,distribution,sample_number):
+        all_samples = []
+        for i in range(sample_number):
+            all_samples.append(distribution.sample())
+        all_samples = th.stack(all_samples,dim=0)
+        all_samples = th.eye(self.action_space.n)[all_samples]
+        all_samples = all_samples.permute(1,0,2)
+        all_samples = all_samples.unsqueeze(1)
+        return all_samples
+
+
+    # def compute_cf_rewards(self,policy,all_last_obs,all_actions,polid,all_distributions):
+    #     all_cf_rewards = []
+
+    #     all_last_obs = obs_as_tensor(np.array(all_last_obs), policy.device)
+    #     all_actions = obs_as_tensor(np.transpose(np.array(all_actions),(1,0,2)), policy.device)
+        
+    #     # extract obs features
+    #     all_obs_features = []
+    #     for i in range(self.num_agents):
+    #         all_obs_features.append(policy.policy.extract_features(all_last_obs[i]))
+    #     all_obs_features = th.stack(all_obs_features,dim=0).permute(1,0,2)
+    #     all_obs_features = all_obs_features.reshape(all_obs_features.shape[0],-1)
+    #     index = 0
+    #     all_actions_one_hot = F.one_hot(all_actions, num_classes=self.action_space.n).repeat(1,1,(self.num_agents-1) * self.action_space.n,1)
+    #     for i in range(self.num_agents):
+    #         if i != polid:
+    #             all_actions_i = th.eye(self.action_space.n).repeat(self.num_envs,1,1)
+    #             all_actions_one_hot[:,i,index:index+self.action_space.n,:] = all_actions_i
+    #             index += self.action_space.n
+    #     # Need to double check here, to see if the cf is correct, (num_envs, num_agents, num_cf, num_action_space)
+    #     all_actions_one_hot = all_actions_one_hot.permute(0,2,1,3)
+    #     all_actions_one_hot = all_actions_one_hot.reshape(all_actions_one_hot.shape[0],all_actions_one_hot.shape[1],-1).permute(1,0,2)
+    #     all_obs_features = all_obs_features.repeat(all_actions_one_hot.shape[0],1,1)
+        
+    #     all_obs_actions_features = th.cat((all_obs_features,all_actions_one_hot),dim=-1).permute(1,0,2)
+    #     all_obs_actions_features = all_obs_actions_features.reshape(-1,all_obs_actions_features.shape[-1])
+        
+    #     all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
+    #     all_cf_rewards = th.mean(all_cf_rewards,dim=1).cpu().detach().numpy()
+    #     return all_cf_rewards
 
 
     @classmethod

@@ -1125,7 +1125,7 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
         actions = distribution.get_actions(deterministic=deterministic)
         log_prob = distribution.log_prob(actions)
         actions = actions.reshape((-1,) + self.action_space.shape)
-        return actions, values, log_prob
+        return actions, values, log_prob, distribution
 
 
     def comparing_trajs(self, all_obs: th.Tensor, prev_all_obs: th.Tensor, all_actions: th.Tensor, prev_all_actions: th.Tensor) -> th.Tensor:

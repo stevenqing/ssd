@@ -305,10 +305,22 @@ class CategoricalDistribution(Distribution):
         self.proba_distribution(action_logits)
         return self.get_actions(deterministic=deterministic)
 
+
     def log_prob_from_params(self, action_logits: th.Tensor) -> Tuple[th.Tensor, th.Tensor]:
         actions = self.actions_from_params(action_logits)
         log_prob = self.log_prob(actions)
         return actions, log_prob
+    
+    def get_multiple_actions(self, sample: int=10, deterministic: bool = False) -> th.Tensor:
+        """
+        Return actions according to the probability distribution.
+
+        :param deterministic:
+        :return:
+        """
+        if deterministic:
+            return self.mode()
+        return self.sample()
 
 
 class MultiCategoricalDistribution(Distribution):
