@@ -266,6 +266,7 @@ class OnPolicyAlgorithm(BaseAlgorithm):
                 if len(self.ep_info_buffer) > 0 and len(self.ep_info_buffer[0]) > 0:
                     wandb.log({f"rollout/ep_rew_mean": safe_mean([ep_info["r"] for ep_info in self.ep_info_buffer])}, step=self.num_timesteps)
                     wandb.log({f"SW_ep_rew_mean": safe_mean([ep_info["r"] for ep_info in self.ep_info_buffer])}, step=self.num_timesteps)
+                    wandb.log({f"SW_ep_rew_total": self.num_agents * safe_mean([ep_info["l"] for ep_info in self.ep_info_buffer])}, step=self.num_timesteps)
                     wandb.log({f"rollout/ep_len_mean": safe_mean([ep_info["l"] for ep_info in self.ep_info_buffer])}, step=self.num_timesteps)
                 wandb.log({f"time/fps": fps}, step=self.num_timesteps)
                 wandb.log({f"time/fps": fps}, step=self.num_timesteps)
