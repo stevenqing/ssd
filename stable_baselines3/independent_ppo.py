@@ -93,8 +93,9 @@ class IndependentPPO(OnPolicyAlgorithm):
                 num_agents=self.num_agents,
                 model=self.model,
                 enable_trajs_learning=self.enable_trajs_learning,
+                polid=polid,
             )
-            for _ in range(self.num_agents)
+            for polid in range(self.num_agents)
         ]
         self.previous_all_last_obs_traj = None
         self.previous_all_actions_traj = None
