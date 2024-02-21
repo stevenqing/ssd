@@ -539,6 +539,10 @@ class PPO(OnPolicyAlgorithm):
 
         if self.model == 'causal':
             wandb.log({f"train/reward_loss": reward_losses.item()}, step=self.num_timesteps)
+            if self.enable_trajs_learning == False:
+                for polid in range(self.num_agents):
+                    wandb.log({f"{polid}/predicted_reward": predicted_reward.sum(dim=0)[polid]}, step=self.num_timesteps)
+                    wandb.log({f"{polid}/all_rewards": all_rewards.sum(dim=0)[polid]}, step=self.num_timesteps)
             if not reweighted_reward_losses == None:
                 if reweighted_reward_losses != 0:
                     wandb.log({f"train/reweighted_reward_loss": reweighted_reward_losses.item()}, step=self.num_timesteps)

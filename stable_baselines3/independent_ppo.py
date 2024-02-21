@@ -390,24 +390,38 @@ class IndependentPPO(OnPolicyAlgorithm):
                         cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid)
                         if num_timesteps <= self.using_reward_timestep:
                             cf_rewards = np.zeros_like(cf_rewards)
-                        policy.rollout_buffer.add_sw_traj( # add_sw
-                            all_last_obs[polid],
-                            all_actions[polid],
-                            all_rewards[polid],
-                            all_last_episode_starts[polid],
-                            all_values[polid],
-                            all_log_probs[polid],
-                            all_last_obs,
-                            rollout_all_actions,
-                            all_rewards,
-                            cf_rewards,
-                            all_obs_trajs,
-                            all_actions_trajs,
-                            all_rewards_trajs,
-                            self.previous_all_last_obs_traj,
-                            self.previous_all_actions_traj,
-                            self.previous_all_rewards_traj,
-                        )
+                        if self.enable_trajs_learning:
+                            policy.rollout_buffer.add_sw_traj( # add_sw
+                                all_last_obs[polid],
+                                all_actions[polid],
+                                all_rewards[polid],
+                                all_last_episode_starts[polid],
+                                all_values[polid],
+                                all_log_probs[polid],
+                                all_last_obs,
+                                rollout_all_actions,
+                                all_rewards,
+                                cf_rewards,
+                                all_obs_trajs,
+                                all_actions_trajs,
+                                all_rewards_trajs,
+                                self.previous_all_last_obs_traj,
+                                self.previous_all_actions_traj,
+                                self.previous_all_rewards_traj,
+                            )
+                        else:   
+                            policy.rollout_buffer.add_sw(
+                                all_last_obs[polid],
+                                all_actions[polid],
+                                all_rewards[polid],
+                                all_last_episode_starts[polid],
+                                all_values[polid],
+                                all_log_probs[polid],
+                                all_last_obs,
+                                rollout_all_actions,
+                                all_rewards,
+                                cf_rewards,
+                            )
             if isinstance(all_obs_trajs, np.ndarray):
                 self.previous_all_last_obs_traj = all_obs_trajs
                 self.previous_all_actions_traj = all_actions_trajs
@@ -619,6 +633,20 @@ class IndependentPPO(OnPolicyAlgorithm):
 
         return obs
 
+    # def compute_predicted_rewards(self,policy,all_last_obs,all_actions,polid,all_distributions):
+    #     all_cf_rewards = []
+
+    #     all_last_obs = obs_as_tensor(np.array(all_last_obs), policy.device)
+    #     all_actions = obs_as_tensor(np.transpose(np.array(all_actions),(1,0,2)), policy.device)
+        
+    #     # extract obs features
+    #     all_obs_features = []
+    #     for i in range(self.num_agents):
+    #         all_obs_features.append(policy.policy.extract_features(all_last_obs[i]))
+    #     all_obs_features = th.stack(all_obs_features,dim=0).permute(1,0,2)
+    #     all_obs_features = all_obs_features.reshape(all_obs_features.shape[0],-1)
+    #     index = 0
+    #     all_actions_one_hot = F.one_hot(all_actions, num_classes=self.action_space.n).repeat(1,1,(self.num_agents-1) * self.action_space.n,1)
 
 
     def compute_cf_rewards(self,policy,all_last_obs,all_actions,polid,all_distributions,sample_number=10):

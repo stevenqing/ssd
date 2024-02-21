@@ -71,7 +71,7 @@
                 "--num-envs",
                 "2",
                 "--use-collective-reward",
-                "True"
+                "False"
             ],
         },
     ]
