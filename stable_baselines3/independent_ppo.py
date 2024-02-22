@@ -16,16 +16,8 @@ from stable_baselines3.common.utils import (configure_logger, obs_as_tensor,
                                             safe_mean)
 from stable_baselines3.common.vec_env import DummyVecEnv
 
+from social_dilemmas.envs.agent import ENV_REWARD_SPACE, OOD_INDEX
 
-ENV_REWARD_SPACE = {"harvest":{-1:0,
-                               0:1,
-                               1:2,
-                               -49:3,
-                               -50:4,
-                               -51:5,
-                               -99:6,
-                               -100:7,
-                               -101:8}}
 REWARD_ENV_SPACE = {"harvest": {value: key for key, value in ENV_REWARD_SPACE["harvest"].items()}}
 class DummyGymEnv(gym.Env):
     def __init__(self, observation_space, action_space):
@@ -604,7 +596,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                         )
                     else:
                         cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions)
-                        reward_mapping_func = np.frompyfunc(lambda key: ENV_REWARD_SPACE[self.env_name].get(key, 9), 1, 1)
+                        reward_mapping_func = np.frompyfunc(lambda key: ENV_REWARD_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][1]), 1, 1)
                         all_discrete_rewards = reward_mapping_func(all_rewards)
                         policy.rollout_buffer.add_sw(
                             all_last_obs[polid],
@@ -696,16 +688,26 @@ class IndependentPPO(OnPolicyAlgorithm):
         all_obs_actions_features = th.cat((all_obs_features,all_actions_one_hot),dim=-1).permute(1,0,2)
         all_obs_actions_features = all_obs_actions_features.reshape(-1,all_obs_actions_features.shape[-1])
         
-        all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0].reshape(self.num_envs,sample_number,self.num_agents,-1)#.squeeze().reshape(self.num_envs,-1,self.num_agents)
-        all_cf_rewards = th.mean(all_cf_rewards,dim=1)#.cpu().detach().numpy()
-        all_cf_rewards = all_cf_rewards.reshape(-1,(len(ENV_REWARD_SPACE[self.env_name])+1))
-        all_cf_rewards = th.multinomial(all_cf_rewards,1,replacement=True).cpu().numpy()
+        all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0]
+        # reshape
+        all_cf_rewards = all_cf_rewards.reshape(self.num_envs,sample_number,self.num_agents, -1)#.squeeze().reshape(self.num_envs,-1,self.num_agents)
+        
+        # argmax
+        all_cf_rewards_class_index = th.argmax(all_cf_rewards,dim=-1).cpu().numpy()
+
+        # mapping to the original reward space
+        # all_cf_rewards = th.mean(all_cf_rewards,dim=1)#.cpu().detach().numpy()
+        # all_cf_rewards = all_cf_rewards.reshape(-1,(len(ENV_REWARD_SPACE[self.env_name])+1))
+        # all_cf_rewards = th.multinomial(all_cf_rewards,1,replacement=True).cpu().numpy()
 
         # Set reward not in the dict to be 0
         reverse_reward_mapping_func = np.frompyfunc(lambda key: REWARD_ENV_SPACE[self.env_name].get(key, 0), 1, 1)
-        all_cf_rewards = reverse_reward_mapping_func(all_cf_rewards)
-        all_cf_rewards = np.reshape(all_cf_rewards,(self.num_envs,self.num_agents,-1))
-        all_cf_rewards = np.squeeze(all_cf_rewards)
+        all_cf_rewards_values = reverse_reward_mapping_func(all_cf_rewards_class_index)
+
+        # average along sample dimension
+        all_cf_rewards = np.mean(all_cf_rewards_values,axis=1)
+        # all_cf_rewards = np.reshape(all_cf_rewards_values,(self.num_envs,self.num_agents,-1))
+        # all_cf_rewards = np.squeeze(all_cf_rewards)
         return all_cf_rewards
 
     def generate_samples(self,distribution,sample_number):

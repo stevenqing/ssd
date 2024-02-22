@@ -16,7 +16,42 @@ BASE_ACTIONS = {
     6: "TURN_COUNTERCLOCKWISE",
 }  # Rotate clockwise
 
+ENV_REWARD_SPACE = {"harvest":{
+    -6: 0,
+    -5: 1,
+    -4: 2,
+    -3: 3,
+    -2: 4,
+    -1: 5,
+    0: 6,
+    1: 7,
+    2: 8,
+    3: 9,
+    4: 10,
+    5: 11,
+    6: 12,
+    -44: 13,
+    -45: 14,
+    -46: 15,
+    -47: 16,
+    -48: 17,
+    -49: 18,
+    -50: 19,
+    -51: 20,
+    -52: 21,
+    -53: 22,
+    -54: 23,
+    -55: 24,
+    -56: 25,
+    -99: 26,
+    -100:27,
+    -101:28}}
 
+# ENV_REWARD_SPACE = {"harvest":[-1, 0, 1, -49, -50, -51, -99, -100, -101]}
+
+OOD_INDEX = {
+    "harvest": [29, -120]
+}
 
 class Agent(object):
     def __init__(self, agent_id, start_pos, start_orientation, full_map, row_size, col_size):

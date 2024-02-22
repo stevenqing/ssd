@@ -394,6 +394,7 @@ class MapEnv(MultiAgentEnv):
         else:
             for agent in self.agents.values():
                 pos = agent.pos
+                # possible 1
                 new_char = agent.consume(self.world_map[pos[0], pos[1]])
                 self.single_update_map(pos[0], pos[1], new_char)
 

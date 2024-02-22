@@ -13,17 +13,7 @@ from stable_baselines3.common.utils import explained_variance, get_schedule_fn
 
 SelfPPO = TypeVar("SelfPPO", bound="PPO")
 
-ENV_REWARD_SPACE = {"harvest":{-1:0,
-                               0:1,
-                               1:2,
-                               -49:3,
-                               -50:4,
-                               -51:5,
-                               -99:6,
-                               -100:7,
-                               -101:8}}
-
-# ENV_REWARD_SPACE = {"harvest":[-1, 0, 1, -49, -50, -51, -99, -100, -101]}
+from social_dilemmas.envs.agent import OOD_INDEX
 
 class PPO(OnPolicyAlgorithm):
     """
@@ -436,9 +426,13 @@ class PPO(OnPolicyAlgorithm):
                         predicted_reward = th.permute(predicted_reward,(0,2,1))
                         # TODO use logits here, make sure flatten first
                         # TODO check the data flatten in a right way
-                        predicted_reward = predicted_reward.flatten(-1, predicted_reward.size(-1))
-                        all_rewards = all_rewards.flatten(-1, all_rewards.size(-1))
+                        # predicted_reward =  predicted_reward.reshape(-1, predicted_reward.shape[-1])
+                        # all_rewards = all_rewards.reshape(-1)
                         reward_losses = F.cross_entropy(predicted_reward, all_rewards)
+                        reward_acc = th.mean((th.argmax(predicted_reward, dim=1) == all_rewards).float()).cpu().numpy()
+                        
+                        # acc 
+                        reward_ood_rate = th.mean((all_rewards == OOD_INDEX[self.env_name][0]).float()).cpu().numpy()
                         # reward_losses = F.mse_loss(all_rewards, predicted_reward)
 
                         loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + reward_losses
@@ -568,6 +562,8 @@ class PPO(OnPolicyAlgorithm):
                 if self.polid != None:
                     wandb.log({f"{self.polid}/all_predicted_reward": predicted_reward.sum()}, step=self.num_timesteps)
                     wandb.log({f"{self.polid}/all_rewards": all_rewards.sum()}, step=self.num_timesteps)
+                    wandb.log({f"{self.polid}/reward_acc": reward_acc.mean()}, step=self.num_timesteps)
+                    wandb.log({f"{self.polid}/reward_ood_rate": reward_ood_rate.mean()}, step=self.num_timesteps)
                     for polid in range(self.num_agents):
                         wandb.log({f"{self.polid}/predicted_reward/{polid}": predicted_reward[:,polid].sum()}, step=self.num_timesteps)
                         wandb.log({f"{self.polid}/all_rewards/{polid}": all_rewards[:,polid].sum()}, step=self.num_timesteps)

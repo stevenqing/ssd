@@ -3,15 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import torch.nn.functional as F
-ENV_REWARD_SPACE = {"harvest":{-1:0,
-                               0:1,
-                               1:2,
-                               -49:3,
-                               -50:4,
-                               -51:5,
-                               -99:6,
-                               -100:7,
-                               -101:8}}
+from social_dilemmas.envs.agent import ENV_REWARD_SPACE
 
 class MaskActivation(nn.Module):
     def __init__(self, threshold=0.1):
