@@ -301,6 +301,7 @@ def main(args):
             ),
             net_arch=[features_dim],
             num_agents=args.num_agents,
+            env_name=env_name
         )
     else:
         policy_kwargs = dict(
@@ -310,6 +311,7 @@ def main(args):
             ),
             net_arch=[features_dim],
             num_agents=args.num_agents,
+            env_name=env_name
         )
 
 

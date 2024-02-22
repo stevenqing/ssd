@@ -439,6 +439,7 @@ class ActorCriticPolicy(BasePolicy):
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
         num_agents: int = 3,
+        env_name: str = 'harvest',
     ):
 
         if optimizer_kwargs is None:
@@ -446,7 +447,7 @@ class ActorCriticPolicy(BasePolicy):
             # Small values to avoid NaN in Adam optimizer
             if optimizer_class == th.optim.Adam:
                 optimizer_kwargs["eps"] = 1e-5
-
+        
         super().__init__(
             observation_space,
             action_space,
@@ -482,7 +483,8 @@ class ActorCriticPolicy(BasePolicy):
                 net_arch = dict(pi=[64, 64], vf=[64, 64])
         
         self.num_agents = num_agents
-
+        self.env_name = env_name
+        
         self.net_arch = net_arch
         self.activation_fn = activation_fn
         self.ortho_init = ortho_init
@@ -1010,6 +1012,7 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
         num_agents: int = 3,
+        env_name: str = 'cleanup',
     ):
         super().__init__(
             observation_space,
@@ -1031,6 +1034,7 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
             optimizer_kwargs,
         )
         self.num_agents = num_agents
+        self.env_name = env_name
         self._build(lr_schedule)
 
     def _build_mlp_extractor(self) -> None:
@@ -1075,7 +1079,7 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
 
         self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf, 1)
         # self.reward_net = CausalModel(self.mlp_extractor.latent_dim_vf+self.action_space.n,self.num_agents) # use individual training
-        self.reward_net = CausalModel((self.mlp_extractor.latent_dim_vf+self.action_space.n) * self.num_agents,self.num_agents) # use global training
+        self.reward_net = CausalModel((self.mlp_extractor.latent_dim_vf+self.action_space.n) * self.num_agents,self.num_agents,env_name=self.env_name) # use global training
         # Init weights: use orthogonal initialization
         # with small initial weight for the output
         if self.ortho_init:

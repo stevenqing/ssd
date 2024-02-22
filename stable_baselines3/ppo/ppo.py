@@ -13,6 +13,17 @@ from stable_baselines3.common.utils import explained_variance, get_schedule_fn
 
 SelfPPO = TypeVar("SelfPPO", bound="PPO")
 
+ENV_REWARD_SPACE = {"harvest":{-1:0,
+                               0:1,
+                               1:2,
+                               -49:3,
+                               -50:4,
+                               -51:5,
+                               -99:6,
+                               -100:7,
+                               -101:8}}
+
+# ENV_REWARD_SPACE = {"harvest":[-1, 0, 1, -49, -50, -51, -99, -100, -101]}
 
 class PPO(OnPolicyAlgorithm):
     """
@@ -102,6 +113,7 @@ class PPO(OnPolicyAlgorithm):
         num_agents: int = 3,
         enable_trajs_learning: bool = False,
         polid: Optional[int] = None,
+        env_name: Optional[str] = 'harvest'
     ):
 
         super().__init__(
@@ -164,6 +176,7 @@ class PPO(OnPolicyAlgorithm):
         self.num_agents = num_agents
         self.enable_trajs_learning = enable_trajs_learning
         self.polid = polid
+        self.env_name = env_name
         if _init_setup_model:
             self._setup_model()
 
@@ -178,6 +191,7 @@ class PPO(OnPolicyAlgorithm):
 
             self.clip_range_vf = get_schedule_fn(self.clip_range_vf)
         self.policy.num_agents = self.num_agents
+
 
 
     def train(self) -> None:
@@ -415,8 +429,13 @@ class PPO(OnPolicyAlgorithm):
 
                         entropy_losses.append(entropy_loss.item())
 
-                        # Reward loss
-                        reward_losses = F.mse_loss(all_rewards, predicted_reward)
+
+
+                        # use discrete loss
+                        all_rewards = all_rewards.long()
+                        predicted_reward = th.permute(predicted_reward,(0,2,1))
+                        reward_losses = F.cross_entropy(predicted_reward, all_rewards)
+                        # reward_losses = F.mse_loss(all_rewards, predicted_reward)
 
                         loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + reward_losses
 

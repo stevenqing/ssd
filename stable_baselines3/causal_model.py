@@ -2,7 +2,16 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
-
+import torch.nn.functional as F
+ENV_REWARD_SPACE = {"harvest":{-1:0,
+                               0:1,
+                               1:2,
+                               -49:3,
+                               -50:4,
+                               -51:5,
+                               -99:6,
+                               -100:7,
+                               -101:8}}
 
 class MaskActivation(nn.Module):
     def __init__(self, threshold=0.1):
@@ -18,8 +27,11 @@ class MaskActivation(nn.Module):
         return x
     
 class CausalModel(nn.Module):
-    def __init__(self, input_dim, num_agents, enable_causality=False, dynamic_mask=False):
+    def __init__(self, input_dim, num_agents, env_name='harvest',enable_causality=False, dynamic_mask=False):
         super(CausalModel, self).__init__()
+
+        self.env_name = env_name
+        self.num_reward_class = len(ENV_REWARD_SPACE[self.env_name]) + 1
         self.enable_causality = enable_causality
         self.layers = nn.Sequential(
             nn.Linear(input_dim, 1024),  # Fully connected layer
@@ -28,7 +40,7 @@ class CausalModel(nn.Module):
             nn.ReLU(),
             nn.Linear(512, 128),  # Fully connected layer
             nn.ReLU(),
-            nn.Linear(128, 1 if enable_causality else num_agents),  # Output layer
+            nn.Linear(128, num_agents * self.num_reward_class),  # Output layer
             nn.Tanh() # TODO double check the activation function
             # nn.Tanh() # TODO double check the activation function
         ) 
@@ -78,7 +90,10 @@ class CausalModel(nn.Module):
 
         else:
             input_ = x
-            return self.layers(input_), 0, 0
+            reward_logits_flatten =  self.layers(input_)
+            rew = reward_logits_flatten.view(-1, self.num_agents, self.num_reward_class)
+            rew = F.softmax(rew, dim=-1)
+            return rew, 0, 0
     def get_reg_loss(self):
         return self.causal_mask.abs().mean()
     def get_sparsity(self):

@@ -17,6 +17,16 @@ from stable_baselines3.common.utils import (configure_logger, obs_as_tensor,
 from stable_baselines3.common.vec_env import DummyVecEnv
 
 
+ENV_REWARD_SPACE = {"harvest":{-1:0,
+                               0:1,
+                               1:2,
+                               -49:3,
+                               -50:4,
+                               -51:5,
+                               -99:6,
+                               -100:7,
+                               -101:8}}
+REWARD_ENV_SPACE = {"harvest": {value: key for key, value in ENV_REWARD_SPACE["harvest"].items()}}
 class DummyGymEnv(gym.Env):
     def __init__(self, observation_space, action_space):
         self.observation_space = observation_space
@@ -94,6 +104,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                 model=self.model,
                 enable_trajs_learning=self.enable_trajs_learning,
                 polid=polid,
+                env_name=self.env_name,
             )
             for polid in range(self.num_agents)
         ]
@@ -593,6 +604,8 @@ class IndependentPPO(OnPolicyAlgorithm):
                         )
                     else:
                         cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions)
+                        reward_mapping_func = np.frompyfunc(lambda key: ENV_REWARD_SPACE[self.env_name].get(key, 9), 1, 1)
+                        all_discrete_rewards = reward_mapping_func(all_rewards)
                         policy.rollout_buffer.add_sw(
                             all_last_obs[polid],
                             all_actions[polid],
@@ -602,7 +615,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                             all_log_probs[polid],
                             all_last_obs,
                             rollout_all_actions,
-                            all_rewards,
+                            all_discrete_rewards,
                             cf_rewards,
                         )
             all_last_obs = all_obs
@@ -633,6 +646,7 @@ class IndependentPPO(OnPolicyAlgorithm):
             policy._last_episode_starts = all_last_episode_starts[polid]
 
         return obs
+
 
     # def compute_predicted_rewards(self,policy,all_last_obs,all_actions,polid,all_distributions):
     #     all_cf_rewards = []
@@ -682,8 +696,14 @@ class IndependentPPO(OnPolicyAlgorithm):
         all_obs_actions_features = th.cat((all_obs_features,all_actions_one_hot),dim=-1).permute(1,0,2)
         all_obs_actions_features = all_obs_actions_features.reshape(-1,all_obs_actions_features.shape[-1])
         
-        all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
-        all_cf_rewards = th.mean(all_cf_rewards,dim=1).cpu().detach().numpy()
+        all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0].reshape(self.num_envs,sample_number,self.num_agents,-1)#.squeeze().reshape(self.num_envs,-1,self.num_agents)
+        all_cf_rewards = th.mean(all_cf_rewards,dim=1)#.cpu().detach().numpy()
+        all_cf_rewards = all_cf_rewards.reshape(-1,(len(ENV_REWARD_SPACE[self.env_name])+1))
+        all_cf_rewards = th.multinomial(all_cf_rewards,1,replacement=True).cpu().numpy()
+
+        # Set reward not in the dict to be 0
+        reverse_reward_mapping_func = np.frompyfunc(lambda key: REWARD_ENV_SPACE[self.env_name].get(key, 0), 1, 1)
+        all_cf_rewards = reverse_reward_mapping_func(all_cf_rewards)
         return all_cf_rewards
 
     def generate_samples(self,distribution,sample_number):
