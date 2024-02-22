@@ -102,6 +102,7 @@ class PPO(OnPolicyAlgorithm):
         num_agents: int = 3,
         enable_trajs_learning: bool = False,
         polid: Optional[int] = None,
+        enable_reward_model_learning: int = 2000000,
     ):
 
         super().__init__(
@@ -164,6 +165,9 @@ class PPO(OnPolicyAlgorithm):
         self.num_agents = num_agents
         self.enable_trajs_learning = enable_trajs_learning
         self.polid = polid
+
+        self.enable_reward_model_learning = enable_reward_model_learning
+        self.timestep = 0
         if _init_setup_model:
             self._setup_model()
 
@@ -361,6 +365,7 @@ class PPO(OnPolicyAlgorithm):
                         self.policy.optimizer.step()
                 else:
                     for rollout_data in self.rollout_buffer.get_sw(self.batch_size):
+                        self.timestep += 1
                         all_last_obs = rollout_data.all_last_obs
                         all_rewards = rollout_data.all_rewards
                         actions = rollout_data.actions
@@ -416,10 +421,12 @@ class PPO(OnPolicyAlgorithm):
                         entropy_losses.append(entropy_loss.item())
 
                         # Reward loss
-                        
-                        reward_losses = F.mse_loss(all_rewards, predicted_reward)
+                        if self.timestep > self.enable_reward_model_learning:
+                            reward_losses = F.mse_loss(all_rewards, predicted_reward)
 
-                        loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + reward_losses
+                            loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + reward_losses
+                        else:
+                            loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss
 
                         # Calculate approximate form of reverse KL Divergence for early stopping
                         # see issue #417: https://github.com/DLR-RM/stable-baselines3/issues/417

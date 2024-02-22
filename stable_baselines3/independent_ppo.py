@@ -94,6 +94,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                 model=self.model,
                 enable_trajs_learning=self.enable_trajs_learning,
                 polid=polid,
+                enable_reward_model_learning=self.using_reward_timestep,
             )
             for polid in range(self.num_agents)
         ]
@@ -162,7 +163,7 @@ class IndependentPPO(OnPolicyAlgorithm):
             if self.enable_trajs_learning:
                 last_obs = self.collect_trajs_rollouts(last_obs, callbacks,num_timesteps)
             else:
-                last_obs = self.collect_rollouts(last_obs, callbacks)
+                last_obs = self.collect_rollouts(last_obs, callbacks,num_timesteps)
             num_timesteps += self.num_envs * self.n_steps
             SW_ep_rew_mean = 0
             for polid, policy in enumerate(self.policies):
@@ -460,7 +461,7 @@ class IndependentPPO(OnPolicyAlgorithm):
 
 
 
-    def collect_rollouts(self, last_obs, callbacks):
+    def collect_rollouts(self, last_obs, callbacks,num_timesteps):
 
         all_last_episode_starts = [None] * self.num_agents
         all_obs = [None] * self.num_agents
@@ -593,6 +594,8 @@ class IndependentPPO(OnPolicyAlgorithm):
                         )
                     else:
                         cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions)
+                        if num_timesteps <= self.using_reward_timestep:
+                            cf_rewards = np.zeros_like(cf_rewards)
                         policy.rollout_buffer.add_sw(
                             all_last_obs[polid],
                             all_actions[polid],
