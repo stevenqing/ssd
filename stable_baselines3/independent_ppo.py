@@ -704,6 +704,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         # Set reward not in the dict to be 0
         reverse_reward_mapping_func = np.frompyfunc(lambda key: REWARD_ENV_SPACE[self.env_name].get(key, 0), 1, 1)
         all_cf_rewards = reverse_reward_mapping_func(all_cf_rewards)
+        all_cf_rewards = np.reshape(all_cf_rewards,(self.num_envs,self.num_agents,-1))
         return all_cf_rewards
 
     def generate_samples(self,distribution,sample_number):
