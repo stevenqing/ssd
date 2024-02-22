@@ -17,7 +17,7 @@ SelfPPO = TypeVar("SelfPPO", bound="PPO")
 from social_dilemmas.envs.agent import ENV_REWARD_SPACE, OOD_INDEX
 import copy
 
-REWARD_ENV_SPACE = {"harvest": {value: key for key, value in ENV_REWARD_SPACE["harvest"].items()}}
+REWARD_ENV_SPACE = {"harvest": {value: key for key, value in ENV_REWARD_SPACE["harvest"].items()},"coin3": {value: key for key, value in ENV_REWARD_SPACE["coin3"].items()}}
 
 class PPO(OnPolicyAlgorithm):
     """
