@@ -61,7 +61,7 @@
                 "--env",
                 "harvest",
                 "--model",
-                "causal",
+                "team",
                 "--num-agents",
                 "5",
                 "--rollout-len",
