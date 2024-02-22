@@ -294,8 +294,11 @@ class CategoricalDistribution(Distribution):
     def entropy(self) -> th.Tensor:
         return self.distribution.entropy()
 
-    def sample(self) -> th.Tensor:
-        return self.distribution.sample()
+    def sample(self, size=None) -> th.Tensor:
+        if size is None:
+            return self.distribution.sample()
+        else:
+            return self.distribution.sample(size)
 
     def mode(self) -> th.Tensor:
         return th.argmax(self.distribution.probs, dim=1)

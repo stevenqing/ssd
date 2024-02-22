@@ -83,7 +83,9 @@ class CausalModel(nn.Module):
         else:
             input_ = x
             reward_logits_flatten =  self.layers(input_)
-            rew = reward_logits_flatten.view(-1, self.num_agents, self.num_reward_class)
+            # rew = reward_logits_flatten.view(reward_logits_flatten.shape[0], reward_logits_flatten.shape[1], self.num_agents, self.num_reward_class)
+            rew = torch.stack(torch.chunk(reward_logits_flatten, self.num_reward_class, dim=-1), -1)
+            
             # rew = F.softmax(rew, dim=-1)
             return rew, 0, 0
     def get_reg_loss(self):

@@ -17,6 +17,7 @@ from stable_baselines3.common.utils import (configure_logger, obs_as_tensor,
 from stable_baselines3.common.vec_env import DummyVecEnv
 
 from social_dilemmas.envs.agent import ENV_REWARD_SPACE, OOD_INDEX
+import copy
 
 REWARD_ENV_SPACE = {"harvest": {value: key for key, value in ENV_REWARD_SPACE["harvest"].items()}}
 class DummyGymEnv(gym.Env):
@@ -103,6 +104,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         self.previous_all_last_obs_traj = None
         self.previous_all_actions_traj = None
         self.previous_all_rewards_traj = None
+
 
     def learn(
         self,
@@ -663,66 +665,56 @@ class IndependentPPO(OnPolicyAlgorithm):
         all_cf_rewards = []
 
         all_last_obs = obs_as_tensor(np.array(all_last_obs), policy.device)
+
+        # batch_size, num_agents, 1
         all_actions = obs_as_tensor(np.transpose(np.array(all_actions),(1,0,2)), policy.device)
         
         # extract obs features
         all_obs_features = []
-        for i in range(self.num_agents):
-            all_obs_features.append(policy.policy.extract_features(all_last_obs[i]))
+        all_obs_features= [policy.policy.extract_features(all_last_obs[i]) for i in range(self.num_agents)]
         all_obs_features = th.stack(all_obs_features,dim=0).permute(1,0,2)
-        all_obs_features = all_obs_features.reshape(all_obs_features.shape[0],-1)
 
-        all_actions_one_hot = all_actions[:,polid,:]
-        eye_matrix = th.eye(self.action_space.n,device=all_actions_one_hot.device)
-        all_actions_one_hot = eye_matrix[all_actions_one_hot]
-        all_actions_one_hot = all_actions_one_hot.unsqueeze(1)
-        all_actions_one_hot = all_actions_one_hot.repeat(1,1,sample_number,1)
+        # num_env, num_agent, obs_feat_size
+        all_obs_features = all_obs_features.reshape(all_obs_features.shape[0],-1)
+        all_obs_features = all_obs_features.repeat(sample_number, 1, 1).permute(1, 0, 2)
+
+        # 1, batch_size, sample_size, 1
+        cf_all_actions = copy.deepcopy(all_actions).squeeze(-1)
+        cf_all_actions = cf_all_actions.unsqueeze(1).repeat(1,sample_number, 1) #.permute(1, 0, 2)
 
         for i in range(self.num_agents):
             if i != polid:
-                cf_action_i = self.generate_samples(all_distributions[i],sample_number)
-                all_actions_one_hot = th.cat((all_actions_one_hot,cf_action_i),dim=1)
+                # return not one-hot
+                cf_action_i = self.generate_samples(all_distributions[i],sample_number).permute(1, 0)
+                # cf_action_i = cf_action_i.unsqueeze(-1)
 
-        # Need to double check here, to see if the cf is correct, (num_envs, num_agents, num_cf, num_action_space)
-        all_actions_one_hot = all_actions_one_hot.permute(0,2,1,3)
-        all_actions_one_hot = all_actions_one_hot.reshape(all_actions_one_hot.shape[0],all_actions_one_hot.shape[1],-1).permute(1,0,2)
-        all_obs_features = all_obs_features.repeat(all_actions_one_hot.shape[0],1,1)
+                # all_actions_index = th.cat((all_actions,cf_action_i),dim=1)
+                cf_all_actions[:, :, i] = cf_action_i
+        eye_matrix = th.eye(self.action_space.n,device=cf_all_actions.device)
+        cf_all_actions = eye_matrix[cf_all_actions]
+
+        # batch_size, sample_size, num_agents * num_action
+        cf_all_actions = cf_all_actions.reshape(cf_all_actions.shape[0],cf_all_actions.shape[1],-1) #.permute(1,0,2)
         
-        all_obs_actions_features = th.cat((all_obs_features,all_actions_one_hot),dim=-1).permute(1,0,2)
-        all_obs_actions_features = all_obs_actions_features.reshape(-1,all_obs_actions_features.shape[-1])
+        # batch_size, num_sample, obs_feat_size + num_agents * num_action
+        all_obs_actions_features = th.cat((all_obs_features,cf_all_actions),dim=-1) #.permute(1,0,2)
         
         all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0]
-        # reshape
-        all_cf_rewards = all_cf_rewards.reshape(self.num_envs,sample_number,self.num_agents, -1)#.squeeze().reshape(self.num_envs,-1,self.num_agents)
         
         # argmax
         all_cf_rewards_class_index = th.argmax(all_cf_rewards,dim=-1).cpu().numpy()
 
-        # mapping to the original reward space
-        # all_cf_rewards = th.mean(all_cf_rewards,dim=1)#.cpu().detach().numpy()
-        # all_cf_rewards = all_cf_rewards.reshape(-1,(len(ENV_REWARD_SPACE[self.env_name])+1))
-        # all_cf_rewards = th.multinomial(all_cf_rewards,1,replacement=True).cpu().numpy()
-
-        # Set reward not in the dict to be 0
+        # Set reward not in the dict to be default excluded reward
         reverse_reward_mapping_func = np.frompyfunc(lambda key: REWARD_ENV_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][1]), 1, 1) #SPEED, Can the function be jit?
         all_cf_rewards_values = reverse_reward_mapping_func(all_cf_rewards_class_index)
 
         # average along sample dimension
         all_cf_rewards = np.mean(all_cf_rewards_values,axis=1)
-        # all_cf_rewards = np.reshape(all_cf_rewards_values,(self.num_envs,self.num_agents,-1))
-        # all_cf_rewards = np.squeeze(all_cf_rewards)
         return all_cf_rewards
 
     def generate_samples(self,distribution,sample_number):
-        all_samples = []
-        for i in range(sample_number): #SPEED, don't know how to sample from the array
-            all_samples.append(distribution.sample())
-        all_samples = th.stack(all_samples,dim=0)
-        eye_matrix = th.eye(self.action_space.n,device=all_samples.device)
-        all_samples = eye_matrix[all_samples]
-        all_samples = all_samples.permute(1,0,2)
-        all_samples = all_samples.unsqueeze(1)
-        return all_samples
+        return distribution.sample(th.Size([sample_number]))
+
 
 
     # def compute_cf_rewards(self,policy,all_last_obs,all_actions,polid,all_distributions):

@@ -1167,15 +1167,21 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
         all_actions_one_hot = th.stack(all_actions_one_hot,dim=0)
         all_actions_one_hot = th.squeeze(all_actions_one_hot)
         if use_all_obs:
-            features = th.permute(features,(1,0,2))
-            features = th.reshape(features,(features.shape[0],-1))
-            all_actions_one_hot = th.permute(all_actions_one_hot,(1,0,2))
-            all_actions_one_hot = th.reshape(all_actions_one_hot,(all_actions_one_hot.shape[0],-1))
+            # features = th.permute(features,(1,0,2))
+            # features = th.reshape(features,(features.shape[0],-1))
+            # all_actions_one_hot = th.permute(all_actions_one_hot,(1,0,2))
+            # all_actions_one_hot = th.reshape(all_actions_one_hot,(all_actions_one_hot.shape[0],-1))
+            all_actions_one_hot = all_actions_one_hot.permute(1,0,2)
+            all_actions_one_hot = all_actions_one_hot.reshape(all_actions_one_hot.shape[0], -1)
+            features = features.permute(1,0,2)
+            features = features.reshape(features.shape[0], -1)
             obs_action = th.cat((features,all_actions_one_hot),dim=-1)
 
+            # batch_size, num_agents, num_reward_class
             predicted_reward = self.reward_net(obs_action)[0]
-            predicted_reward = th.squeeze(predicted_reward)
+            # predicted_reward = th.squeeze(predicted_reward)
         else:
+            raise NotImplementedError("Not implemented yet")
             obs_action = th.cat((features,all_actions_one_hot),dim=-1)
             for i in range(self.num_agents):
                 predicted_reward.append(th.squeeze(self.reward_net(obs_action[i])[0]))
