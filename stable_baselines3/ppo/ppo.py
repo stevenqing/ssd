@@ -10,10 +10,14 @@ from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
 from stable_baselines3.common.policies import ActorCriticCnnPolicy, ActorCriticPolicy, BasePolicy, MultiInputActorCriticPolicy, RewardActorCriticPolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import explained_variance, get_schedule_fn
-
+from stable_baselines3.common.utils import (configure_logger, obs_as_tensor,
+                                            safe_mean)
 SelfPPO = TypeVar("SelfPPO", bound="PPO")
 
-from social_dilemmas.envs.agent import OOD_INDEX
+from social_dilemmas.envs.agent import ENV_REWARD_SPACE, OOD_INDEX
+import copy
+
+REWARD_ENV_SPACE = {"harvest": {value: key for key, value in ENV_REWARD_SPACE["harvest"].items()}}
 
 class PPO(OnPolicyAlgorithm):
     """
@@ -560,13 +564,18 @@ class PPO(OnPolicyAlgorithm):
             wandb.log({f"train/reward_loss": reward_losses.item()}, step=self.num_timesteps)
             if self.enable_trajs_learning == False:
                 if self.polid != None:
-                    wandb.log({f"{self.polid}/all_predicted_reward": predicted_reward.sum()}, step=self.num_timesteps)
-                    wandb.log({f"{self.polid}/all_rewards": all_rewards.sum()}, step=self.num_timesteps)
+                    output_predicted_reward = th.argmax(predicted_reward, dim=1)
+                    reverse_reward_mapping_func = np.frompyfunc(lambda key: REWARD_ENV_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][1]), 1, 1) #SPEED, Can the function be jit?
+                    all_rewards_values = np.mean(reverse_reward_mapping_func(all_rewards.cpu().numpy()),axis=0)
+                    predicted_reward_values = np.mean(reverse_reward_mapping_func(output_predicted_reward.cpu().numpy()),axis=0)
+
+                    wandb.log({f"{self.polid}/all_predicted_reward": predicted_reward_values}, step=self.num_timesteps)
+                    wandb.log({f"{self.polid}/all_rewards": all_rewards_values}, step=self.num_timesteps)
                     wandb.log({f"{self.polid}/reward_acc": reward_acc.mean()}, step=self.num_timesteps)
                     wandb.log({f"{self.polid}/reward_ood_rate": reward_ood_rate.mean()}, step=self.num_timesteps)
                     for polid in range(self.num_agents):
-                        wandb.log({f"{self.polid}/predicted_reward/{polid}": predicted_reward[:,polid].sum()}, step=self.num_timesteps)
-                        wandb.log({f"{self.polid}/all_rewards/{polid}": all_rewards[:,polid].sum()}, step=self.num_timesteps)
+                        wandb.log({f"{self.polid}/predicted_reward/{polid}": predicted_reward_values[polid]}, step=self.num_timesteps)
+                        wandb.log({f"{self.polid}/all_rewards/{polid}": all_rewards_values[polid]}, step=self.num_timesteps)
             if not reweighted_reward_losses == None:
                 if reweighted_reward_losses != 0:
                     wandb.log({f"train/reweighted_reward_loss": reweighted_reward_losses.item()}, step=self.num_timesteps)
@@ -591,7 +600,59 @@ class PPO(OnPolicyAlgorithm):
 
     # def sample_from_reweighted_list(self, obs:th.Tensor, action:th.Tensor, reweighted_list:list):
 
+    def compute_cf_rewards(self,policy,all_last_obs,all_actions,polid,all_distributions,sample_number=10):
+        all_cf_rewards = []
 
+        all_last_obs = obs_as_tensor(np.array(all_last_obs), policy.device)
+
+        # batch_size, num_agents, 1
+        all_actions = obs_as_tensor(np.transpose(np.array(all_actions),(1,0,2)), policy.device)
+        
+        # extract obs features
+        all_obs_features = []
+        all_obs_features= [policy.policy.extract_features(all_last_obs[i]) for i in range(self.num_agents)]
+        all_obs_features = th.stack(all_obs_features,dim=0).permute(1,0,2)
+
+        # num_env, num_agent, obs_feat_size
+        all_obs_features = all_obs_features.reshape(all_obs_features.shape[0],-1)
+        all_obs_features = all_obs_features.repeat(sample_number, 1, 1).permute(1, 0, 2)
+
+        # 1, batch_size, sample_size, 1
+        cf_all_actions = copy.deepcopy(all_actions).squeeze(-1)
+        cf_all_actions = cf_all_actions.unsqueeze(1).repeat(1,sample_number, 1) #.permute(1, 0, 2)
+
+        for i in range(self.num_agents):
+            if i != polid:
+                # return not one-hot
+                cf_action_i = self.generate_samples(all_distributions[i],sample_number).permute(1, 0)
+                # cf_action_i = cf_action_i.unsqueeze(-1)
+
+                # all_actions_index = th.cat((all_actions,cf_action_i),dim=1)
+                cf_all_actions[:, :, i] = cf_action_i
+        eye_matrix = th.eye(self.action_space.n,device=cf_all_actions.device)
+        cf_all_actions = eye_matrix[cf_all_actions]
+
+        # batch_size, sample_size, num_agents * num_action
+        cf_all_actions = cf_all_actions.reshape(cf_all_actions.shape[0],cf_all_actions.shape[1],-1) #.permute(1,0,2)
+        
+        # batch_size, num_sample, obs_feat_size + num_agents * num_action
+        all_obs_actions_features = th.cat((all_obs_features,cf_all_actions),dim=-1) #.permute(1,0,2)
+        
+        all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0]
+        
+        # argmax
+        all_cf_rewards_class_index = th.argmax(all_cf_rewards,dim=-1).cpu().numpy()
+
+        # Set reward not in the dict to be default excluded reward
+        reverse_reward_mapping_func = np.frompyfunc(lambda key: REWARD_ENV_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][1]), 1, 1) #SPEED, Can the function be jit?
+        all_cf_rewards_values = reverse_reward_mapping_func(all_cf_rewards_class_index)
+
+        # average along sample dimension
+        all_cf_rewards = np.mean(all_cf_rewards_values,axis=1)
+        return all_cf_rewards
+
+    def generate_samples(self,distribution,sample_number):
+        return distribution.sample(th.Size([sample_number]))
 
     def learn(
         self: SelfPPO,
