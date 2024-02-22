@@ -596,7 +596,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                         )
                     else:
                         cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions)
-                        reward_mapping_func = np.frompyfunc(lambda key: ENV_REWARD_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][1]), 1, 1)
+                        reward_mapping_func = np.frompyfunc(lambda key: ENV_REWARD_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][0]), 1, 1)
                         all_discrete_rewards = reward_mapping_func(all_rewards)
                         policy.rollout_buffer.add_sw(
                             all_last_obs[polid],
@@ -701,7 +701,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         # all_cf_rewards = th.multinomial(all_cf_rewards,1,replacement=True).cpu().numpy()
 
         # Set reward not in the dict to be 0
-        reverse_reward_mapping_func = np.frompyfunc(lambda key: REWARD_ENV_SPACE[self.env_name].get(key, 0), 1, 1)
+        reverse_reward_mapping_func = np.frompyfunc(lambda key: REWARD_ENV_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][1]), 1, 1)
         all_cf_rewards_values = reverse_reward_mapping_func(all_cf_rewards_class_index)
 
         # average along sample dimension
