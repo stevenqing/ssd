@@ -41,7 +41,7 @@ class CausalModel(nn.Module):
             nn.Linear(512, 128),  # Fully connected layer
             nn.ReLU(),
             nn.Linear(128, num_agents * self.num_reward_class),  # Output layer
-            nn.Sigmoid() # TODO double check the activation function
+            # nn.Sigmoid() # TODO double check the activation function
             # nn.Tanh() # TODO double check the activation function
         ) 
         self.input_dim = input_dim
