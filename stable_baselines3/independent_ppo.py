@@ -389,7 +389,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                             cf_rewards=None,
                         )
                     else:
-                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid)
+                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid) 
                         if num_timesteps <= self.using_reward_timestep:
                             cf_rewards = np.zeros_like(cf_rewards)
                         if self.enable_trajs_learning:
@@ -593,7 +593,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                             cf_rewards=None,
                         )
                     else:
-                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions)
+                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions) #SPEED
                         if num_timesteps <= self.using_reward_timestep:
                             cf_rewards = np.zeros_like(cf_rewards)
                         policy.rollout_buffer.add_sw(
@@ -686,12 +686,12 @@ class IndependentPPO(OnPolicyAlgorithm):
         all_obs_actions_features = all_obs_actions_features.reshape(-1,all_obs_actions_features.shape[-1])
         
         all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
-        all_cf_rewards = th.mean(all_cf_rewards,dim=1).cpu().detach().numpy()
+        all_cf_rewards = th.mean(all_cf_rewards,dim=1).cpu().detach().numpy() #SPEED? Not sure in here
         return all_cf_rewards
 
     def generate_samples(self,distribution,sample_number):
         all_samples = []
-        for i in range(sample_number):
+        for i in range(sample_number): #SPEED, can sample method apply to the whole tensor?
             all_samples.append(distribution.sample())
         all_samples = th.stack(all_samples,dim=0)
         eye_matrix = th.eye(self.action_space.n,device=all_samples.device)
