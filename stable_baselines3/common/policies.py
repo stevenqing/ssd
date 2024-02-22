@@ -1012,7 +1012,7 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
         num_agents: int = 3,
-        env_name: str = 'cleanup',
+        env_name: str = 'harvest',
     ):
         super().__init__(
             observation_space,
