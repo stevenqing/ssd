@@ -1162,7 +1162,7 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
         obs_features = self.extract_features(obs)
         for i in range(self.num_agents):
             features.append(self.extract_features(all_last_obs[:,i,:]))
-            all_actions_one_hot.append(F.one_hot(all_actions[:,i,:], num_classes=self.action_space.n))
+            all_actions_one_hot.append(F.one_hot(all_actions[:,i,:], num_classes=self.action_space.n)) #SPEED, Not sure if here could be faster
         features = th.stack(features,dim=0)
         all_actions_one_hot = th.stack(all_actions_one_hot,dim=0)
         all_actions_one_hot = th.squeeze(all_actions_one_hot)

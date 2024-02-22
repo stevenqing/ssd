@@ -595,8 +595,8 @@ class IndependentPPO(OnPolicyAlgorithm):
                             cf_rewards=None,
                         )
                     else:
-                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions)
-                        reward_mapping_func = np.frompyfunc(lambda key: ENV_REWARD_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][0]), 1, 1)
+                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions) #SPEED, Can the cf rewards be computed in ppo?
+                        reward_mapping_func = np.frompyfunc(lambda key: ENV_REWARD_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][0]), 1, 1) #SPEED, Can the function be jit?
                         all_discrete_rewards = reward_mapping_func(all_rewards)
                         detected_OOD = np.array(all_rewards)[all_discrete_rewards == OOD_INDEX[self.env_name][0]]
                         if len(detected_OOD) != 0:
@@ -704,7 +704,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         # all_cf_rewards = th.multinomial(all_cf_rewards,1,replacement=True).cpu().numpy()
 
         # Set reward not in the dict to be 0
-        reverse_reward_mapping_func = np.frompyfunc(lambda key: REWARD_ENV_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][1]), 1, 1)
+        reverse_reward_mapping_func = np.frompyfunc(lambda key: REWARD_ENV_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][1]), 1, 1) #SPEED, Can the function be jit?
         all_cf_rewards_values = reverse_reward_mapping_func(all_cf_rewards_class_index)
 
         # average along sample dimension
@@ -715,7 +715,7 @@ class IndependentPPO(OnPolicyAlgorithm):
 
     def generate_samples(self,distribution,sample_number):
         all_samples = []
-        for i in range(sample_number):
+        for i in range(sample_number): #SPEED, don't know how to sample from the array
             all_samples.append(distribution.sample())
         all_samples = th.stack(all_samples,dim=0)
         eye_matrix = th.eye(self.action_space.n,device=all_samples.device)
