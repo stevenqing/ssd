@@ -73,6 +73,7 @@ class OnPolicyAlgorithm(BaseAlgorithm):
         _init_setup_model: bool = True,
         supported_action_spaces: Optional[Tuple[spaces.Space, ...]] = None,
         num_agents: int = 3,
+        env_name: str = 'harvest',
     ):
 
         super().__init__(
@@ -98,7 +99,7 @@ class OnPolicyAlgorithm(BaseAlgorithm):
         self.max_grad_norm = max_grad_norm
         self.rollout_buffer = None
         self.num_agents = num_agents
-
+        self.env_name = env_name
         if _init_setup_model:
             self._setup_model()
 
