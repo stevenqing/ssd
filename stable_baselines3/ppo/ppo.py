@@ -434,6 +434,10 @@ class PPO(OnPolicyAlgorithm):
                         # use discrete loss
                         all_rewards = all_rewards.long()
                         predicted_reward = th.permute(predicted_reward,(0,2,1))
+                        # TODO use logits here, make sure flatten first
+                        # TODO check the data flatten in a right way
+                        predicted_reward = predicted_reward.flatten(-1, predicted_reward.size(-1))
+                        all_rewards = all_rewards.flatten(-1, all_rewards.size(-1))
                         reward_losses = F.cross_entropy(predicted_reward, all_rewards)
                         # reward_losses = F.mse_loss(all_rewards, predicted_reward)
 

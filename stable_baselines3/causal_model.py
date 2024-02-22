@@ -92,7 +92,7 @@ class CausalModel(nn.Module):
             input_ = x
             reward_logits_flatten =  self.layers(input_)
             rew = reward_logits_flatten.view(-1, self.num_agents, self.num_reward_class)
-            rew = F.softmax(rew, dim=-1)
+            # rew = F.softmax(rew, dim=-1)
             return rew, 0, 0
     def get_reg_loss(self):
         return self.causal_mask.abs().mean()
