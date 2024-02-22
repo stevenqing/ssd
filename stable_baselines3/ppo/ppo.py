@@ -548,7 +548,8 @@ class PPO(OnPolicyAlgorithm):
             wandb.log({f"train/std": th.exp(self.policy.log_std).mean().item()}, step=self.num_timesteps)
 
         if self.model == 'causal':
-            wandb.log({f"train/reward_loss": reward_losses.item()}, step=self.num_timesteps)
+            if not isinstance(reward_losses,list):
+                wandb.log({f"train/reward_loss": reward_losses.item()}, step=self.num_timesteps)
             if self.enable_trajs_learning == False:
                 if self.polid != None:
                     wandb.log({f"{self.polid}/all_predicted_reward": predicted_reward.sum()}, step=self.num_timesteps)
