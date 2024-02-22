@@ -416,6 +416,7 @@ class PPO(OnPolicyAlgorithm):
                         entropy_losses.append(entropy_loss.item())
 
                         # Reward loss
+                        
                         reward_losses = F.mse_loss(all_rewards, predicted_reward)
 
                         loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + reward_losses
