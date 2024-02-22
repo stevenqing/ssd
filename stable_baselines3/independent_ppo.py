@@ -598,6 +598,9 @@ class IndependentPPO(OnPolicyAlgorithm):
                         cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions)
                         reward_mapping_func = np.frompyfunc(lambda key: ENV_REWARD_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][0]), 1, 1)
                         all_discrete_rewards = reward_mapping_func(all_rewards)
+                        detected_OOD = np.array(all_rewards)[all_discrete_rewards == OOD_INDEX[self.env_name][0]]
+                        if len(detected_OOD) != 0:
+                            print('OOD reward detected! mean reward:',detected_OOD)
                         policy.rollout_buffer.add_sw(
                             all_last_obs[polid],
                             all_actions[polid],
