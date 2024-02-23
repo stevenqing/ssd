@@ -671,12 +671,15 @@ class IndependentPPO(OnPolicyAlgorithm):
         all_actions_one_hot = eye_matrix[all_actions_one_hot]
         all_actions_one_hot = all_actions_one_hot.unsqueeze(1)
         all_actions_one_hot = all_actions_one_hot.repeat(1,1,sample_number,1)
+        all_actions_one_hot = all_actions_one_hot.repeat(1,self.num_agents,1,1)
+        all_actions_one_hot = all_actions_one_hot.permute(1,0,2,3)
 
         for i in range(self.num_agents):
             if i != polid:
                 cf_action_i = self.generate_samples(all_distributions[i],sample_number)
-                all_actions_one_hot = th.cat((all_actions_one_hot,cf_action_i),dim=1)
-
+                cf_action_i = cf_action_i.permute(1,0,2,3).squeeze(0)
+                all_actions_one_hot[i,:,:,:] = cf_action_i
+        all_actions_one_hot = all_actions_one_hot.permute(1,0,2,3)
         # Need to double check here, to see if the cf is correct, (num_envs, num_agents, num_cf, num_action_space)
         all_actions_one_hot = all_actions_one_hot.permute(0,2,1,3)
         all_actions_one_hot = all_actions_one_hot.reshape(all_actions_one_hot.shape[0],all_actions_one_hot.shape[1],-1).permute(1,0,2)
