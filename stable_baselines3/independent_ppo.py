@@ -19,7 +19,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 from social_dilemmas.envs.agent import ENV_REWARD_SPACE, OOD_INDEX
 import copy
 
-REWARD_ENV_SPACE = {"harvest": {value: key for key, value in ENV_REWARD_SPACE["harvest"].items()},"coin3": {value: key for key, value in ENV_REWARD_SPACE["coin3"].items()}}
+REWARD_ENV_SPACE = {"harvest": {value: key for key, value in ENV_REWARD_SPACE["harvest"].items()},"cleanup": {value: key for key, value in ENV_REWARD_SPACE["cleanup"].items()},"coin3": {value: key for key, value in ENV_REWARD_SPACE["coin3"].items()}}
 class DummyGymEnv(gym.Env):
     def __init__(self, observation_space, action_space):
         self.observation_space = observation_space
