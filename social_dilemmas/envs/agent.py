@@ -114,6 +114,7 @@ ENV_REWARD_SPACE = {"harvest":{
 
 OOD_INDEX = {
     "harvest": [29, -120],
+    "cleanup": [29, -120],
     "coin3": [31, -30]
 }
 

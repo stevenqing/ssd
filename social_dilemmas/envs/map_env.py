@@ -551,6 +551,7 @@ class MapEnv(MultiAgentEnv):
             rewards = temp_rewards
 
         dones["__all__"] = np.any(list(dones.values()))
+        print(rewards)
         return observations, rewards, dones, infos
     
 
