@@ -371,7 +371,7 @@ class PPO(OnPolicyAlgorithm):
 
                     # move cf reward calculation process to here
                     obs_tensor = obs_as_tensor(self.rollout_buffer.all_last_obs[:,:,self.polid,:,:,:], self.policy.device)
-                    _, value, _,_ = self.policy.policy.forward(obs_tensor)
+                    _, value, _,_ = self.policy.forward(obs_tensor)
                     self.rollout_buffer.compute_sw_returns_and_advantage(
                         last_values=value, dones=self.rollout_buffer.all_dones[:,:,polid,:,:,:], alpha=self.alpha
                     )

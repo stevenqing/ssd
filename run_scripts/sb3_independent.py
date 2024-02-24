@@ -198,7 +198,7 @@ class CustomCNN(BaseFeaturesExtractor):
         super(CustomCNN, self).__init__(observation_space, features_dim)
         # We assume CxHxW images (channels first)
         # Re-ordering will be done by pre-preprocessing or wrapper
-
+        self.num_frames = num_frames
         flat_out = num_frames * 6 * (view_len * 2 - 1) ** 2
         self.conv = nn.Conv2d(
             in_channels=num_frames * 3,  # Input: (3 * 4) x 15 x 15
@@ -212,7 +212,11 @@ class CustomCNN(BaseFeaturesExtractor):
 
     def forward(self, observations) -> torch.Tensor:
         # Convert to tensor, rescale to [0, 1], and convert from B x H x W x C to B x C x H x W
-        observations = observations.permute(0, 3, 1, 2)
+        if len(observations.shape) == 4:
+            observations = observations.permute(0, 3, 1, 2)
+        elif len(observations.shape) == 5:
+            observations = observations.permute(0, 1, 4, 2, 3)
+            observations = observations.reshape(-1,observations.shape[2],observations.shape[3],observations.shape[4])
         features = torch.flatten(F.relu(self.conv(observations)), start_dim=1)
         features = F.relu(self.fc1(features))
         features = F.relu(self.fc2(features))
