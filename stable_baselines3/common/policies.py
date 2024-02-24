@@ -1277,6 +1277,7 @@ class ActorCriticCnnPolicy(ActorCriticPolicy):
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
         num_agents: int = 3,
+        env_name: str = 'harvest',
     ):
         super().__init__(
             observation_space,
@@ -1298,6 +1299,7 @@ class ActorCriticCnnPolicy(ActorCriticPolicy):
             optimizer_kwargs,
         )
         self.num_agents = num_agents
+        self.env_name = env_name
         self._build(lr_schedule)
 
 class MultiInputActorCriticPolicy(ActorCriticPolicy):

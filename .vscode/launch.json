@@ -61,7 +61,7 @@
                 "--env",
                 "cleanup",
                 "--model",
-                "causal",
+                "baseline",
                 "--num-agents",
                 "5",
                 "--rollout-len",
