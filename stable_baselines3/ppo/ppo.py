@@ -368,9 +368,23 @@ class PPO(OnPolicyAlgorithm):
                         th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
                         self.policy.optimizer.step()
                 else:
+
+                    # move cf reward calculation process to here
+                    obs_tensor = obs_as_tensor(self.rollout_buffer.all_last_obs[:,:,self.polid,:,:,:], self.policy.device)
+                    _, value, _,_ = self.policy.policy.forward(obs_tensor)
+                    self.rollout_buffer.compute_sw_returns_and_advantage(
+                        last_values=value, dones=self.rollout_buffer.all_dones[:,:,polid,:,:,:], alpha=self.alpha
+                    )
                     for rollout_data in self.rollout_buffer.get_sw(self.batch_size):
+
                         all_last_obs = rollout_data.all_last_obs
                         all_rewards = rollout_data.all_rewards
+                        all_actions = rollout_data.all_actions
+                        all_distribution = rollout_data.all_distributions
+
+                        # compute cf_rewards
+                        cf_rewards = self.compute_cf_rewards(self.policy,all_last_obs,all_actions,polid,all_distribution)
+
                         actions = rollout_data.actions
                         if isinstance(self.action_space, spaces.Discrete):
                             # Convert discrete action from float to long

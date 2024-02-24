@@ -59,11 +59,11 @@
             "justMyCode": false,
             "args": [
                 "--env",
-                "cleanup",
+                "coin3",
                 "--model",
                 "causal",
                 "--num-agents",
-                "5",
+                "3",
                 "--rollout-len",
                 "1000",
                 "--user_name",

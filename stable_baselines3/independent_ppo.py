@@ -183,8 +183,8 @@ class IndependentPPO(OnPolicyAlgorithm):
                     wandb.log({f"{polid}/total_timesteps": policy.num_timesteps}, step=num_timesteps)
                     
                     SW_ep_rew_mean += safe_mean([ep_info["r"] for ep_info in policy.ep_info_buffer])
-                    ep_cf_reward = np.sum(policy.rollout_buffer.cf_rewards)
-                    wandb.log({f"{polid}/cf_reward": ep_cf_reward}, step=num_timesteps)
+                    # ep_cf_reward = np.sum(policy.rollout_buffer.cf_rewards)
+                    # wandb.log({f"{polid}/cf_reward": ep_cf_reward}, step=num_timesteps)
 
                     if self.env_name == 'harvest':
                         wandb.log({f"{polid}/zap_behavior": (policy.rollout_buffer.actions==7).sum()}, step=num_timesteps)
@@ -597,7 +597,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                             cf_rewards=None,
                         )
                     else:
-                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions) #SPEED, Can the cf rewards be computed in ppo?
+                        # cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions) #SPEED, Can the cf rewards be computed in ppo?
                         reward_mapping_func = np.frompyfunc(lambda key: ENV_REWARD_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][0]), 1, 1) #SPEED, Can the function be jit?
                         all_discrete_rewards = reward_mapping_func(all_rewards)
                         detected_OOD = np.array(all_rewards)[all_discrete_rewards == OOD_INDEX[self.env_name][0]]
@@ -613,7 +613,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                             all_last_obs,
                             rollout_all_actions,
                             all_discrete_rewards,
-                            cf_rewards,
+                            all_distributions,
                         )
             all_last_obs = all_obs
             all_last_episode_starts = all_dones
@@ -631,10 +631,10 @@ class IndependentPPO(OnPolicyAlgorithm):
                         policy.rollout_buffer.compute_sw_returns_and_advantage(
                         last_values=value, dones=all_dones[polid], alpha=self.alpha, use_team_reward=True
                     )
-                    else:
-                        policy.rollout_buffer.compute_sw_returns_and_advantage(
-                        last_values=value, dones=all_dones[polid], alpha=self.alpha
-                    )
+                    # else:
+                    #     policy.rollout_buffer.compute_sw_returns_and_advantage(
+                    #     last_values=value, dones=all_dones[polid], alpha=self.alpha
+                    # )
 
         for callback in callbacks:
             callback.on_rollout_end()

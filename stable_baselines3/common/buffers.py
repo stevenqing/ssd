@@ -359,7 +359,7 @@ class RolloutBuffer(BaseBuffer):
         self.gamma = gamma
         self.agent_number = num_agents
         self.observations, self.actions, self.rewards, self.advantages = None, None, None, None
-        self.all_last_obs, self.all_actions, self.all_rewards, self.cf_rewards = None, None, None, None
+        self.all_last_obs, self.all_actions, self.all_rewards, self.all_distribution = None, None, None, None
         self.all_last_obs_traj, self.all_actions_traj, self.all_rewards_traj = None, None, None
         self.previous_all_last_obs_traj, self.previous_all_actions_traj, self.previous_all_rewards_traj = None, None, None
         self.returns, self.episode_starts, self.values, self.log_probs = None, None, None, None
@@ -383,7 +383,7 @@ class RolloutBuffer(BaseBuffer):
         self.all_last_obs = np.zeros((self.buffer_size, self.n_envs, self.agent_number) + self.obs_shape, dtype=np.float32)
         self.all_actions = np.zeros((self.buffer_size, self.n_envs, self.agent_number, self.action_dim), dtype=np.float32)
         self.all_rewards = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
-        self.cf_rewards = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
+        self.all_distribution = [[0] * self.agent_number for _ in range(self.buffer_size)]
 
         self.all_last_obs_traj = self.all_last_obs.copy()
         self.all_actions_traj = self.all_actions.copy()
@@ -511,7 +511,7 @@ class RolloutBuffer(BaseBuffer):
         all_last_obs: np.ndarray,
         all_actions: np.ndarray,
         all_rewards: np.ndarray,
-        cf_rewards: np.ndarray,
+        all_distribution: np.ndarray,
     ) -> None:
         """
         :param obs: Observation
@@ -535,9 +535,9 @@ class RolloutBuffer(BaseBuffer):
         # Same reshape, for actions
         action = action.reshape((self.n_envs, self.action_dim))
 
-        all_last_obs = np.array(all_last_obs)
-        all_actions = np.array(all_actions)
-        all_rewards = np.array(all_rewards)
+        # all_last_obs = np.array(all_last_obs)
+        # all_actions = np.array(all_actions)
+        # all_rewards = np.array(all_rewards)
 
         self.observations[self.pos] = np.array(obs).copy()
         self.actions[self.pos] = np.array(action).copy()
@@ -549,7 +549,7 @@ class RolloutBuffer(BaseBuffer):
         self.all_last_obs[self.pos] = np.transpose(np.array(all_last_obs).copy(),(1,0,2,3,4))
         self.all_actions[self.pos] = np.transpose(np.array(all_actions).copy(),(1,0,2))
         self.all_rewards[self.pos] = np.transpose(np.array(all_rewards).copy(),(1,0))
-        self.cf_rewards[self.pos] = np.array(cf_rewards).copy()
+        self.all_distribution[self.pos] = all_distribution
 
         self.pos += 1
         if self.pos == self.buffer_size:
@@ -787,7 +787,7 @@ class RolloutBuffer(BaseBuffer):
                 "all_last_obs",
                 "all_actions",
                 "all_rewards",
-                "cf_rewards",
+                "all_distribution",
             ]
 
             for tensor in _tensor_names:
@@ -814,7 +814,7 @@ class RolloutBuffer(BaseBuffer):
             self.all_last_obs[batch_inds],
             self.all_actions[batch_inds],
             self.all_rewards[batch_inds],
-            self.cf_rewards[batch_inds],
+            self.all_distribution[batch_inds],
         )
         return RewardRolloutBufferSamples(*tuple(map(self.to_torch, data)))
 
