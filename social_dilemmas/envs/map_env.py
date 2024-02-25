@@ -9,6 +9,8 @@ from ray.rllib.env import MultiAgentEnv
 import json
 import torch
 import time
+import csv
+import os
 # from reward_prediction_torch import CausalModel
 from ray.rllib.models import ModelCatalog
 
@@ -128,7 +130,7 @@ class MapEnv(MultiAgentEnv):
         self.file_path = '/scratch/prj/inf_du/shuqing/trajs_file.json' 
         # TODO add by ReedZyd, please remove these lines when you use this code
         # self.saved_model_path = 'reward_model_wo_causality.pth' 
-        # self.file_path = './trajs_file.json' 
+        self.file_path = './apple_data.csv' 
 
         # ModelCatalog.register_custom_model("causal_model", CausalModel)
         #####################################################################
@@ -551,9 +553,39 @@ class MapEnv(MultiAgentEnv):
             rewards = temp_rewards
 
         dones["__all__"] = np.any(list(dones.values()))
+        
+        if self.timestep % 100 == 0:
+            apple_num = self.calculate_apples()
+            last_value = None
+            file_exists = os.path.isfile(self.file_path) and os.path.getsize(self.file_path) > 0
+            
+            if file_exists:
+                with open(self.file_path, 'r', newline='') as csv_file:
+                    reader = csv.reader(csv_file)
+                    last_row = None
+                    for row in reader:
+                        if row:  # 确保行不为空
+                            last_row = row
+                    if last_row:
+                        last_value = int(last_row[0])  # 假设我们关心的值是数值类型的
+
+            if last_value is not None and last_value > self.timestep:
+                os.remove(self.file_path)
+
+            with open(self.file_path, "a") as csv_file:
+                writer = csv.writer(csv_file)
+                if not file_exists:
+                    writer.writerow(["timestep","apple_num"])
+                writer.writerow([self.timestep,apple_num])
         return observations, rewards, dones, infos
     
-
+    def calculate_apples(self):
+        apple_num = 0
+        for i in range(self.world_map.shape[0]):
+            for j in range(self.world_map.shape[1]):
+                if self.world_map[i,j] == b'A':
+                    apple_num += 1
+        return apple_num
 
     def get_cf_actions(self, prev_actions, agent_actions, agent_id):
         agent_id = int(agent_id[-1])
@@ -589,7 +621,7 @@ class MapEnv(MultiAgentEnv):
         self.setup_agents()
         self.reset_map()
         self.custom_map_update()
-
+        self.timestep = 0
         map_with_agents = self.get_map_with_agents()
 
         observations = {}
