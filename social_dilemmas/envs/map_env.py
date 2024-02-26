@@ -554,23 +554,9 @@ class MapEnv(MultiAgentEnv):
 
         dones["__all__"] = np.any(list(dones.values()))
         
-        if self.timestep % 100 == 0:
+        if self.timestep % 50 == 0:
             apple_num = self.calculate_apples()
-            last_value = None
             file_exists = os.path.isfile(self.file_path) and os.path.getsize(self.file_path) > 0
-            
-            if file_exists:
-                with open(self.file_path, 'r', newline='') as csv_file:
-                    reader = csv.reader(csv_file)
-                    last_row = None
-                    for row in reader:
-                        if row:  # 确保行不为空
-                            last_row = row
-                    if last_row:
-                        last_value = int(last_row[0])  # 假设我们关心的值是数值类型的
-
-            if last_value is not None and last_value > self.timestep:
-                os.remove(self.file_path)
 
             with open(self.file_path, "a") as csv_file:
                 writer = csv.writer(csv_file)
