@@ -421,12 +421,10 @@ class PPO(OnPolicyAlgorithm):
                         entropy_losses.append(entropy_loss.item())
 
                         # Reward loss
-                        if self.timestep > self.enable_reward_model_learning:
-                            reward_losses = F.mse_loss(all_rewards, predicted_reward)
+                        reward_losses = F.mse_loss(all_rewards, predicted_reward)
+                        loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + reward_losses
 
-                            loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + reward_losses
-                        else:
-                            loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss
+
 
                         # Calculate approximate form of reverse KL Divergence for early stopping
                         # see issue #417: https://github.com/DLR-RM/stable-baselines3/issues/417
@@ -631,8 +629,7 @@ class PPO(OnPolicyAlgorithm):
             wandb.log({f"train/std": th.exp(self.policy.log_std).mean().item()}, step=self.num_timesteps)
 
         if self.model == 'causal':
-            if not isinstance(reward_losses,list):
-                wandb.log({f"train/reward_loss": reward_losses.item()}, step=self.num_timesteps)
+            wandb.log({f"train/reward_loss": reward_losses.item()}, step=self.num_timesteps)
             if self.enable_trajs_learning == False:
                 if self.polid != None:
                     wandb.log({f"{self.polid}/all_predicted_reward": predicted_reward.sum()}, step=self.num_timesteps)

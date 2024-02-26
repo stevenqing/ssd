@@ -594,8 +594,6 @@ class IndependentPPO(OnPolicyAlgorithm):
                         )
                     else:
                         cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions) #SPEED
-                        if num_timesteps <= self.using_reward_timestep:
-                            cf_rewards = np.zeros_like(cf_rewards)
                         policy.rollout_buffer.add_sw(
                             all_last_obs[polid],
                             all_actions[polid],
