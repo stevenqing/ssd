@@ -103,6 +103,8 @@ class PPO(OnPolicyAlgorithm):
         enable_trajs_learning: bool = False,
         polid: Optional[int] = None,
         enable_reward_model_learning: int = 2000000,
+        use_collective_reward: bool = False,
+        inequity_averse_reward: bool = False,
     ):
 
         super().__init__(
@@ -167,6 +169,8 @@ class PPO(OnPolicyAlgorithm):
         self.polid = polid
 
         self.enable_reward_model_learning = enable_reward_model_learning
+        self.use_collective_reward = use_collective_reward
+        self.inequity_averse_reward = inequity_averse_reward
         self.timestep = 0
         if _init_setup_model:
             self._setup_model()

@@ -222,7 +222,8 @@ class LBF10Agent(Agent):
         super().__init__(agent_id, start_pos, start_orientation, full_map, view_len, view_len)
         self.update_agent_pos(start_pos)
         # self.agent_level = self.init_level(max_level=3)
-        self.agent_level = int(agent_id[-1]) if int(agent_id[-1]) > 0 else 1
+        # self.agent_level = int(agent_id[-1]) if int(agent_id[-1]) > 0 else 1
+        self.agent_level = int(agent_id[-1]) + 1 if int(agent_id[-1]) != 2 else int(agent_id[-1]) # 1,2,2
         self.level_consumed = 0
         self.surroundings_chars = []
         self.surroundings = []

@@ -282,7 +282,18 @@ def main(args):
                             job_type="training",
                             reinit=True)
     else:
-        run = wandb.init(config=args,
+        if env_name == 'lbf10':
+            run = wandb.init(config=args,
+                            project="SSD_pytorch",
+                            entity=args.user_name, 
+                            notes=socket.gethostname(),
+                            name=str(env_name) +"_" + str(extractor) + "_122_" + str(model),
+                            group=str(env_name) + "_cf_" + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
+                            dir="./",
+                            job_type="training",
+                            reinit=True)
+        else:
+            run = wandb.init(config=args,
                             project="SSD_pytorch",
                             entity=args.user_name, 
                             notes=socket.gethostname(),
