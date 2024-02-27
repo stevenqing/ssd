@@ -61,7 +61,7 @@
                 "--env",
                 "lbf10",
                 "--model",
-                "causal",
+                "baseline",
                 "--num-agents",
                 "3",
                 "--rollout-len",

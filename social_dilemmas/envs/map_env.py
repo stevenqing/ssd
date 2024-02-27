@@ -24,6 +24,7 @@ _MAP_ENV_ACTIONS = {
 }  # Counter clockwise rotation matrix
 # Positive Theta is in the counterclockwise direction
 
+LBF_ID_LEVEL = {'agent-0':b'1','agent-1':b'2','agent-2':b'3'}
 
 COIN_MAP_ENV_ACTIONS = {
     "MOVE_LEFT": [0, -1],  # Move left
@@ -177,7 +178,7 @@ class MapEnv(MultiAgentEnv):
         self.wall_points = []
         for row in range(self.base_map.shape[0]):
             for col in range(self.base_map.shape[1]):
-                if self.base_map[row, col] == b"P":
+                if self.base_map[row, col] == b"P" or self.base_map[row, col] == b'1' or self.base_map[row, col] == b'2' or self.base_map[row, col] == b'3':
                     self.spawn_points.append([row, col])
                     self.vector_state_shape += 2
                 elif self.base_map[row, col] == b"@":
@@ -785,13 +786,16 @@ class MapEnv(MultiAgentEnv):
                 new_pos = agent.pos + rot_action
                 # allow the agents to confirm what position they can move to
                 new_pos = agent.return_valid_pos(new_pos)
-                reserved_slots.append((*new_pos, b"P", agent_id))
+                # agent_representation = self.base_map[agent.pos[0], agent.pos[1]]
+                # reserved_slots.append((*new_pos, agent_representation, agent_id))
+
+                reserved_slots.append((*new_pos, LBF_ID_LEVEL[agent_id], agent_id))
             elif "TURN" in action:
                 new_rot = self.update_rotation(action, agent.get_orientation())
                 agent.update_agent_rot(new_rot)
 
         # now do the conflict resolution part of the process
-
+        # print(reserved_slots)
         # helpful for finding the agent in the conflicting slot
         agent_by_pos = {tuple(agent.pos): agent.agent_id for agent in self.agents.values()}
 
@@ -804,7 +808,7 @@ class MapEnv(MultiAgentEnv):
 
         for slot in reserved_slots:
             row, col = slot[0], slot[1]
-            if slot[2] == b"P":
+            if slot[2] == b"P" or slot[2] == b"1" or slot[2] == b"2" or slot[2] == b"3":
                 agent_id = slot[3]
                 agent_moves[agent_id] = [row, col]
                 move_slots.append([row, col])
@@ -1097,7 +1101,6 @@ class MapEnv(MultiAgentEnv):
         spawn_index = 0
         is_free_cell = False
         curr_agent_pos = [agent.pos.tolist() for agent in self.agents.values()]
-        np.random.shuffle(self.spawn_points)
         for i, spawn_point in enumerate(self.spawn_points):
             if [spawn_point[0], spawn_point[1]] not in curr_agent_pos:
                 spawn_index = i

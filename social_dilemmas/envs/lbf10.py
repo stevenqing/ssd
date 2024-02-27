@@ -52,18 +52,29 @@ class LBF10Env(MapEnv):
 
     @property
     def action_space(self):
-        return DiscreteWithDType(7, dtype=np.uint8)
+        return DiscreteWithDType(4, dtype=np.uint8)
 
     def setup_agents(self):
         map_with_agents = self.get_map_with_agents()
         for i in range(self.num_agents):
             agent_id = "agent-" + str(i)
-            spawn_point = self.spawn_point()
+            spawn_point = self.spawn_point(i)
             rotation = self.spawn_rotation()
             grid = map_with_agents
             agent = LBF10Agent(agent_id, spawn_point, rotation, grid, COIN_VIEW_SIZE)
             self.agents[agent_id] = agent
-            
+    
+    def spawn_point(self,i):
+        """Returns a randomly selected spawn point."""
+        # spawn_index = 0
+        # is_free_cell = False
+        # curr_agent_pos = [agent.pos.tolist() for agent in self.agents.values()]
+        # for i, spawn_point in enumerate(self.spawn_points):
+        #     if [spawn_point[0], spawn_point[1]] not in curr_agent_pos:
+        #         spawn_index = i
+        #         is_free_cell = True
+        # assert is_free_cell, "There are not enough spawn points! Check your map?"
+        return np.array(self.spawn_points[i])
 
     def custom_reset(self):
         """Initialize the walls and the apples"""
@@ -159,12 +170,12 @@ class LBF10Env(MapEnv):
                    apple_pos[0] = [int(row),int(col)]
                    apple_type[0] = 1
                    apple_pos_list.append([int(row),int(col)])
-                   apple_type_list.append(3)
+                   apple_type_list.append(1)
                elif char == b'B':
                    apple_pos[1] = [int(row),int(col)]
                    apple_type[1] = 2
                    apple_pos_list.append([int(row),int(col)])
-                   apple_type_list.append(3)
+                   apple_type_list.append(2)
                elif char == b'C':
                    apple_pos[2] = [int(row),int(col)]
                    apple_type[2] = 3
