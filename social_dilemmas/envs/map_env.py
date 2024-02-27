@@ -788,8 +788,10 @@ class MapEnv(MultiAgentEnv):
                 new_pos = agent.return_valid_pos(new_pos)
                 # agent_representation = self.base_map[agent.pos[0], agent.pos[1]]
                 # reserved_slots.append((*new_pos, agent_representation, agent_id))
-
-                reserved_slots.append((*new_pos, LBF_ID_LEVEL[agent_id], agent_id))
+                if self.env_name == 'LBF10':
+                    reserved_slots.append((*new_pos, LBF_ID_LEVEL[agent_id], agent_id))
+                else:
+                    reserved_slots.append((*new_pos,b"P", agent_id))
             elif "TURN" in action:
                 new_rot = self.update_rotation(action, agent.get_orientation())
                 agent.update_agent_rot(new_rot)
