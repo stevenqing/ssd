@@ -670,25 +670,40 @@ class IndependentPPO(OnPolicyAlgorithm):
         all_actions_one_hot = all_actions_one_hot.unsqueeze(1)
         all_actions_one_hot = all_actions_one_hot.repeat(1,1,sample_number,1)
         all_actions_one_hot = all_actions_one_hot.repeat(1,self.num_agents,1,1)
-        all_actions_one_hot = all_actions_one_hot.permute(1,0,2,3)
+        all_actions_one_hot_list = all_actions_one_hot.permute(1,0,2,3)
 
+        # for i in range(self.num_agents):
+        #     if i != polid:
+        #         cf_action_i = self.generate_samples(all_distributions[i],sample_number)
+        #         cf_action_i = cf_action_i.permute(1,0,2,3).squeeze(0)
+        #         all_actions_one_hot[i,:,:,:] = cf_action_i
+        total_actions = [None] * self.num_agents
         for i in range(self.num_agents):
             if i != polid:
+                actions_one_hot_copy = all_actions_one_hot_list.clone()
                 cf_action_i = self.generate_samples(all_distributions[i],sample_number)
                 cf_action_i = cf_action_i.permute(1,0,2,3).squeeze(0)
-                all_actions_one_hot[i,:,:,:] = cf_action_i
-        all_actions_one_hot = all_actions_one_hot.permute(1,0,2,3)
-        # Need to double check here, to see if the cf is correct, (num_envs, num_agents, num_cf, num_action_space)
-        all_actions_one_hot = all_actions_one_hot.permute(0,2,1,3)
-        all_actions_one_hot = all_actions_one_hot.reshape(all_actions_one_hot.shape[0],all_actions_one_hot.shape[1],-1).permute(1,0,2)
-        all_obs_features = all_obs_features.repeat(all_actions_one_hot.shape[0],1,1)
-        
-        all_obs_actions_features = th.cat((all_obs_features,all_actions_one_hot),dim=-1).permute(1,0,2)
-        all_obs_actions_features = all_obs_actions_features.reshape(-1,all_obs_actions_features.shape[-1])
-        
-        all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
-        all_cf_rewards = th.mean(all_cf_rewards,dim=1).cpu().detach().numpy() #SPEED? Not sure in here
-        return all_cf_rewards
+                actions_one_hot_copy[i,:,:,:] = cf_action_i
+
+                total_actions[i] = actions_one_hot_copy
+        total_cf_rewards = []
+        for all_actions_one_hot in total_actions:
+            if all_actions_one_hot is not None:
+                all_actions_one_hot = all_actions_one_hot.permute(1,2,0,3)
+
+                all_actions_one_hot = all_actions_one_hot.reshape(all_actions_one_hot.shape[0],all_actions_one_hot.shape[1],-1).permute(1,0,2)
+                all_obs_features_copy = all_obs_features.clone().repeat(all_actions_one_hot.shape[0],1,1)
+                
+                all_obs_actions_features = th.cat((all_obs_features_copy,all_actions_one_hot),dim=-1).permute(1,0,2)
+                all_obs_actions_features = all_obs_actions_features.reshape(-1,all_obs_actions_features.shape[-1])
+                
+                all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
+
+                all_cf_rewards = th.mean(all_cf_rewards,dim=1) #SPEED? Not sure in here
+                total_cf_rewards.append(all_cf_rewards)
+        total_cf_rewards = th.stack(total_cf_rewards,dim=0)
+        total_cf_rewards = th.mean(total_cf_rewards,dim=0).cpu().detach().numpy()        
+        return total_cf_rewards
 
     def generate_samples(self,distribution,sample_number):
         all_samples = []
