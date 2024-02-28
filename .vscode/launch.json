@@ -59,9 +59,9 @@
             "justMyCode": false,
             "args": [
                 "--env",
-                "coin3",
+                "lbf10",
                 "--model",
-                "causal",
+                "baseline",
                 "--num-agents",
                 "3",
                 "--rollout-len",
