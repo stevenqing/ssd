@@ -682,35 +682,42 @@ class IndependentPPO(OnPolicyAlgorithm):
         cf_all_actions = copy.deepcopy(all_actions).squeeze(-1)
         cf_all_actions = cf_all_actions.unsqueeze(1).repeat(1,sample_number, 1) #.permute(1, 0, 2)
 
+        total_actions = [None] * self.num_agents
         for i in range(self.num_agents):
             if i != polid:
                 # return not one-hot
                 cf_action_i = self.generate_samples(all_distributions[i],sample_number).permute(1, 0)
-                # cf_action_i = cf_action_i.unsqueeze(-1)
+                cf_all_actions_copy = cf_all_actions.clone()
+                # cf_all_actions[:, :, i] = cf_action_i
+                cf_all_actions_copy[:, :, i] = cf_action_i
+                total_actions[i] = cf_all_actions_copy
+        total_cf_rewards = []
+        for all_actions_one_hot in total_actions:
+            if all_actions_one_hot is not None:
+                eye_matrix = th.eye(self.action_space.n,device=all_actions_one_hot.device)
+                cf_all_actions = eye_matrix[all_actions_one_hot]
 
-                # all_actions_index = th.cat((all_actions,cf_action_i),dim=1)
-                cf_all_actions[:, :, i] = cf_action_i
-        eye_matrix = th.eye(self.action_space.n,device=cf_all_actions.device)
-        cf_all_actions = eye_matrix[cf_all_actions]
+                # batch_size, sample_size, num_agents * num_action
+                cf_all_actions = cf_all_actions.reshape(cf_all_actions.shape[0],cf_all_actions.shape[1],-1) #.permute(1,0,2)
+                
+                # batch_size, num_sample, obs_feat_size + num_agents * num_action
+                all_obs_actions_features = th.cat((all_obs_features,cf_all_actions),dim=-1) #.permute(1,0,2)
+                
+                all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0]
+                
+                # argmax
+                all_cf_rewards_class_index = th.argmax(all_cf_rewards,dim=-1).cpu().numpy()
 
-        # batch_size, sample_size, num_agents * num_action
-        cf_all_actions = cf_all_actions.reshape(cf_all_actions.shape[0],cf_all_actions.shape[1],-1) #.permute(1,0,2)
-        
-        # batch_size, num_sample, obs_feat_size + num_agents * num_action
-        all_obs_actions_features = th.cat((all_obs_features,cf_all_actions),dim=-1) #.permute(1,0,2)
-        
-        all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0]
-        
-        # argmax
-        all_cf_rewards_class_index = th.argmax(all_cf_rewards,dim=-1).cpu().numpy()
+                # Set reward not in the dict to be default excluded reward
+                reverse_reward_mapping_func = np.frompyfunc(lambda key: REWARD_ENV_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][1]), 1, 1) #SPEED, Can the function be jit?
+                all_cf_rewards_values = reverse_reward_mapping_func(all_cf_rewards_class_index)
 
-        # Set reward not in the dict to be default excluded reward
-        reverse_reward_mapping_func = np.frompyfunc(lambda key: REWARD_ENV_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][1]), 1, 1) #SPEED, Can the function be jit?
-        all_cf_rewards_values = reverse_reward_mapping_func(all_cf_rewards_class_index)
-
-        # average along sample dimension
-        all_cf_rewards = np.mean(all_cf_rewards_values,axis=1)
-        return all_cf_rewards
+                # average along sample dimension
+                all_cf_rewards = np.mean(all_cf_rewards_values,axis=1)
+                total_cf_rewards.append(all_cf_rewards)
+        total_cf_rewards = np.stack(total_cf_rewards,axis=0)
+        total_cf_rewards = np.mean(total_cf_rewards,axis=0)
+        return total_cf_rewards
 
     def generate_samples(self,distribution,sample_number):
         return distribution.sample(th.Size([sample_number]))
