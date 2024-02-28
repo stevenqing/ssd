@@ -74,6 +74,31 @@
                 "False"
             ],
         },
+        {
+            "name": "reed: main",
+            "type": "python",
+            "request": "launch",
+            "program": "run_scripts/sb3_independent.py",
+            "console": "integratedTerminal",
+            "python": "/home/zyd/anaconda3/envs/ssd/bin/python",
+            "justMyCode": false,
+            "args": [
+                "--env",
+                "coin3",
+                "--model",
+                "causal",
+                "--num-agents",
+                "3",
+                "--rollout-len",
+                "1000",
+                "--user_name",
+                "1160677229",
+                "--num-envs",
+                "2",
+                "--use-collective-reward",
+                "False"
+            ],
+        },
     ]
 
 
