@@ -108,6 +108,7 @@ def parse_args():
     parser.add_argument("--using_reward_timestep", type=int, default=2000000)
     parser.add_argument("--extractor", type=str, default='cnn')
     parser.add_argument("--enable_trajs_learning", type=int, default=0,choices=[0, 1])
+    parser.add_argument("--lr", type=float, default=0.0001)
     args = parser.parse_args()
     return args
 
@@ -248,7 +249,7 @@ def main(args):
     fcnet_hiddens = [1024, 128]  # Two hidden layers for cnn extractor
     ent_coef = 0.001  # entropy coefficient in loss
     batch_size = rollout_len * num_envs // 2  # This is from the rllib baseline implementation
-    lr = 0.0001
+    lr = args.lr
     n_epochs = 30
     gae_lambda = 1.0
     gamma = 0.99
