@@ -94,7 +94,8 @@
                 "--num-envs",
                 "2",
                 "--use-collective-reward",
-                "False"
+                "False",
+                "--local"
             ],
         },
     ]
