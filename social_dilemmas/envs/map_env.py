@@ -51,7 +51,7 @@ DEFAULT_COLOURS = {
     # b'2': np.array([2, 81, 154], dtype=np.uint8),  # Sky blue
     b'2': np.array([254, 151, 0], dtype=np.uint8),  # Orange
 
-    b'3': np.array([238, 223, 16], dtype=np.uint8),  # Magenta
+    b'3': np.array([254, 151, 0], dtype=np.uint8),  # Orange
     # b'3': np.array([204, 0, 204], dtype=np.uint8),  # Magenta
     b"4": np.array([216, 30, 54], dtype=np.uint8),  # Red
     b"5": np.array([254, 151, 0], dtype=np.uint8),  # Orange
