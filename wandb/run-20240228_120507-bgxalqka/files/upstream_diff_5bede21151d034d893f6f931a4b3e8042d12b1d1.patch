@@ -1,0 +1,595 @@
+diff --git a/.vscode/launch.json b/.vscode/launch.json
+index 635b921..7d6da4f 100644
+--- a/.vscode/launch.json
++++ b/.vscode/launch.json
+@@ -74,6 +74,31 @@
+                 "False"
+             ],
+         },
++        {
++            "name": "reed: main",
++            "type": "python",
++            "request": "launch",
++            "program": "run_scripts/sb3_independent.py",
++            "console": "integratedTerminal",
++            "python": "/home/zyd/anaconda3/envs/ssd/bin/python",
++            "justMyCode": false,
++            "args": [
++                "--env",
++                "lbf10",
++                "--model",
++                "causal",
++                "--num-agents",
++                "3",
++                "--rollout-len",
++                "1000",
++                "--user_name",
++                "reedzyd",
++                "--num-envs",
++                "2",
++                "--use-collective-reward",
++                "False",
++            ],
++        },
+     ]
+ 
+ 
+diff --git a/run_scripts/sb3_independent.py b/run_scripts/sb3_independent.py
+index ae033e2..8e6d43f 100644
+--- a/run_scripts/sb3_independent.py
++++ b/run_scripts/sb3_independent.py
+@@ -282,15 +282,26 @@ def main(args):
+                             job_type="training",
+                             reinit=True)
+     else:
+-        run = wandb.init(config=args,
++        if env_name == 'lbf10':
++            run = wandb.init(config=args,
+                             project="SSD_pytorch",
+                             entity=args.user_name, 
+                             notes=socket.gethostname(),
+-                            name=str(env_name) +"_" + str(extractor) + "_" + str(model),
++                            name=str(env_name) +"_" + str(extractor) + "_122_" + str(model),
+                             group=str(env_name) + "_cf_" + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
+                             dir="./",
+                             job_type="training",
+                             reinit=True)
++        else:
++            run = wandb.init(config=args,
++                            project="SSD_pytorch",
++                            entity=args.user_name, 
++                            notes=socket.gethostname(),
++                            name=str(env_name) +"_" + str(extractor) + "_" + str(model),
++                            group=str(env_name) + "_cf_modified_" + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
++                            dir="./",
++                            job_type="training",
++                            reinit=True)
+     
+     args = wandb.config # for wandb sweep
+     if extractor == 'cbam':
+diff --git a/social_dilemmas/envs/agent.py b/social_dilemmas/envs/agent.py
+index 8257a9c..a6a00a8 100644
+--- a/social_dilemmas/envs/agent.py
++++ b/social_dilemmas/envs/agent.py
+@@ -131,6 +131,8 @@ class Agent(object):
+         else:
+             return self.pos
+ 
++
++
+     def update_agent_pos(self, new_pos):
+         """Updates the agents internal positions
+ 
+@@ -222,7 +224,8 @@ class LBF10Agent(Agent):
+         super().__init__(agent_id, start_pos, start_orientation, full_map, view_len, view_len)
+         self.update_agent_pos(start_pos)
+         # self.agent_level = self.init_level(max_level=3)
+-        self.agent_level = int(agent_id[-1]) + 1
++        # self.agent_level = int(agent_id[-1]) if int(agent_id[-1]) > 0 else 1
++        self.agent_level = int(agent_id[-1]) + 1 if int(agent_id[-1]) != 2 else int(agent_id[-1]) # 1,2,2
+         self.level_consumed = 0
+         self.surroundings_chars = []
+         self.surroundings = []
+@@ -250,7 +253,7 @@ class LBF10Agent(Agent):
+     # defined in two places
+     def action_map(self, action_number):
+         """Maps action_number to a desired action in the map"""
+-        return BASE_ACTIONS[action_number]
++        return COIN_ACTIONS[action_number]
+ 
+ 
+     def count_apples(self):
+@@ -273,8 +276,7 @@ class LBF10Agent(Agent):
+ 
+ 
+     def get_done(self,timestep, apple_pos_list):
+-        apple_pos,apple_type = self.count_apples()
+-        if apple_pos == [[0,0],[0,0],[0,0]]:
++        if apple_pos_list == []:
+             return True
+         return False
+ 
+diff --git a/social_dilemmas/envs/lbf10.py b/social_dilemmas/envs/lbf10.py
+index 99f20c5..3dcd1db 100644
+--- a/social_dilemmas/envs/lbf10.py
++++ b/social_dilemmas/envs/lbf10.py
+@@ -52,18 +52,29 @@ class LBF10Env(MapEnv):
+ 
+     @property
+     def action_space(self):
+-        return DiscreteWithDType(7, dtype=np.uint8)
++        return DiscreteWithDType(4, dtype=np.uint8)
+ 
+     def setup_agents(self):
+         map_with_agents = self.get_map_with_agents()
+         for i in range(self.num_agents):
+             agent_id = "agent-" + str(i)
+-            spawn_point = self.spawn_point()
++            spawn_point = self.spawn_point(i)
+             rotation = self.spawn_rotation()
+             grid = map_with_agents
+             agent = LBF10Agent(agent_id, spawn_point, rotation, grid, COIN_VIEW_SIZE)
+             self.agents[agent_id] = agent
+-            
++    
++    def spawn_point(self,i):
++        """Returns a randomly selected spawn point."""
++        # spawn_index = 0
++        # is_free_cell = False
++        # curr_agent_pos = [agent.pos.tolist() for agent in self.agents.values()]
++        # for i, spawn_point in enumerate(self.spawn_points):
++        #     if [spawn_point[0], spawn_point[1]] not in curr_agent_pos:
++        #         spawn_index = i
++        #         is_free_cell = True
++        # assert is_free_cell, "There are not enough spawn points! Check your map?"
++        return np.array(self.spawn_points[i])
+ 
+     def custom_reset(self):
+         """Initialize the walls and the apples"""
+@@ -159,12 +170,12 @@ class LBF10Env(MapEnv):
+                    apple_pos[0] = [int(row),int(col)]
+                    apple_type[0] = 1
+                    apple_pos_list.append([int(row),int(col)])
+-                   apple_type_list.append(3)
++                   apple_type_list.append(1)
+                elif char == b'B':
+                    apple_pos[1] = [int(row),int(col)]
+                    apple_type[1] = 2
+                    apple_pos_list.append([int(row),int(col)])
+-                   apple_type_list.append(3)
++                   apple_type_list.append(2)
+                elif char == b'C':
+                    apple_pos[2] = [int(row),int(col)]
+                    apple_type[2] = 3
+diff --git a/social_dilemmas/envs/map_env.py b/social_dilemmas/envs/map_env.py
+index e0b2595..78ebe01 100644
+--- a/social_dilemmas/envs/map_env.py
++++ b/social_dilemmas/envs/map_env.py
+@@ -24,6 +24,7 @@ _MAP_ENV_ACTIONS = {
+ }  # Counter clockwise rotation matrix
+ # Positive Theta is in the counterclockwise direction
+ 
++LBF_ID_LEVEL = {'agent-0':b'1','agent-1':b'2','agent-2':b'3'}
+ 
+ COIN_MAP_ENV_ACTIONS = {
+     "MOVE_LEFT": [0, -1],  # Move left
+@@ -46,9 +47,12 @@ DEFAULT_COLOURS = {
+     b"F": np.array([255, 255, 0], dtype=np.uint8),  # Yellow firing beam
+     b"P": np.array([159, 67, 255], dtype=np.uint8),  # Generic agent (any player)
+     # Colours for agents. R value is a unique identifier
+-    b"1": np.array([0, 0, 255], dtype=np.uint8),  # Pure blue
+-    b"2": np.array([2, 81, 154], dtype=np.uint8),  # Sky blue
+-    b"3": np.array([204, 0, 204], dtype=np.uint8),  # Magenta
++    b'1': np.array([0, 0, 255], dtype=np.uint8),  # Pure blue
++    # b'2': np.array([2, 81, 154], dtype=np.uint8),  # Sky blue
++    b'2': np.array([254, 151, 0], dtype=np.uint8),  # Orange
++
++    b'3': np.array([238, 223, 16], dtype=np.uint8),  # Magenta
++    # b'3': np.array([204, 0, 204], dtype=np.uint8),  # Magenta
+     b"4": np.array([216, 30, 54], dtype=np.uint8),  # Red
+     b"5": np.array([254, 151, 0], dtype=np.uint8),  # Orange
+     b"6": np.array([100, 255, 255], dtype=np.uint8),  # Cyan
+@@ -177,7 +181,7 @@ class MapEnv(MultiAgentEnv):
+         self.wall_points = []
+         for row in range(self.base_map.shape[0]):
+             for col in range(self.base_map.shape[1]):
+-                if self.base_map[row, col] == b"P":
++                if self.base_map[row, col] == b"P" or self.base_map[row, col] == b'1' or self.base_map[row, col] == b'2' or self.base_map[row, col] == b'3':
+                     self.spawn_points.append([row, col])
+                     self.vector_state_shape += 2
+                 elif self.base_map[row, col] == b"@":
+@@ -313,7 +317,15 @@ class MapEnv(MultiAgentEnv):
+             for col in range(arr.shape[1]):
+                 arr[row, col] = ascii_list[row][col]
+         return arr
+-
++    def save_image(self, obs_dict, path):
++        from PIL import Image
++        mmm = Image.fromarray(self.full_map_to_colors().astype(np.uint8))
++        mmm.save(path + "full_map.png")
++
++        for agent_id, obs in obs_dict.items():
++            img = Image.fromarray(obs['curr_obs'])
++            img.save(path + agent_id + ".png")
++        
+ 
+     def step(self, actions):
+         """Takes in a dict of actions and converts them to a map update
+@@ -415,8 +427,7 @@ class MapEnv(MultiAgentEnv):
+             positions.append(agent.pos)
+             # Firing beams have priority over agents and should cover them
+             # to avoid conflicts in b"C"
+-            
+-
++        
+             if self.num_agents > 3:
+                 if self.world_map[row, col] not in [b"F", b"C"]:
+                     self.single_update_world_color_map(row, col, agent.get_char_id())
+@@ -453,7 +464,12 @@ class MapEnv(MultiAgentEnv):
+ 
+         for agent in self.agents.values():
+             agent.full_map = map_with_agents
+-            rgb_arr = self.color_view(agent)
++            if self.env_name == 'LBF10':
++
++                rgb_arr = self.color_view(agent)
++            else:
++                colored_map_with_agents = self.full_map_to_colors(map_with_agents).astype(np.uint8)
++                rgb_arr = self.color_view_with_agents(agent, colored_map_with_agents)
+             all_rewards.append(rewards[agent.agent_id])
+ 
+ 
+@@ -594,7 +610,12 @@ class MapEnv(MultiAgentEnv):
+         observations = {}
+         for agent in self.agents.values():
+             agent.full_map = map_with_agents
+-            rgb_arr = self.color_view(agent)
++            if self.env_name == 'LBF10':
++                rgb_arr = self.color_view(agent)
++            else:
++                colored_map_with_agents = self.full_map_to_colors(map_with_agents).astype(np.uint8)
++                rgb_arr = self.color_view_with_agents(agent, colored_map_with_agents)
++
+             # concatenate on the prev_actions to the observations
+             if self.return_agent_actions:
+                 # No previous actions so just pass in "wait" action
+@@ -667,8 +688,9 @@ class MapEnv(MultiAgentEnv):
+                 return False
+         return True
+ 
+-    def full_map_to_colors(self):
+-        map_with_agents = self.get_map_with_agents()
++    def full_map_to_colors(self, map_with_agents=None):
++        if map_with_agents is None:
++            map_with_agents = self.get_map_with_agents()
+         rgb_arr = np.zeros((map_with_agents.shape[0], map_with_agents.shape[1], 3), dtype=int)
+         return self.map_to_colors(map_with_agents, self.color_map, rgb_arr)
+ 
+@@ -687,6 +709,21 @@ class MapEnv(MultiAgentEnv):
+         elif agent.orientation == "RIGHT":
+             rotated_view = np.rot90(view_slice, k=1, axes=(1, 0))
+         return rotated_view
++    def color_view_with_agents(self, agent, map_with_agents):
++        row, col = agent.pos[0], agent.pos[1]
++        view_slice = map_with_agents[
++            row + self.map_padding - self.view_len : row + self.map_padding + self.view_len + 1,
++            col + self.map_padding - self.view_len : col + self.map_padding + self.view_len + 1,
++        ]
++        if agent.orientation == "UP":
++            rotated_view = view_slice
++        elif agent.orientation == "LEFT":
++            rotated_view = np.rot90(view_slice)
++        elif agent.orientation == "DOWN":
++            rotated_view = np.rot90(view_slice, k=2)
++        elif agent.orientation == "RIGHT":
++            rotated_view = np.rot90(view_slice, k=1, axes=(1, 0))
++        return rotated_view
+ 
+     def map_to_colors(self, mmap, color_map, rgb_arr, orientation="UP"):
+         """Converts a map to an array of RGB values.
+@@ -785,13 +822,18 @@ class MapEnv(MultiAgentEnv):
+                 new_pos = agent.pos + rot_action
+                 # allow the agents to confirm what position they can move to
+                 new_pos = agent.return_valid_pos(new_pos)
+-                reserved_slots.append((*new_pos, b"P", agent_id))
++                # agent_representation = self.base_map[agent.pos[0], agent.pos[1]]
++                # reserved_slots.append((*new_pos, agent_representation, agent_id))
++                if self.env_name == 'LBF10':
++                    reserved_slots.append((*new_pos, LBF_ID_LEVEL[agent_id], agent_id))
++                else:
++                    reserved_slots.append((*new_pos,b"P", agent_id))
+             elif "TURN" in action:
+                 new_rot = self.update_rotation(action, agent.get_orientation())
+                 agent.update_agent_rot(new_rot)
+ 
+         # now do the conflict resolution part of the process
+-
++        # print(reserved_slots)
+         # helpful for finding the agent in the conflicting slot
+         agent_by_pos = {tuple(agent.pos): agent.agent_id for agent in self.agents.values()}
+ 
+@@ -804,7 +846,7 @@ class MapEnv(MultiAgentEnv):
+ 
+         for slot in reserved_slots:
+             row, col = slot[0], slot[1]
+-            if slot[2] == b"P":
++            if slot[2] == b"P" or slot[2] == b"1" or slot[2] == b"2" or slot[2] == b"3":
+                 agent_id = slot[3]
+                 agent_moves[agent_id] = [row, col]
+                 move_slots.append([row, col])
+@@ -1097,7 +1139,6 @@ class MapEnv(MultiAgentEnv):
+         spawn_index = 0
+         is_free_cell = False
+         curr_agent_pos = [agent.pos.tolist() for agent in self.agents.values()]
+-        np.random.shuffle(self.spawn_points)
+         for i, spawn_point in enumerate(self.spawn_points):
+             if [spawn_point[0], spawn_point[1]] not in curr_agent_pos:
+                 spawn_index = i
+diff --git a/social_dilemmas/maps.py b/social_dilemmas/maps.py
+index 0b8a222..e4abdf6 100644
+--- a/social_dilemmas/maps.py
++++ b/social_dilemmas/maps.py
+@@ -53,7 +53,7 @@ COIN3_MAP = [
+ # 15 * 15
+ LBF10_MAP = [
+     "@@@@@@@@@@@@@@@@@",
+-    "@P             P@",
++    "@1             2@",
+     "@        A      @",
+     "@   A           @",
+     "@          A   A@",
+@@ -67,7 +67,7 @@ LBF10_MAP = [
+     "@               @",
+     "@       C       @",
+     "@C              @",
+-    "@      B       P@",
++    "@      B       3@",
+     "@@@@@@@@@@@@@@@@@",
+ ]
+ 
+diff --git a/stable_baselines3/independent_ppo.py b/stable_baselines3/independent_ppo.py
+index b5656e1..af2431e 100644
+--- a/stable_baselines3/independent_ppo.py
++++ b/stable_baselines3/independent_ppo.py
+@@ -94,6 +94,7 @@ class IndependentPPO(OnPolicyAlgorithm):
+                 model=self.model,
+                 enable_trajs_learning=self.enable_trajs_learning,
+                 polid=polid,
++                enable_reward_model_learning=self.using_reward_timestep,
+             )
+             for polid in range(self.num_agents)
+         ]
+@@ -162,7 +163,7 @@ class IndependentPPO(OnPolicyAlgorithm):
+             if self.enable_trajs_learning:
+                 last_obs = self.collect_trajs_rollouts(last_obs, callbacks,num_timesteps)
+             else:
+-                last_obs = self.collect_rollouts(last_obs, callbacks)
++                last_obs = self.collect_rollouts(last_obs, callbacks,num_timesteps)
+             num_timesteps += self.num_envs * self.n_steps
+             SW_ep_rew_mean = 0
+             for polid, policy in enumerate(self.policies):
+@@ -388,7 +389,7 @@ class IndependentPPO(OnPolicyAlgorithm):
+                             cf_rewards=None,
+                         )
+                     else:
+-                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid)
++                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid) 
+                         if num_timesteps <= self.using_reward_timestep:
+                             cf_rewards = np.zeros_like(cf_rewards)
+                         if self.enable_trajs_learning:
+@@ -460,7 +461,7 @@ class IndependentPPO(OnPolicyAlgorithm):
+ 
+ 
+ 
+-    def collect_rollouts(self, last_obs, callbacks):
++    def collect_rollouts(self, last_obs, callbacks,num_timesteps):
+ 
+         all_last_episode_starts = [None] * self.num_agents
+         all_obs = [None] * self.num_agents
+@@ -592,7 +593,7 @@ class IndependentPPO(OnPolicyAlgorithm):
+                             cf_rewards=None,
+                         )
+                     else:
+-                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions)
++                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions) #SPEED
+                         policy.rollout_buffer.add_sw(
+                             all_last_obs[polid],
+                             all_actions[polid],
+@@ -668,27 +669,45 @@ class IndependentPPO(OnPolicyAlgorithm):
+         all_actions_one_hot = eye_matrix[all_actions_one_hot]
+         all_actions_one_hot = all_actions_one_hot.unsqueeze(1)
+         all_actions_one_hot = all_actions_one_hot.repeat(1,1,sample_number,1)
+-
++        all_actions_one_hot = all_actions_one_hot.repeat(1,self.num_agents,1,1)
++        all_actions_one_hot_list = all_actions_one_hot.permute(1,0,2,3)
++
++        # for i in range(self.num_agents):
++        #     if i != polid:
++        #         cf_action_i = self.generate_samples(all_distributions[i],sample_number)
++        #         cf_action_i = cf_action_i.permute(1,0,2,3).squeeze(0)
++        #         all_actions_one_hot[i,:,:,:] = cf_action_i
++        total_actions = [None] * self.num_agents
+         for i in range(self.num_agents):
+             if i != polid:
++                actions_one_hot_copy = all_actions_one_hot_list.clone()
+                 cf_action_i = self.generate_samples(all_distributions[i],sample_number)
+-                all_actions_one_hot = th.cat((all_actions_one_hot,cf_action_i),dim=1)
+-
+-        # Need to double check here, to see if the cf is correct, (num_envs, num_agents, num_cf, num_action_space)
+-        all_actions_one_hot = all_actions_one_hot.permute(0,2,1,3)
+-        all_actions_one_hot = all_actions_one_hot.reshape(all_actions_one_hot.shape[0],all_actions_one_hot.shape[1],-1).permute(1,0,2)
+-        all_obs_features = all_obs_features.repeat(all_actions_one_hot.shape[0],1,1)
+-        
+-        all_obs_actions_features = th.cat((all_obs_features,all_actions_one_hot),dim=-1).permute(1,0,2)
+-        all_obs_actions_features = all_obs_actions_features.reshape(-1,all_obs_actions_features.shape[-1])
+-        
+-        all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
+-        all_cf_rewards = th.mean(all_cf_rewards,dim=1).cpu().detach().numpy()
+-        return all_cf_rewards
++                cf_action_i = cf_action_i.permute(1,0,2,3).squeeze(0)
++                actions_one_hot_copy[i,:,:,:] = cf_action_i
++
++                total_actions[i] = actions_one_hot_copy
++        total_cf_rewards = []
++        for all_actions_one_hot in total_actions:
++            if all_actions_one_hot is not None:
++                all_actions_one_hot = all_actions_one_hot.permute(1,2,0,3)
++
++                all_actions_one_hot = all_actions_one_hot.reshape(all_actions_one_hot.shape[0],all_actions_one_hot.shape[1],-1).permute(1,0,2)
++                all_obs_features_copy = all_obs_features.clone().repeat(all_actions_one_hot.shape[0],1,1)
++                
++                all_obs_actions_features = th.cat((all_obs_features_copy,all_actions_one_hot),dim=-1).permute(1,0,2)
++                all_obs_actions_features = all_obs_actions_features.reshape(-1,all_obs_actions_features.shape[-1])
++                
++                all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
++
++                all_cf_rewards = th.mean(all_cf_rewards,dim=1) #SPEED? Not sure in here
++                total_cf_rewards.append(all_cf_rewards)
++        total_cf_rewards = th.stack(total_cf_rewards,dim=0)
++        total_cf_rewards = th.mean(total_cf_rewards,dim=0).cpu().detach().numpy()        
++        return total_cf_rewards
+ 
+     def generate_samples(self,distribution,sample_number):
+         all_samples = []
+-        for i in range(sample_number):
++        for i in range(sample_number): #SPEED, can sample method apply to the whole tensor?
+             all_samples.append(distribution.sample())
+         all_samples = th.stack(all_samples,dim=0)
+         eye_matrix = th.eye(self.action_space.n,device=all_samples.device)
+diff --git a/stable_baselines3/ppo/ppo.py b/stable_baselines3/ppo/ppo.py
+index 3a35d28..2fd9527 100755
+--- a/stable_baselines3/ppo/ppo.py
++++ b/stable_baselines3/ppo/ppo.py
+@@ -102,6 +102,9 @@ class PPO(OnPolicyAlgorithm):
+         num_agents: int = 3,
+         enable_trajs_learning: bool = False,
+         polid: Optional[int] = None,
++        enable_reward_model_learning: int = 2000000,
++        use_collective_reward: bool = False,
++        inequity_averse_reward: bool = False,
+     ):
+ 
+         super().__init__(
+@@ -164,6 +167,11 @@ class PPO(OnPolicyAlgorithm):
+         self.num_agents = num_agents
+         self.enable_trajs_learning = enable_trajs_learning
+         self.polid = polid
++
++        self.enable_reward_model_learning = enable_reward_model_learning
++        self.use_collective_reward = use_collective_reward
++        self.inequity_averse_reward = inequity_averse_reward
++        self.timestep = 0
+         if _init_setup_model:
+             self._setup_model()
+ 
+@@ -361,6 +369,7 @@ class PPO(OnPolicyAlgorithm):
+                         self.policy.optimizer.step()
+                 else:
+                     for rollout_data in self.rollout_buffer.get_sw(self.batch_size):
++                        self.timestep += 1
+                         all_last_obs = rollout_data.all_last_obs
+                         all_rewards = rollout_data.all_rewards
+                         actions = rollout_data.actions
+@@ -417,9 +426,10 @@ class PPO(OnPolicyAlgorithm):
+ 
+                         # Reward loss
+                         reward_losses = F.mse_loss(all_rewards, predicted_reward)
+-
+                         loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + reward_losses
+ 
++
++
+                         # Calculate approximate form of reverse KL Divergence for early stopping
+                         # see issue #417: https://github.com/DLR-RM/stable-baselines3/issues/417
+                         # and discussion in PR #419: https://github.com/DLR-RM/stable-baselines3/pull/419
+@@ -441,7 +451,90 @@ class PPO(OnPolicyAlgorithm):
+                         # Clip grad norm
+                         th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
+                         self.policy.optimizer.step()
++            elif self.model == 'team':
++                for rollout_data in self.rollout_buffer.get_sw(self.batch_size):
++                    all_last_obs = rollout_data.all_last_obs
++                    all_rewards = rollout_data.all_rewards
++                    actions = rollout_data.actions
++                    if isinstance(self.action_space, spaces.Discrete):
++                        # Convert discrete action from float to long
++                        actions = rollout_data.actions.long().flatten()
++                        all_actions = rollout_data.all_actions.long()
++                    # Re-sample the noise matrix because the log_std has changed
++                    if self.use_sde:
++                        self.policy.reset_noise(self.batch_size)
++
++                    values, log_prob, entropy, predicted_reward = self.policy.evaluate_actions(rollout_data.observations, actions, all_last_obs, all_actions)
++                    values = values.flatten()
++                    # Normalize advantage
++                    advantages = rollout_data.advantages
++                    # Normalization does not make sense if mini batchsize == 1, see GH issue #325
++                    if self.normalize_advantage and len(advantages) > 1:
++                        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
++
++                    # ratio between old and new policy, should be one at the first iteration
++                    ratio = th.exp(log_prob - rollout_data.old_log_prob)
++
++                    # clipped surrogate loss
++                    policy_loss_1 = advantages * ratio
++                    policy_loss_2 = advantages * th.clamp(ratio, 1 - clip_range, 1 + clip_range)
++                    policy_loss = -th.min(policy_loss_1, policy_loss_2).mean()
++
++                    # Logging
++                    pg_losses.append(policy_loss.item())
++                    clip_fraction = th.mean((th.abs(ratio - 1) > clip_range).float()).item()
++                    clip_fractions.append(clip_fraction)
+ 
++                    if self.clip_range_vf is None:
++                        # No clipping
++                        values_pred = values
++                    else:
++                        # Clip the difference between old and new value
++                        # NOTE: this depends on the reward scaling
++                        values_pred = rollout_data.old_values + th.clamp(
++                            values - rollout_data.old_values, -clip_range_vf, clip_range_vf
++                        )
++                    # Value loss using the TD(gae_lambda) target
++                    value_loss = F.mse_loss(rollout_data.returns, values_pred)
++                    value_losses.append(value_loss.item())
++
++                    # Entropy loss favor exploration
++                    if entropy is None:
++                        # Approximate entropy when no analytical form
++                        entropy_loss = -th.mean(-log_prob)
++                    else:
++                        entropy_loss = -th.mean(entropy)
++
++                    entropy_losses.append(entropy_loss.item())
++
++
++
++                    # use discrete loss
++                    # reward_losses = F.mse_loss(all_rewards, predicted_reward)
++
++                    loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss
++
++                    # Calculate approximate form of reverse KL Divergence for early stopping
++                    # see issue #417: https://github.com/DLR-RM/stable-baselines3/issues/417
++                    # and discussion in PR #419: https://github.com/DLR-RM/stable-baselines3/pull/419
++                    # and Schulman blog: http://joschu.net/blog/kl-approx.html
++                    with th.no_grad():
++                        log_ratio = log_prob - rollout_data.old_log_prob
++                        approx_kl_div = th.mean((th.exp(log_ratio) - 1) - log_ratio).cpu().numpy()
++                        approx_kl_divs.append(approx_kl_div)
++
++                    if self.target_kl is not None and approx_kl_div > 1.5 * self.target_kl:
++                        continue_training = False
++                        if self.verbose >= 1:
++                            print(f"Early stopping at step {epoch} due to reaching max kl: {approx_kl_div:.2f}")
++                        break
++
++                    # Optimization step
++                    self.policy.optimizer.zero_grad()
++                    loss.backward()
++                    # Clip grad norm
++                    th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
++                    self.policy.optimizer.step()
+             else:
+                 for rollout_data in self.rollout_buffer.get(self.batch_size):
+                     actions = rollout_data.actions

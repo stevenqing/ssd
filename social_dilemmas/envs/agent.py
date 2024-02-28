@@ -131,6 +131,8 @@ class Agent(object):
         else:
             return self.pos
 
+
+
     def update_agent_pos(self, new_pos):
         """Updates the agents internal positions
 

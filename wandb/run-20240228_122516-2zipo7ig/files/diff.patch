@@ -1,0 +1,132 @@
+diff --git a/.vscode/launch.json b/.vscode/launch.json
+index e3608e0..7d6da4f 100644
+--- a/.vscode/launch.json
++++ b/.vscode/launch.json
+@@ -91,11 +91,12 @@
+                 "3",
+                 "--rollout-len",
+                 "1000",
++                "--user_name",
++                "reedzyd",
+                 "--num-envs",
+                 "2",
+                 "--use-collective-reward",
+                 "False",
+-                "--local"
+             ],
+         },
+     ]
+diff --git a/social_dilemmas/envs/agent.py b/social_dilemmas/envs/agent.py
+index 228ff7b..a6a00a8 100644
+--- a/social_dilemmas/envs/agent.py
++++ b/social_dilemmas/envs/agent.py
+@@ -131,6 +131,8 @@ class Agent(object):
+         else:
+             return self.pos
+ 
++
++
+     def update_agent_pos(self, new_pos):
+         """Updates the agents internal positions
+ 
+diff --git a/social_dilemmas/envs/map_env.py b/social_dilemmas/envs/map_env.py
+index 867fa49..e8f54e6 100644
+--- a/social_dilemmas/envs/map_env.py
++++ b/social_dilemmas/envs/map_env.py
+@@ -48,8 +48,11 @@ DEFAULT_COLOURS = {
+     b"P": np.array([159, 67, 255], dtype=np.uint8),  # Generic agent (any player)
+     # Colours for agents. R value is a unique identifier
+     b'1': np.array([0, 0, 255], dtype=np.uint8),  # Pure blue
+-    b'2': np.array([2, 81, 154], dtype=np.uint8),  # Sky blue
+-    b'3': np.array([204, 0, 204], dtype=np.uint8),  # Magenta
++    # b'2': np.array([2, 81, 154], dtype=np.uint8),  # Sky blue
++    b'2': np.array([254, 151, 0], dtype=np.uint8),  # Orange
++
++    b'3': np.array([238, 223, 16], dtype=np.uint8),  # Magenta
++    # b'3': np.array([204, 0, 204], dtype=np.uint8),  # Magenta
+     b"4": np.array([216, 30, 54], dtype=np.uint8),  # Red
+     b"5": np.array([254, 151, 0], dtype=np.uint8),  # Orange
+     b"6": np.array([100, 255, 255], dtype=np.uint8),  # Cyan
+@@ -314,7 +317,15 @@ class MapEnv(MultiAgentEnv):
+             for col in range(arr.shape[1]):
+                 arr[row, col] = ascii_list[row][col]
+         return arr
+-
++    def save_image(self, obs_dict, path):
++        from PIL import Image
++        mmm = Image.fromarray(self.full_map_to_colors().astype(np.uint8))
++        mmm.save(path + "full_map.png")
++
++        for agent_id, obs in obs_dict.items():
++            img = Image.fromarray(obs['curr_obs'])
++            img.save(path + agent_id + ".png")
++        
+ 
+     def step(self, actions):
+         """Takes in a dict of actions and converts them to a map update
+@@ -453,7 +464,12 @@ class MapEnv(MultiAgentEnv):
+ 
+         for agent in self.agents.values():
+             agent.full_map = map_with_agents
+-            rgb_arr = self.color_view(agent)
++            if self.env_name != 'LBF10':
++
++                rgb_arr = self.color_view(agent)
++            else:
++                colored_map_with_agents = self.full_map_to_colors(map_with_agents).astype(np.uint8)
++                rgb_arr = self.color_view_with_agents(agent, colored_map_with_agents)
+             all_rewards.append(rewards[agent.agent_id])
+ 
+ 
+@@ -594,7 +610,12 @@ class MapEnv(MultiAgentEnv):
+         observations = {}
+         for agent in self.agents.values():
+             agent.full_map = map_with_agents
+-            rgb_arr = self.color_view(agent)
++            if self.env_name != 'LBF10':
++                rgb_arr = self.color_view(agent)
++            else:
++                colored_map_with_agents = self.full_map_to_colors(map_with_agents).astype(np.uint8)
++                rgb_arr = self.color_view_with_agents(agent, colored_map_with_agents)
++
+             # concatenate on the prev_actions to the observations
+             if self.return_agent_actions:
+                 # No previous actions so just pass in "wait" action
+@@ -667,8 +688,9 @@ class MapEnv(MultiAgentEnv):
+                 return False
+         return True
+ 
+-    def full_map_to_colors(self):
+-        map_with_agents = self.get_map_with_agents()
++    def full_map_to_colors(self, map_with_agents=None):
++        if map_with_agents is None:
++            map_with_agents = self.get_map_with_agents()
+         rgb_arr = np.zeros((map_with_agents.shape[0], map_with_agents.shape[1], 3), dtype=int)
+         return self.map_to_colors(map_with_agents, self.color_map, rgb_arr)
+ 
+@@ -687,6 +709,25 @@ class MapEnv(MultiAgentEnv):
+         elif agent.orientation == "RIGHT":
+             rotated_view = np.rot90(view_slice, k=1, axes=(1, 0))
+         return rotated_view
++    def color_view_with_agents(self, agent, map_with_agents):
++        row, col = agent.pos[0], agent.pos[1]
++
++        map_padded = np.copy(self.world_map_color)
++        map_padded[self.view_len:-self.view_len, self.view_len:-self.view_len] = map_with_agents
++
++        view_slice = map_padded[
++            row + self.map_padding - self.view_len : row + self.map_padding + self.view_len + 1,
++            col + self.map_padding - self.view_len : col + self.map_padding + self.view_len + 1,
++        ]
++        if agent.orientation == "UP":
++            rotated_view = view_slice
++        elif agent.orientation == "LEFT":
++            rotated_view = np.rot90(view_slice)
++        elif agent.orientation == "DOWN":
++            rotated_view = np.rot90(view_slice, k=2)
++        elif agent.orientation == "RIGHT":
++            rotated_view = np.rot90(view_slice, k=1, axes=(1, 0))
++        return rotated_view
+ 
+     def map_to_colors(self, mmap, color_map, rgb_arr, orientation="UP"):
+         """Converts a map to an array of RGB values.
