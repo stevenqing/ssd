@@ -51,7 +51,7 @@ DEFAULT_COLOURS = {
     # b'2': np.array([2, 81, 154], dtype=np.uint8),  # Sky blue
     b'2': np.array([254, 151, 0], dtype=np.uint8),  # Orange
 
-    b'3': np.array([254, 151, 0], dtype=np.uint8),  # Orange
+    b'3': np.array([238, 223, 16], dtype=np.uint8),  # Magenta
     # b'3': np.array([204, 0, 204], dtype=np.uint8),  # Magenta
     b"4": np.array([216, 30, 54], dtype=np.uint8),  # Red
     b"5": np.array([254, 151, 0], dtype=np.uint8),  # Orange
@@ -354,17 +354,14 @@ class MapEnv(MultiAgentEnv):
                 store_actions.append(int(action))
 
         # Remove agents from color map
-        
+        agents_pos = []
         for agent in self.agents.values():
+            agents_pos.append(list(agent.pos))
             row, col = agent.pos[0], agent.pos[1]
             self.single_update_world_color_map(row, col, self.world_map[row, col])
 
         self.update_moves(agent_actions)
         
-        agents_pos = []
-        for agent in self.agents.values():
-            agents_pos.append(list(agent.pos))
-            
         # Construct the vector state
         apple_type = None
         if self.env_name == 'LBF10':
