@@ -52,6 +52,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         using_reward_timestep: int = 2000000,
         enable_trajs_learning: bool = False,
         env_name: str = 'harvest',
+        use_collective_reward: bool = False,
     ):
         self.env = env
         self.env_name = env_name
@@ -67,6 +68,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         self.model = model
         self.using_reward_timestep = using_reward_timestep
         self.enable_trajs_learning = enable_trajs_learning
+        self.use_collective_reward = use_collective_reward
         env_fn = lambda: DummyGymEnv(self.observation_space, self.action_space)
         dummy_env = DummyVecEnv([env_fn] * self.num_envs)
         self.policies = [
@@ -173,7 +175,10 @@ class IndependentPPO(OnPolicyAlgorithm):
                 if log_interval is not None and num_timesteps % log_interval == 0:
                     fps = int(policy.num_timesteps / (time.time() - policy.start_time))
                     wandb.log({f"{polid}/fps": fps}, step=num_timesteps)
-                    wandb.log({f"{polid}/ep_rew_mean": safe_mean([ep_info["r"] for ep_info in policy.ep_info_buffer])}, step=num_timesteps)
+                    if self.use_collective_reward:
+                        wandb.log({f"{polid}/ep_rew_mean": safe_mean([ep_info["r"] for ep_info in policy.ep_info_buffer])/self.num_agents}, step=num_timesteps)
+                    else:
+                        wandb.log({f"{polid}/ep_rew_mean": safe_mean([ep_info["r"] for ep_info in policy.ep_info_buffer])}, step=num_timesteps)
                     wandb.log({f"{polid}/ep_len_mean": policy.ep_info_buffer[-1]["l"]}, step=num_timesteps)
                     wandb.log({f"{polid}/time_elapsed": int(time.time() - policy.start_time)}, step=num_timesteps)
                     wandb.log({f"{polid}/total_timesteps": policy.num_timesteps}, step=num_timesteps)
@@ -222,8 +227,12 @@ class IndependentPPO(OnPolicyAlgorithm):
                     policy.logger.dump(step=policy.num_timesteps)
 
                 policy.train()
-            wandb.log({"SW_ep_rew_mean": SW_ep_rew_mean/self.num_agents}, step=num_timesteps)
-            wandb.log({"SW_ep_rew_total": SW_ep_rew_mean}, step=num_timesteps)
+            if self.use_collective_reward:
+                wandb.log({"SW_ep_rew_mean": SW_ep_rew_mean/(self.num_agents * 2)}, step=num_timesteps)
+                wandb.log({"SW_ep_rew_total": SW_ep_rew_mean/self.num_agents}, step=num_timesteps)
+            else:
+                wandb.log({"SW_ep_rew_mean": SW_ep_rew_mean/self.num_agents}, step=num_timesteps)
+                wandb.log({"SW_ep_rew_total": SW_ep_rew_mean}, step=num_timesteps)
         for callback in callbacks:
             callback.on_training_end()
 

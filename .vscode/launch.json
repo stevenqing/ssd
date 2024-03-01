@@ -61,7 +61,7 @@
                 "--env",
                 "coin3",
                 "--model",
-                "vae",
+                "causal",
                 "--num-agents",
                 "3",
                 "--rollout-len",
@@ -71,7 +71,7 @@
                 "--num-envs",
                 "1",
                 "--use-collective-reward",
-                "False"
+                "True"
             ],
         },
         {

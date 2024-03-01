@@ -347,7 +347,8 @@ def main(args):
             model=args.model,
             using_reward_timestep=using_reward_timestep,
             enable_trajs_learning=enable_trajs_learning,
-            env_name=env_name
+            env_name=env_name,
+            use_collective_reward=use_collective_reward,
         )
     elif model == 'causal' or model == 'team':
         model = IndependentPPO(
@@ -370,7 +371,8 @@ def main(args):
             model=args.model,
             using_reward_timestep=using_reward_timestep,
             enable_trajs_learning=enable_trajs_learning,
-            env_name=env_name
+            env_name=env_name,
+            use_collective_reward=use_collective_reward,
         )
     elif model == 'vae':
         model = IndependentPPO(
@@ -393,7 +395,8 @@ def main(args):
             model=args.model,
             using_reward_timestep=using_reward_timestep,
             enable_trajs_learning=enable_trajs_learning,
-            env_name=env_name
+            env_name=env_name,
+            use_collective_reward=use_collective_reward,
         )
     model.learn(total_timesteps=total_timesteps)
 
