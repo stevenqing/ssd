@@ -13,35 +13,43 @@ from torch.utils.data import DataLoader, TensorDataset
 
 ####### Decoder #######
 # the input of the decoder should be the latent variable z and the action
-class P_s_za(nn.Module):
-    def __init__(self, dim_z=128, dim_a=8, nh=2, dim_h=128, dim_out=128):
+class P_or_za(nn.Module):
+    def __init__(self, dim_z=128, nh=2, dim_h=128, dim_out_o=128*5, dim_out_r=5):
         super().__init__()
         self.nh = nh
-        self.dim_out = dim_out
 
         # Hidden layers
         self.hidden_z = nn.Sequential(nn.Linear(dim_z, dim_h), nn.ReLU())
-        self.hidden_a = nn.Sequential(nn.Linear(dim_a, dim_h), nn.ReLU())
-        self.hidden_layer = nn.Sequential(nn.Linear(dim_h*2, dim_h), nn.ReLU())
 
-        self.output = nn.ModuleList(
+        self.output_o = nn.ModuleList(
             [
                 nn.Sequential(
                     *[
                         nn.Sequential(nn.Linear(dim_h, dim_h), nn.ReLU())
                         for _ in range(nh)
                     ],
-                    nn.Linear(dim_h, dim_out),
+                    nn.Linear(dim_h, dim_out_o),
+                )
+            ]
+        )
+        
+        self.output_r = nn.ModuleList(
+            [
+                nn.Sequential(
+                    *[
+                        nn.Sequential(nn.Linear(dim_h, dim_h), nn.ReLU())
+                        for _ in range(nh)
+                    ],
+                    nn.Linear(dim_h, dim_out_r),
                 )
             ]
         )
 
     def forward(self, z, a):
         z = self.hidden_z(z).squeeze(1)
-        a = self.hidden_a(a)
-        x = torch.cat([z, a], 1)
-        x = self.hidden_layer(x)
-        return x
+        o = torch.stack([o(z) for o in self.output_o]).swapaxes(0, 1).squeeze(1)
+        r = torch.stack([r(z) for r in self.output_r]).swapaxes(0, 1).squeeze(1)
+        return o, r
 
 
 
@@ -51,19 +59,17 @@ class P_s_za(nn.Module):
 # the input of the encoder should be the state, observation, action, reward
 # the output of the encoder should be the latent variable z
 
-class Q_z_xot(nn.Module):
-    def __init__(self, dim_s=128, dim_in_oa=128*5+8*5, nh=2, dim_h=128, dim_out=128):
+class Q_z_oar(nn.Module):
+    def __init__(self, dim_s=128, dim_in_oa=128*5+8*5, dim_r=5, nh=2, dim_h=128, dim_out=128):
         super().__init__()
-        # dim in is dim of x + dim of y
-        # dim_out is dim of latent space z
-        # save required vars
         self.nh = nh
         self.dim_out = dim_out
         # Shared layers with separated output layers
         self.hidden_state = nn.Sequential(nn.Linear(dim_s, dim_h), nn.ReLU())
         self.hidden_oa = nn.Sequential(nn.Linear(dim_in_oa, dim_h), nn.ReLU())
+        self.hidden_r = nn.Sequential(nn.Linear(dim_r, dim_h), nn.ReLU())
 
-        self.hidden_layer = nn.Sequential(nn.Linear(dim_h*2, dim_h), nn.ReLU())
+        self.hidden_layer = nn.Sequential(nn.Linear(dim_h*3, dim_h), nn.ReLU())
 
         self.mu_header = nn.ModuleList(
             [
@@ -88,10 +94,11 @@ class Q_z_xot(nn.Module):
             ]
         )
 
-    def forward(self, s, oa) -> Normal:
+    def forward(self, s, oa, r) -> Normal:
         s = self.hidden_state(s)
         oa = self.hidden_oa(oa)
-        x = torch.cat([s, oa], 1)
+        r = self.hidden_r(r)
+        x = torch.cat([s, oa, r], 1)
         x = self.hidden_layer(x)
 
         mu = torch.stack([mu(x) for mu in self.mu_header]).swapaxes(0, 1)
@@ -101,31 +108,33 @@ class Q_z_xot(nn.Module):
 
 
 class Transition_VAE(nn.Module):
-    def __init__(self, hidden_size, dim_o, dim_a, dim_s, dim_z, num_agents): # dim_s = dim_z
+    def __init__(self, hidden_size, dim_o, dim_a, dim_s, dim_r, dim_z): # dim_s = dim_z
         super().__init__()
         nh=3
-        self.encoder = Q_z_xot(dim_s=dim_s, dim_in_oa=dim_o+dim_a, nh=nh, dim_h=hidden_size, dim_out=dim_z)
-        self.decoder = P_s_za(dim_z=dim_z,dim_a=dim_a,nh=nh, dim_h=hidden_size, dim_out=dim_z)
+        self.encoder = Q_z_oar(dim_s=dim_s, dim_in_oa=dim_o+dim_a, nh=nh, dim_h=hidden_size, dim_out=dim_z)
+        self.decoder = P_or_za(dim_z=dim_z,dim_out_r=dim_r,nh=nh, dim_h=hidden_size, dim_out_o=dim_o)
 
-    def forward(self, s, o, a):
+    def forward(self, s, o, a, r):
         oa = torch.cat([o, a], -1)
-        z_dist = self.encoder(s, oa)
+        z_dist = self.encoder(s, oa, r)
         z = z_dist.rsample()
-        y_dist = self.decoder(z, a)
-        return y_dist, z_dist
+        o_predicted,r_predicted = self.decoder(z)
+        return o_predicted, r_predicted
 
 
-    def loss_function(self, s_1, s_2, o, a):
+    def loss_function(self, s_1, o, a, r):
         # Compute z distribution
         oa = torch.cat([o, a], -1)
-        z_dist = self.encoder(s_1, oa)
+        z_dist = self.encoder(s_1, oa, r)
         z = z_dist.rsample()
 
         # Compute prediction distribution
-        y_dist = self.decoder(z, a)
+        o_predicted,r_predicted = self.decoder(z, a)
 
         # Calculate the loss
-        loss_recon = F.mse_loss(y_dist, s_2, reduction='mean')
+        loss_o_recon = F.mse_loss(o, o_predicted)
+        loss_r_recon = F.mse_loss(r, r_predicted)
+        loss_recon = loss_o_recon + loss_r_recon
 
         # Compute total loss
         kl_divergence = 0.5 * (1 + 2 * z_dist.scale.log() - z_dist.mean.pow(2) - z_dist.scale.pow(2)).sum(-1).mean()
@@ -135,9 +144,9 @@ class Transition_VAE(nn.Module):
 
 
 s_1 = torch.rand(32, 128)
-s_2 = torch.rand(32, 128)
+r = torch.rand(32, 5)
 o = torch.rand(32, 128*5)
 a = torch.rand(32, 8*5)
-model = Transition_VAE(128, 128*5, 8*5, 128, 128, 5)
-loss, loss_recon, kl_divergence = model.loss_function(s_1, s_2, o, a)
+model = Transition_VAE(128, 128*5, 8*5, 128, 5, 128)
+loss, loss_recon, kl_divergence = model.loss_function(s_1, o, a, r)
 print(loss, loss_recon, kl_divergence)

@@ -348,9 +348,32 @@ def main(args):
             enable_trajs_learning=enable_trajs_learning,
             env_name=env_name
         )
-    else:
+    elif model == 'causal' or model == 'team':
         model = IndependentPPO(
             "RewardPolicy",
+            num_agents=num_agents,
+            env=env,
+            learning_rate=lr,
+            n_steps=rollout_len,
+            batch_size=batch_size,
+            n_epochs=n_epochs,
+            gamma=gamma,
+            gae_lambda=gae_lambda,
+            ent_coef=ent_coef,
+            max_grad_norm=grad_clip,
+            target_kl=target_kl,
+            policy_kwargs=policy_kwargs,
+            tensorboard_log=tensorboard_log,
+            verbose=verbose,
+            alpha=alpha,
+            model=args.model,
+            using_reward_timestep=using_reward_timestep,
+            enable_trajs_learning=enable_trajs_learning,
+            env_name=env_name
+        )
+    elif model == 'vae':
+        model = IndependentPPO(
+            "TransitionPolicy",
             num_agents=num_agents,
             env=env,
             learning_rate=lr,
