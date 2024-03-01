@@ -402,7 +402,7 @@ class MapEnv(MultiAgentEnv):
                     self.single_update_map(apple[0],apple[1],new_char)
                     for agent in self.agents.values():
                         if agent.agent_id in agent_id:
-                            agent.reward += apple_type_list[i] / total_agent_level
+                            agent.reward += apple_type_list[i] * 10/ total_agent_level
         else:
             for agent in self.agents.values():
                 pos = agent.pos

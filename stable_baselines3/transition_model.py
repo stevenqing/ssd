@@ -98,7 +98,7 @@ class Q_z_oar(nn.Module):
         s = self.hidden_state(s)
         oa = self.hidden_oa(oa)
         r = self.hidden_r(r)
-        x = torch.cat([s, oa, r], 1)
+        x = torch.cat([s, oa, r], -1)
         x = self.hidden_layer(x)
 
         mu = torch.stack([mu(x) for mu in self.mu_header]).swapaxes(0, 1)
@@ -111,7 +111,7 @@ class Transition_VAE(nn.Module):
     def __init__(self, hidden_size, dim_o, dim_a, dim_s, dim_r, dim_z): # dim_s = dim_z
         super().__init__()
         nh=3
-        self.encoder = Q_z_oar(dim_s=dim_s, dim_in_oa=dim_o+dim_a, nh=nh, dim_h=hidden_size, dim_out=dim_z)
+        self.encoder = Q_z_oar(dim_s=dim_s, dim_in_oa=dim_o+dim_a, dim_r=dim_r, nh=nh, dim_h=hidden_size, dim_out=dim_z)
         self.decoder = P_or_za(dim_z=dim_z,dim_out_r=dim_r,nh=nh, dim_h=hidden_size, dim_out_o=dim_o)
 
     def forward(self, s, o, a, r):
@@ -121,6 +121,10 @@ class Transition_VAE(nn.Module):
         o_predicted,r_predicted = self.decoder(z)
         return o_predicted, r_predicted
 
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
 
     def loss_function(self, s_1, o, a, r):
         # Compute z distribution
@@ -142,11 +146,27 @@ class Transition_VAE(nn.Module):
 
         return -loss, loss_recon, kl_divergence
 
-
-s_1 = torch.rand(32, 128)
-r = torch.rand(32, 5)
-o = torch.rand(32, 128*5)
-a = torch.rand(32, 8*5)
-model = Transition_VAE(128, 128*5, 8*5, 128, 5, 128)
-loss, loss_recon, kl_divergence = model.loss_function(s_1, o, a, r)
-print(loss, loss_recon, kl_divergence)
+class Transition_Net(nn.Module):
+    def __init__(self, hidden_size, dim_latent_state, dim_a, dim_output_size):
+        super().__init__()
+        self.latent_state_input = nn.Linear(dim_latent_state, hidden_size)
+        self.action_input = nn.Linear(dim_a, hidden_size)
+        self.transition = nn.Sequential(
+            nn.Linear(hidden_size*2, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, dim_output_size)
+        )
+    def forward(self, latent_state, action):
+        if latent_state.dtype != action.dtype:
+            action = action.to(latent_state.dtype)
+        z = torch.cat([self.latent_state_input(latent_state), self.action_input(action)], -1)
+        return self.transition(z)
+# s_1 = torch.rand(32,2, 128)
+# r = torch.rand(32,2, 5)
+# o = torch.rand(32,2, 128*5)
+# a = torch.rand(32,2, 8*5)
+# model = Transition_VAE(128, 128*5, 8*5, 128, 5, 128)
+# loss, loss_recon, kl_divergence = model.loss_function(s_1, o, a, r)
+# print(loss, loss_recon, kl_divergence)

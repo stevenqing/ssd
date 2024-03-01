@@ -13,7 +13,8 @@ from stable_baselines3.common.type_aliases import (
     ReplayBufferSamples,
     RolloutBufferSamples,
     RewardRolloutBufferSamples,
-    RewardTrajsRolloutBufferSamples
+    RewardTrajsRolloutBufferSamples,
+    TransitionRolloutBufferSamples,
 )
 from stable_baselines3.common.utils import get_device
 from stable_baselines3.common.vec_env import VecNormalize
@@ -770,6 +771,58 @@ class RolloutBuffer(BaseBuffer):
         )
         return RewardTrajsRolloutBufferSamples(*tuple(map(self.to_torch, data)))
 
+    def get_vae_sw(self, batch_size: Optional[int] = None) -> Generator[RolloutBufferSamples, None, None]:
+        assert self.full, ""
+        indices = np.random.permutation(self.buffer_size * self.n_envs)
+        # Prepare the data
+        if not self.generator_ready:
+
+            _tensor_names = [
+                "observations",
+                "actions",
+                "values",
+                "log_probs",
+                "advantages",
+                "returns",
+                "all_last_obs",
+                "all_actions",
+                "all_rewards",
+                "all_next_obs",
+                "all_next_actions",
+                "all_next_rewards",
+                "cf_rewards",
+            ]
+
+            for tensor in _tensor_names:
+                self.__dict__[tensor] = self.swap_and_flatten(self.__dict__[tensor])
+            self.generator_ready = True
+
+        # Return everything, don't create minibatches
+        if batch_size is None:
+            batch_size = self.buffer_size * self.n_envs
+
+        start_idx = 0
+        while start_idx < self.buffer_size * self.n_envs:
+            yield self._get_sw_samples(indices[start_idx : start_idx + batch_size])
+            start_idx += batch_size
+
+    def _get_vae_sw_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> RolloutBufferSamples:
+        data = (
+            self.observations[batch_inds],
+            self.actions[batch_inds],
+            self.values[batch_inds].flatten(),
+            self.log_probs[batch_inds].flatten(),
+            self.advantages[batch_inds].flatten(),
+            self.returns[batch_inds].flatten(),
+            self.all_last_obs[batch_inds],
+            self.all_actions[batch_inds],
+            self.all_rewards[batch_inds],
+            self.all_last_obs[batch_inds+1],
+            self.all_actions[batch_inds+1],
+            self.all_rewards[batch_inds+1],
+            self.cf_rewards[batch_inds],
+        )
+        return TransitionRolloutBufferSamples(*tuple(map(self.to_torch, data)))
 
     def get_sw(self, batch_size: Optional[int] = None) -> Generator[RolloutBufferSamples, None, None]:
         assert self.full, ""

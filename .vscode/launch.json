@@ -42,64 +42,6 @@
 
 
 
-// {
-//     // Use IntelliSense to learn about possible attributes.
-//     // Hover to view descriptions of existing attributes.
-//     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-//     "version": "0.2.0",
-//     "configurations": [
-
-//         {
-//             "name": "Python: main",
-//             "type": "python",
-//             "request": "launch",
-//             "program": "run_scripts/sb3_independent.py",
-//             "console": "integratedTerminal",
-//             "python": "/home/shuqingshi/miniconda3/envs/ssd/bin/python",
-//             "justMyCode": false,
-//             "args": [
-//                 "--env",
-//                 "coin3",
-//                 "--model",
-//                 "causal",
-//                 "--num-agents",
-//                 "3",
-//                 "--rollout-len",
-//                 "1000",
-//                 "--user_name",
-//                 "1160677229",
-//                 "--num-envs",
-//                 "2",
-//                 "--use-collective-reward",
-//                 "False"
-//             ],
-//         },
-//         {
-//             "name": "reed: main",
-//             "type": "python",
-//             "request": "launch",
-//             "program": "run_scripts/sb3_independent.py",
-//             "console": "integratedTerminal",
-//             "python": "/home/zyd/anaconda3/envs/ssd/bin/python",
-//             "justMyCode": false,
-//             "args": [
-//                 "--env",
-//                 "lbf10",
-//                 "--model",
-//                 "causal",
-//                 "--num-agents",
-//                 "3",
-//                 "--rollout-len",
-//                 "1000",
-//                 "--num-envs",
-//                 "2",
-//                 "--use-collective-reward",
-//                 "False",
-//                 "--local"
-//             ],
-//         },
-//     ]
-
 {
     // Use IntelliSense to learn about possible attributes.
     // Hover to view descriptions of existing attributes.
@@ -111,10 +53,68 @@
             "name": "Python: main",
             "type": "python",
             "request": "launch",
-            "program": "stable_baselines3/transition_model.py",
+            "program": "run_scripts/sb3_independent.py",
             "console": "integratedTerminal",
             "python": "/home/shuqingshi/miniconda3/envs/ssd/bin/python",
             "justMyCode": false,
+            "args": [
+                "--env",
+                "coin3",
+                "--model",
+                "vae",
+                "--num-agents",
+                "3",
+                "--rollout-len",
+                "1000",
+                "--user_name",
+                "1160677229",
+                "--num-envs",
+                "2",
+                "--use-collective-reward",
+                "False"
+            ],
         },
-    }
+        {
+            "name": "reed: main",
+            "type": "python",
+            "request": "launch",
+            "program": "run_scripts/sb3_independent.py",
+            "console": "integratedTerminal",
+            "python": "/home/zyd/anaconda3/envs/ssd/bin/python",
+            "justMyCode": false,
+            "args": [
+                "--env",
+                "lbf10",
+                "--model",
+                "causal",
+                "--num-agents",
+                "3",
+                "--rollout-len",
+                "1000",
+                "--num-envs",
+                "2",
+                "--use-collective-reward",
+                "False",
+                "--local"
+            ],
+        },
+    ]
+
+// {
+//     // Use IntelliSense to learn about possible attributes.
+//     // Hover to view descriptions of existing attributes.
+//     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+//     "version": "0.2.0",
+//     "configurations": [
+
+//         {
+//             "name": "Python: main",
+//             "type": "python",
+//             "request": "launch",
+//             "program": "stable_baselines3/transition_model.py",
+//             "console": "integratedTerminal",
+//             "python": "/home/shuqingshi/miniconda3/envs/ssd/bin/python",
+//             "justMyCode": false,
+//         },
+//     }
     

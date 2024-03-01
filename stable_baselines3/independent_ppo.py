@@ -101,7 +101,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         self.previous_all_last_obs_traj = None
         self.previous_all_actions_traj = None
         self.previous_all_rewards_traj = None
-
+        self.prev_latent_state = None
     def learn(
         self,
         total_timesteps: int,
@@ -592,6 +592,20 @@ class IndependentPPO(OnPolicyAlgorithm):
                             all_rewards,
                             cf_rewards=None,
                         )
+                    elif self.model == 'vae':
+                        cf_rewards = self.compute_transition_cf_rewards(policy,all_last_obs,all_rewards,all_actions,polid,all_distributions) #SPEED
+                        policy.rollout_buffer.add_sw(
+                            all_last_obs[polid],
+                            all_actions[polid],
+                            all_rewards[polid],
+                            all_last_episode_starts[polid],
+                            all_values[polid],
+                            all_log_probs[polid],
+                            all_last_obs,
+                            rollout_all_actions,
+                            all_rewards,
+                            cf_rewards,
+                        )
                     else:
                         cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions) #SPEED
                         policy.rollout_buffer.add_sw(
@@ -635,21 +649,71 @@ class IndependentPPO(OnPolicyAlgorithm):
 
         return obs
 
-    # def compute_predicted_rewards(self,policy,all_last_obs,all_actions,polid,all_distributions):
-    #     all_cf_rewards = []
+    def compute_transition_cf_rewards(self,policy,all_last_obs,all_rewards,all_actions,polid,all_distributions,sample_number=10):
+        all_cf_rewards = []
 
-    #     all_last_obs = obs_as_tensor(np.array(all_last_obs), policy.device)
-    #     all_actions = obs_as_tensor(np.transpose(np.array(all_actions),(1,0,2)), policy.device)
-        
-    #     # extract obs features
-    #     all_obs_features = []
-    #     for i in range(self.num_agents):
-    #         all_obs_features.append(policy.policy.extract_features(all_last_obs[i]))
-    #     all_obs_features = th.stack(all_obs_features,dim=0).permute(1,0,2)
-    #     all_obs_features = all_obs_features.reshape(all_obs_features.shape[0],-1)
-    #     index = 0
-    #     all_actions_one_hot = F.one_hot(all_actions, num_classes=self.action_space.n).repeat(1,1,(self.num_agents-1) * self.action_space.n,1)
+        all_last_obs = obs_as_tensor(np.array(all_last_obs), policy.device)
+        all_rewards = obs_as_tensor(np.transpose(np.array(all_rewards),(1,0)), policy.device)
+        all_actions = obs_as_tensor(np.transpose(np.array(all_actions),(1,0,2)), policy.device)
 
+        all_obs_features = []
+        for i in range(self.num_agents):
+            all_obs_features.append(policy.policy.extract_features(all_last_obs[i]))
+        all_obs_features = th.stack(all_obs_features,dim=0).permute(1,0,2)
+        all_obs_features = all_obs_features.reshape(all_obs_features.shape[0],-1)
+
+        all_actions_one_hot = all_actions[:,polid,:]
+        eye_matrix = th.eye(self.action_space.n,device=all_actions_one_hot.device)
+        all_actions_one_hot = eye_matrix[all_actions_one_hot]
+        all_actions_one_hot = all_actions_one_hot.unsqueeze(1)
+        all_actions_one_hot = all_actions_one_hot.repeat(1,1,sample_number,1)
+        all_actions_one_hot = all_actions_one_hot.repeat(1,self.num_agents,1,1)
+        all_actions_one_hot_list = all_actions_one_hot.permute(1,0,2,3)
+
+        total_actions = [None] * self.num_agents
+        for i in range(self.num_agents):
+            if i != polid:
+                actions_one_hot_copy = all_actions_one_hot_list.clone()
+                cf_action_i = self.generate_samples(all_distributions[i],sample_number)
+                cf_action_i = cf_action_i.permute(1,0,2,3).squeeze(0)
+                actions_one_hot_copy[i,:,:,:] = cf_action_i
+
+                total_actions[i] = actions_one_hot_copy
+        total_cf_rewards = []
+        for all_actions_one_hot in total_actions:
+            if all_actions_one_hot is not None:
+                all_actions_one_hot = all_actions_one_hot.permute(1,2,0,3)
+
+                all_actions_one_hot = all_actions_one_hot.reshape(all_actions_one_hot.shape[0],all_actions_one_hot.shape[1],-1).permute(1,0,2)
+                all_actions_one_hot_flatten = all_actions_one_hot.reshape(-1,all_actions_one_hot.shape[-1])
+                all_obs_features_copy = all_obs_features.clone().repeat(all_actions_one_hot.shape[0],1,1)
+                
+                all_obs_actions_features = th.cat((all_obs_features_copy,all_actions_one_hot),dim=-1) # Here should be (num_env, sample_number, (feature_dim+action_dim)*num_agents). We won't permute it since we will be using the same form on the action_one_hot(for the transition model)
+                all_obs_actions_features = all_obs_actions_features.reshape(-1,all_obs_actions_features.shape[-1])
+
+                # Let the dimension of the rewards be (num_env, sample_number, num_agents)
+                all_rewards_copy = all_rewards.clone().unsqueeze(1)
+                all_rewards_copy = all_rewards_copy.repeat(1,sample_number,1)
+                all_rewards_copy = all_rewards_copy.reshape(-1,all_rewards_copy.shape[-1])
+
+                if self.prev_latent_state == None:
+                    prev_latent_state_size = (all_obs_actions_features.shape[0],int((all_obs_actions_features.shape[-1]-self.num_agents*self.action_space.n)/self.num_agents))
+                    self.prev_latent_state = th.randn(prev_latent_state_size)
+                else:
+                    self.prev_latent_state = self.prev_latent_state.squeeze(1)
+                    
+                prev_latent_state = policy.policy.vae_net.encoder(self.prev_latent_state, all_obs_actions_features, all_rewards_copy).rsample()
+                latent_state = policy.policy.transition_net(prev_latent_state.squeeze(1), all_actions_one_hot_flatten)
+                
+                all_cf_rewards = policy.policy.reward_net(latent_state)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
+
+                all_cf_rewards = th.mean(all_cf_rewards,dim=1) #SPEED? Not sure in here
+                total_cf_rewards.append(all_cf_rewards)
+        total_cf_rewards = th.stack(total_cf_rewards,dim=0)
+        total_cf_rewards = th.mean(total_cf_rewards,dim=0).cpu().detach().numpy()        
+        self.prev_latent_state = prev_latent_state
+        return total_cf_rewards
+    
 
     def compute_cf_rewards(self,policy,all_last_obs,all_actions,polid,all_distributions,sample_number=10):
         all_cf_rewards = []
