@@ -302,6 +302,7 @@ def main(args):
                             dir="./",
                             job_type="training",
                             reinit=True)
+        
     
     args = wandb.config # for wandb sweep
     if extractor == 'cbam':
