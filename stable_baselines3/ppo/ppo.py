@@ -513,8 +513,6 @@ class PPO(OnPolicyAlgorithm):
                     
                     loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + vae_loss + reward_loss
 
-                    print(f"vae_loss: {vae_loss}, vae_recon_loss: {vae_recon_loss}, vae_kl_loss: {vae_kl_loss}, reward_loss: {reward_loss}")
-
                     # Calculate approximate form of reverse KL Divergence for early stopping
                     # see issue #417: https://github.com/DLR-RM/stable-baselines3/issues/417
                     # and discussion in PR #419: https://github.com/DLR-RM/stable-baselines3/pull/419
