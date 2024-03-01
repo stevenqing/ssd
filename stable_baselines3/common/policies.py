@@ -1030,7 +1030,7 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
             optimizer_kwargs,
         )
         self.num_agents = num_agents
-        self.previous_state = None
+        self.previous_latent_state = None
         self._build(lr_schedule)
 
     def _build_mlp_extractor(self) -> None:
@@ -1079,7 +1079,7 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
         self.vae_net = Transition_VAE(hidden_size=self.mlp_extractor.latent_dim_vf,
                                              dim_o=self.mlp_extractor.latent_dim_vf * self.num_agents,
                                              dim_a=self.action_space.n * self.num_agents,
-                                             dim_s=self.mlp_extractor.latent_dim_vf,
+                                            #  dim_s=self.mlp_extractor.latent_dim_vf,
                                              dim_r=self.num_agents,
                                              dim_z=self.mlp_extractor.latent_dim_vf) # use global training
         self.transition_net = Transition_Net(self.mlp_extractor.latent_dim_vf, self.mlp_extractor.latent_dim_vf, self.action_space.n * self.num_agents, self.mlp_extractor.latent_dim_vf) 
@@ -1183,25 +1183,25 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
 
             # add transition model prdiction
             # Need to initialize self.previous_state
-            if self.previous_state is None:
+            if self.previous_latent_state is None:
                 previous_latent_state_size = (obs.shape[0], self.mlp_extractor.latent_dim_vf)
                 self.previous_latent_state = th.randn(previous_latent_state_size, device=obs.device)
             else:
                 self.previous_latent_state = self.previous_latent_state.squeeze(1)
-            latent_state = self.vae_net.encoder(self.previous_latent_state, obs_action, all_rewards).rsample().squeeze(1)
-            predicted_latent_state = self.transition_net(self.previous_latent_state, all_actions_one_hot)
+            latent_state = self.vae_net.encoder(obs_action, all_rewards).rsample().squeeze(1)
+            # predicted_latent_state = self.transition_net(self.previous_latent_state, all_actions_one_hot)
             
             # Loss Calculation
             # Transition Model Loss
-            transition_loss = F.mse_loss(latent_state, predicted_latent_state)
+            # transition_loss = F.mse_loss(latent_state, predicted_latent_state)
             # VAE Loss
-            vae_loss, vae_recon_loss, vae_kl_loss = self.vae_net.loss_function(self.previous_latent_state, features, all_actions_one_hot, all_rewards)
+            vae_loss, vae_recon_loss, vae_kl_loss = self.vae_net.loss_function(features, all_actions_one_hot, all_rewards)
             # Reward Model Loss
             predicted_reward = self.reward_net(latent_state)[0]
             predicted_reward = th.squeeze(predicted_reward)
             reward_loss = F.mse_loss(predicted_reward, all_rewards)
             # Update previous state
-            self.previous_state = latent_state
+            self.previous_latent_state = latent_state
         else:
             obs_action = th.cat((features,all_actions_one_hot),dim=-1)
             for i in range(self.num_agents):
@@ -1218,7 +1218,7 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
         log_prob = distribution.log_prob(actions)
         values = self.value_net(latent_vf)
         entropy = distribution.entropy()
-        return values, log_prob, entropy, transition_loss, vae_loss, vae_recon_loss, vae_kl_loss, reward_loss, predicted_reward
+        return values, log_prob, entropy, vae_loss, vae_recon_loss, vae_kl_loss, reward_loss, predicted_reward
     
 
 class RewardActorCriticPolicy(ActorCriticPolicy):

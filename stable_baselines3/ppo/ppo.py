@@ -467,7 +467,7 @@ class PPO(OnPolicyAlgorithm):
                     if self.use_sde:
                         self.policy.reset_noise(self.batch_size)
 
-                    values, log_prob, entropy, transition_loss, vae_loss, vae_recon_loss, vae_kl_loss, reward_loss, predicted_reward = self.policy.evaluate_actions(rollout_data.observations, actions, all_last_obs, all_actions, all_rewards)
+                    values, log_prob, entropy, vae_loss, vae_recon_loss, vae_kl_loss, reward_loss, predicted_reward = self.policy.evaluate_actions(rollout_data.observations, actions, all_last_obs, all_actions, all_rewards)
                     values = values.flatten()
                     # Normalize advantage
                     advantages = rollout_data.advantages
@@ -511,9 +511,9 @@ class PPO(OnPolicyAlgorithm):
                     entropy_losses.append(entropy_loss.item())
                     
                     
-                    loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + transition_loss + vae_loss + reward_loss
+                    loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + vae_loss + reward_loss
 
-
+                    print(f"vae_loss: {vae_loss}, vae_recon_loss: {vae_recon_loss}, vae_kl_loss: {vae_kl_loss}, reward_loss: {reward_loss}")
 
                     # Calculate approximate form of reverse KL Divergence for early stopping
                     # see issue #417: https://github.com/DLR-RM/stable-baselines3/issues/417
@@ -531,8 +531,9 @@ class PPO(OnPolicyAlgorithm):
                         break
 
                     # Optimization step
+                    # use reward model and policy loss to optimize policy
                     self.policy.optimizer.zero_grad()
-                    loss.backward()
+                    loss.backward(retain_graph=True)
                     # Clip grad norm
                     th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
                     self.policy.optimizer.step()
