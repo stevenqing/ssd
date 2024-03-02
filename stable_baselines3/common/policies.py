@@ -1553,6 +1553,7 @@ class ActorCriticCnnPolicy(ActorCriticPolicy):
         self.num_agents = num_agents
         self._build(lr_schedule)
 
+
 class MultiInputActorCriticPolicy(ActorCriticPolicy):
     """
     MultiInputActorClass policy class for actor-critic algorithms (has both policy and value prediction).

@@ -260,7 +260,6 @@ def main(args):
         env=env_name,
         num_agents=num_agents,
         use_collective_reward=use_collective_reward,
-        inequity_averse_reward=inequity_averse_reward,
         alpha=alpha,
         beta=beta,
     )
@@ -344,11 +343,13 @@ def main(args):
             tensorboard_log=tensorboard_log,
             verbose=verbose,
             alpha=alpha,
+            beta=beta,
             model=args.model,
             using_reward_timestep=using_reward_timestep,
             enable_trajs_learning=enable_trajs_learning,
             env_name=env_name,
             use_collective_reward=use_collective_reward,
+            inequity_averse_reward=inequity_averse_reward,
         )
     elif model == 'causal' or model == 'team':
         model = IndependentPPO(
@@ -368,11 +369,13 @@ def main(args):
             tensorboard_log=tensorboard_log,
             verbose=verbose,
             alpha=alpha,
+            beta=beta,
             model=args.model,
             using_reward_timestep=using_reward_timestep,
             enable_trajs_learning=enable_trajs_learning,
             env_name=env_name,
             use_collective_reward=use_collective_reward,
+            inequity_averse_reward=inequity_averse_reward,
         )
     elif model == 'vae':
         model = IndependentPPO(
@@ -392,11 +395,13 @@ def main(args):
             tensorboard_log=tensorboard_log,
             verbose=verbose,
             alpha=alpha,
+            beta=beta,
             model=args.model,
             using_reward_timestep=using_reward_timestep,
             enable_trajs_learning=enable_trajs_learning,
             env_name=env_name,
             use_collective_reward=use_collective_reward,
+            inequity_averse_reward=inequity_averse_reward,
         )
     model.learn(total_timesteps=total_timesteps)
 

@@ -47,12 +47,14 @@ class IndependentPPO(OnPolicyAlgorithm):
         policy_kwargs: Optional[Dict[str, Any]] = None,
         verbose: int = 0,
         device: Union[th.device, str] = "auto",
-        alpha: float = 0.5,
+        alpha: float = 0.55,
+        beta: float = 0.55,
         model: str = 'baseline',
         using_reward_timestep: int = 2000000,
         enable_trajs_learning: bool = False,
         env_name: str = 'harvest',
         use_collective_reward: bool = False,
+        inequity_averse_reward: bool = False,
     ):
         self.env = env
         self.env_name = env_name
@@ -65,10 +67,12 @@ class IndependentPPO(OnPolicyAlgorithm):
         self.verbose = verbose
         self._logger = None
         self.alpha = alpha
+        self.beta = beta
         self.model = model
         self.using_reward_timestep = using_reward_timestep
         self.enable_trajs_learning = enable_trajs_learning
         self.use_collective_reward = use_collective_reward
+        self.inequity_averse_reward = inequity_averse_reward
         env_fn = lambda: DummyGymEnv(self.observation_space, self.action_space)
         dummy_env = DummyVecEnv([env_fn] * self.num_envs)
         self.policies = [
@@ -579,14 +583,30 @@ class IndependentPPO(OnPolicyAlgorithm):
             rollout_all_actions = all_actions
             for polid, policy in enumerate(self.policies):
                 if self.model == 'baseline':
-                    policy.rollout_buffer.add(
-                        all_last_obs[polid],
-                        all_actions[polid],
-                        all_rewards[polid],
-                        all_last_episode_starts[polid],
-                        all_values[polid],
-                        all_log_probs[polid],
-                    )
+                    if self.inequity_averse_reward:
+                        cf_reward = self.compute_inequity_averse_rewards(all_rewards[polid],all_rewards) #SPEED
+                        policy.rollout_buffer.add_sw(
+                            all_last_obs[polid],
+                            all_actions[polid],
+                            all_rewards[polid],
+                            all_last_episode_starts[polid],
+                            all_values[polid],
+                            all_log_probs[polid],
+                            all_last_obs,
+                            rollout_all_actions,
+                            all_rewards,
+                            cf_rewards=cf_reward,
+                        )
+                    else:
+                        policy.rollout_buffer.add(
+                            all_last_obs[polid],
+                            all_actions[polid],
+                            all_rewards[polid],
+                            all_last_episode_starts[polid],
+                            all_values[polid],
+                            all_log_probs[polid],
+                        )
+
                 else:
                     if self.model == 'team':
                         policy.rollout_buffer.add_sw(
@@ -637,6 +657,11 @@ class IndependentPPO(OnPolicyAlgorithm):
                 obs_tensor = obs_as_tensor(all_last_obs[polid], policy.device)
                 _, value, _,_ = policy.policy.forward(obs_tensor)
                 if self.model == 'baseline':
+                    if self.inequity_averse_reward:
+                        policy.rollout_buffer.compute_inequity_returns_and_advantage(
+                        last_values=value, dones=all_dones[polid], polid=polid
+                    )
+                    else:
                         policy.rollout_buffer.compute_returns_and_advantage(
                         last_values=value, dones=all_dones[polid]
                     )
@@ -657,6 +682,14 @@ class IndependentPPO(OnPolicyAlgorithm):
             policy._last_episode_starts = all_last_episode_starts[polid]
 
         return obs
+
+    def compute_inequity_averse_rewards(self,individual_reward,all_rewards):
+        diff = np.array([individual_reward - reward for reward in all_rewards])
+        dis_inequity = self.alpha * sum(diff[diff > 0])
+        adv_inequity = self.beta * sum(diff[diff < 0])
+        inequity_reward = individual_reward - (dis_inequity + adv_inequity) / (self.num_agents -1)
+        return inequity_reward
+
 
     def compute_transition_cf_rewards(self,policy,all_last_obs,all_rewards,all_actions,polid,all_distributions,sample_number=10):
         all_cf_rewards = []
