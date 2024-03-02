@@ -584,8 +584,8 @@ class IndependentPPO(OnPolicyAlgorithm):
             for polid, policy in enumerate(self.policies):
                 if self.model == 'baseline':
                     if self.inequity_averse_reward:
-                        cf_reward = self.compute_inequity_averse_rewards(all_rewards[polid],all_rewards) #SPEED
-                        policy.rollout_buffer.add_sw(
+                        inequity_reward = self.compute_inequity_averse_rewards(all_rewards[polid],all_rewards) #SPEED
+                        policy.rollout_buffer.add_inequity_sw(
                             all_last_obs[polid],
                             all_actions[polid],
                             all_rewards[polid],
@@ -595,7 +595,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                             all_last_obs,
                             rollout_all_actions,
                             all_rewards,
-                            cf_rewards=cf_reward,
+                            inequity_reward,
                         )
                     else:
                         policy.rollout_buffer.add(

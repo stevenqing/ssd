@@ -360,7 +360,7 @@ class RolloutBuffer(BaseBuffer):
         self.gamma = gamma
         self.agent_number = num_agents
         self.observations, self.actions, self.rewards, self.advantages = None, None, None, None
-        self.all_last_obs, self.all_actions, self.all_rewards, self.cf_rewards = None, None, None, None
+        self.all_last_obs, self.all_actions, self.all_rewards, self.cf_rewards, self.inequity_rewards = None, None, None, None, None
         self.all_last_obs_traj, self.all_actions_traj, self.all_rewards_traj = None, None, None
         self.previous_all_last_obs_traj, self.previous_all_actions_traj, self.previous_all_rewards_traj = None, None, None
         self.returns, self.episode_starts, self.values, self.log_probs = None, None, None, None
@@ -385,6 +385,7 @@ class RolloutBuffer(BaseBuffer):
         self.all_actions = np.zeros((self.buffer_size, self.n_envs, self.agent_number, self.action_dim), dtype=np.float32)
         self.all_rewards = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
         self.cf_rewards = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
+        self.inequity_rewards = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
 
         self.all_last_obs_traj = self.all_last_obs.copy()
         self.all_actions_traj = self.all_actions.copy()
@@ -464,7 +465,7 @@ class RolloutBuffer(BaseBuffer):
             else:
                 next_non_terminal = 1.0 - self.episode_starts[step + 1]
                 next_values = self.values[step + 1]
-            delta = self.cf_rewards[step,:,polid] + self.gamma * next_values * next_non_terminal - self.values[step]
+            delta = self.inequity_rewards[step] + self.gamma * next_values * next_non_terminal - self.values[step]
             last_gae_lam = delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam
             self.advantages[step] = last_gae_lam
         # TD(lambda) estimator, see Github PR #375 or "Telescoping in TD(lambda)"
@@ -593,6 +594,60 @@ class RolloutBuffer(BaseBuffer):
         if self.pos == self.buffer_size:
             self.full = True
 
+    def add_inequity_sw(
+        self,
+        obs: np.ndarray,
+        action: np.ndarray,
+        reward: np.ndarray,
+        episode_start: np.ndarray,
+        value: th.Tensor,
+        log_prob: th.Tensor,
+        all_last_obs: np.ndarray,
+        all_actions: np.ndarray,
+        all_rewards: np.ndarray,
+        inequity_rewards: np.ndarray,
+    ) -> None:
+        """
+        :param obs: Observation
+        :param action: Action
+        :param reward:
+        :param episode_start: Start of episode signal.
+        :param value: estimated value of the current state
+            following the current policy.
+        :param log_prob: log probability of the action
+            following the current policy.
+        """
+        if len(log_prob.shape) == 0:
+            # Reshape 0-d tensor to avoid error
+            log_prob = log_prob.reshape(-1, 1)
+
+        # Reshape needed when using multiple envs with discrete observations
+        # as numpy cannot broadcast (n_discrete,) to (n_discrete, 1)
+        if isinstance(self.observation_space, spaces.Discrete):
+            obs = obs.reshape((self.n_envs,) + self.obs_shape)
+
+        # Same reshape, for actions
+        action = action.reshape((self.n_envs, self.action_dim))
+
+        all_last_obs = np.array(all_last_obs)
+        all_actions = np.array(all_actions)
+        all_rewards = np.array(all_rewards)
+
+        self.observations[self.pos] = np.array(obs).copy()
+        self.actions[self.pos] = np.array(action).copy()
+        self.rewards[self.pos] = np.array(reward).copy()
+        self.episode_starts[self.pos] = np.array(episode_start).copy()
+        self.values[self.pos] = value.clone().cpu().numpy().flatten()
+        self.log_probs[self.pos] = log_prob.clone().cpu().numpy()
+
+        self.all_last_obs[self.pos] = np.transpose(np.array(all_last_obs).copy(),(1,0,2,3,4))
+        self.all_actions[self.pos] = np.transpose(np.array(all_actions).copy(),(1,0,2))
+        self.all_rewards[self.pos] = np.transpose(np.array(all_rewards).copy(),(1,0))
+        self.inequity_rewards[self.pos] = np.array(inequity_rewards).copy()
+
+        self.pos += 1
+        if self.pos == self.buffer_size:
+            self.full = True
 
     def add_sw_traj(
         self,
