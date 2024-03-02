@@ -1075,7 +1075,7 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
 
         self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf, 1)
         # self.reward_net = CausalModel(self.mlp_extractor.latent_dim_vf+self.action_space.n,self.num_agents) # use individual training
-        self.reward_net = CausalModel(self.mlp_extractor.latent_dim_vf,self.num_agents) # use global training
+        self.reward_net = CausalModel(self.mlp_extractor.latent_dim_vf + self.action_space.n*self.num_agents , self.num_agents) # use global training
         self.vae_net = Transition_VAE(hidden_size=self.mlp_extractor.latent_dim_vf,
                                              dim_o=self.mlp_extractor.latent_dim_vf * self.num_agents,
                                              dim_a=self.action_space.n * self.num_agents,
@@ -1197,7 +1197,8 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
             # VAE Loss
             vae_loss, vae_recon_loss, vae_kl_loss = self.vae_net.loss_function(features, all_actions_one_hot, all_rewards)
             # Reward Model Loss
-            predicted_reward = self.reward_net(latent_state)[0]
+            latent_state_action = th.cat((latent_state,all_actions_one_hot),dim=-1)
+            predicted_reward = self.reward_net(latent_state_action)[0]
             predicted_reward = th.squeeze(predicted_reward)
             reward_loss = F.mse_loss(predicted_reward, all_rewards)
             # Update previous state

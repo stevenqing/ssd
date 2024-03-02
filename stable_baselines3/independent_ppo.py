@@ -715,7 +715,8 @@ class IndependentPPO(OnPolicyAlgorithm):
                 prev_latent_state = policy.policy.vae_net.encoder(all_obs_actions_features, all_rewards_copy).rsample()
                 latent_state = policy.policy.transition_net(prev_latent_state.squeeze(1), all_actions_one_hot_flatten)
                 
-                all_cf_rewards = policy.policy.reward_net(latent_state)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
+                latent_state_action = th.cat((latent_state,all_actions_one_hot_flatten),dim=-1)
+                all_cf_rewards = policy.policy.reward_net(latent_state_action)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
 
                 all_cf_rewards = th.mean(all_cf_rewards,dim=1) #SPEED? Not sure in here
                 total_cf_rewards.append(all_cf_rewards)

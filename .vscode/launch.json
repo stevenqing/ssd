@@ -61,7 +61,7 @@
                 "--env",
                 "coin3",
                 "--model",
-                "causal",
+                "vae",
                 "--num-agents",
                 "3",
                 "--rollout-len",
