@@ -70,8 +70,8 @@
                 "1160677229",
                 "--num-envs",
                 "1",
-                "--inequity-averse-reward",
-                "False"
+                "--extractor",
+                "cbam"
             ],
         },
         {

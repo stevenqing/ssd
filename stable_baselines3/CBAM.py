@@ -36,7 +36,7 @@ class SpatialAttention(nn.Module):
         out = self.conv(out)
         return x * self.sigmoid(out) 
     
-class CBAM(nn.Module):
+class CBAM_Gaussian(nn.Module):
     def __init__(self, 
                  observation_space: gym.spaces.Box, 
                  channel=18, 
@@ -47,13 +47,14 @@ class CBAM(nn.Module):
                  reduction=16, 
                  kernel_size=7):
         
-        super(CBAM, self).__init__(observation_space,features_dim)
+        super(CBAM_Gaussian, self).__init__(observation_space,features_dim)
 
         self.ca = ChannelAttention(channel, reduction)
         self.sa = SpatialAttention(kernel_size)
 
         flat_out = num_frames * 3 * (view_len * 2 + 1) ** 2 # eliminate the padding?
-
+        self.fc_mu = nn.Linear(flat_out, features_dim)
+        self.fc_logsigma = nn.Linear(flat_out, features_dim)
 
     def forward(self, x):
         x = x.permute(0, 3, 1, 2)
@@ -62,4 +63,6 @@ class CBAM(nn.Module):
 
         # flatten features
         features = torch.flatten(F.relu(x), start_dim=1)
-        return features
+        mu = self.fc_mu(features)
+        logsigma = self.fc_logsigma(features)
+        return mu, logsigma

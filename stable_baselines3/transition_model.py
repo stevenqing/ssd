@@ -2,7 +2,7 @@ import argparse
 import copy
 import random
 import time
-
+from CBAM import CBAM_Gaussian
 from functools import partial
 import numpy as np
 import torch
@@ -108,38 +108,13 @@ class P_or_za(nn.Module):
 #         return z
 
 class Q_z_oar(nn.Module):
-    def __init__(self, dim_in_oa=128*5+8*5, dim_r=5, nh=2, dim_h=128, dim_out=128):
+    def __init__(self, dim_o=128*5+8*5, dim_r=5, nh=2, dim_h=128, dim_out=128):
         super().__init__()
         self.nh = nh
         self.dim_out = dim_out
         # Shared layers with separated output layers
-        self.hidden_oa = nn.Sequential(nn.Linear(dim_in_oa, dim_h), nn.ReLU())
-        self.hidden_r = nn.Sequential(nn.Linear(dim_r, dim_h), nn.ReLU())
 
-        self.hidden_layer = nn.Sequential(nn.Linear(dim_h*2, dim_h), nn.ReLU())
-
-        self.mu_header = nn.ModuleList(
-            [
-                nn.Sequential(
-                    *[
-                        nn.Sequential(nn.Linear(dim_h, dim_h), nn.ReLU())
-                        for _ in range(nh)
-                    ],
-                    nn.Linear(dim_h, dim_out),
-                )
-            ]
-        )
-        self.sigma_header = nn.ModuleList(
-            [
-                nn.Sequential(
-                    *[
-                        nn.Sequential(nn.Linear(dim_h, dim_h), nn.ReLU())
-                        for _ in range(nh)
-                    ],
-                    nn.Linear(dim_h, dim_out),
-                )
-            ]
-        )
+        self.cbam_gaussian = CBAM_Gaussian(dim_o, channel=18, features_dim=128, view_len=7, num_frames=6, fcnet_hiddens=[1024, 128], reduction=16, kernel_size=7)
 
 
     def forward(self, oa, r) -> Normal:
