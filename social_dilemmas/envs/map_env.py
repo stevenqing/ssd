@@ -354,14 +354,17 @@ class MapEnv(MultiAgentEnv):
                 store_actions.append(int(action))
 
         # Remove agents from color map
-        agents_pos = []
+        
         for agent in self.agents.values():
-            agents_pos.append(list(agent.pos))
             row, col = agent.pos[0], agent.pos[1]
             self.single_update_world_color_map(row, col, self.world_map[row, col])
 
         self.update_moves(agent_actions)
         
+        agents_pos = []
+        for agent in self.agents.values():
+            agents_pos.append(list(agent.pos))
+
         # Construct the vector state
         apple_type = None
         if self.env_name == 'LBF10':
@@ -402,7 +405,7 @@ class MapEnv(MultiAgentEnv):
                     self.single_update_map(apple[0],apple[1],new_char)
                     # Modify the reward
                     if len(agent_id) > 0:
-                        total_reward = apple_type_list[i] * 1.5
+                        total_reward = apple_type_list[i] * 1.2
                     else:
                         total_reward = apple_type_list[i] 
                     for agent in self.agents.values():
