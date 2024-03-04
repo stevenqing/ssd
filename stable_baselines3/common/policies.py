@@ -8,6 +8,7 @@ from functools import partial
 from typing import Any, Dict, List, Optional, Tuple, Type, TypeVar, Union
 from stable_baselines3.causal_model import CausalModel
 from stable_baselines3.transition_model import Transition_VAE, Transition_Net
+from stable_baselines3.mdrnn import MDRNN
 import numpy as np
 import torch as th
 from gym import spaces
@@ -1082,7 +1083,7 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
                                             #  dim_s=self.mlp_extractor.latent_dim_vf,
                                              dim_r=self.num_agents,
                                              dim_z=self.mlp_extractor.latent_dim_vf) # use global training
-        self.transition_net = Transition_Net(self.mlp_extractor.latent_dim_vf, self.mlp_extractor.latent_dim_vf, self.action_space.n * self.num_agents, self.mlp_extractor.latent_dim_vf) 
+        self.transition_net = MDRNN(self.mlp_extractor.latent_dim_vf, self.action_space.n * self.num_agents, self.mlp_extractor.latent_dim_vf) 
         # Init weights: use orthogonal initialization
         # with small initial weight for the output
         if self.ortho_init:
