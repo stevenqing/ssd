@@ -11,8 +11,8 @@ APPLE_RADIUS = 2
 # Add custom actions to the agent
 _HARVEST_ACTIONS = {"FIRE": 5}  # length of firing range
 
-SPAWN_PROB = [0, 0.005, 0.02, 0.05]
-
+# SPAWN_PROB = [0, 0.005, 0.02, 0.05]
+INTERVAL_SPAWN_PROB = [0, 0.005, 0.02, 0.05, 0]
 HARVEST_VIEW_SIZE = 7
 
 
@@ -111,7 +111,17 @@ class HarvestEnv(MapEnv):
                                 if self.world_map[x + j, y + k] == b"A":
                                     num_apples += 1
 
-                spawn_prob = SPAWN_PROB[min(num_apples, 3)]
+                # spawn_prob = SPAWN_PROB[min(num_apples, 3)]
+                if num_apples > 124:
+                    spawn_prob = INTERVAL_SPAWN_PROB[0]
+                elif num_apples > 93 and num_apples <= 124:
+                    spawn_prob = INTERVAL_SPAWN_PROB[1]
+                elif num_apples > 62 and num_apples <= 93:
+                    spawn_prob = INTERVAL_SPAWN_PROB[2]
+                elif num_apples > 31 and num_apples <= 62:
+                    spawn_prob = INTERVAL_SPAWN_PROB[3]
+                else:
+                    spawn_prob = INTERVAL_SPAWN_PROB[4]
                 rand_num = random_numbers[r]
                 r += 1
                 if rand_num < spawn_prob:
