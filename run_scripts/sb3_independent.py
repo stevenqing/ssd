@@ -287,7 +287,7 @@ def main(args):
                             entity=args.user_name, 
                             notes=socket.gethostname(),
                             name=str(env_name) +"_" + str(extractor) + "_111_hard_" + str(model),
-                            group=str(env_name) + "_cf_selfish_" + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha) + "_inequity_averse_" + str(args.inequity_averse_reward) + "_collective_" + str(args.use_collective_reward),
+                            group=str(env_name) + "_cf_lbf_modified_" + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha) + "_inequity_averse_" + str(args.inequity_averse_reward) + "_collective_" + str(args.use_collective_reward),
                             dir="./",
                             job_type="training",
                             reinit=True)
