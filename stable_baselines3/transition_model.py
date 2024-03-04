@@ -2,7 +2,7 @@ import argparse
 import copy
 import random
 import time
-from CBAM import CBAM_Gaussian
+from stable_baselines3.CBAM import CBAM_Gaussian
 from functools import partial
 import numpy as np
 import torch
