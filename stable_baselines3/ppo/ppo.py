@@ -453,7 +453,7 @@ class PPO(OnPolicyAlgorithm):
                         th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
                         self.policy.optimizer.step()
             elif self.model == 'vae':
-                for rollout_data in self.rollout_buffer.get_sw(self.batch_size):
+                for rollout_data in self.rollout_buffer.get_sw_traj(self.batch_size):
                     self.timestep += 1
                     all_last_obs = rollout_data.all_last_obs
                     all_rewards = rollout_data.all_rewards

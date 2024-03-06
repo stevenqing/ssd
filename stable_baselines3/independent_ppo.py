@@ -166,7 +166,7 @@ class IndependentPPO(OnPolicyAlgorithm):
             policy._last_episode_starts = np.ones((self.num_envs,), dtype=bool)
 
         while num_timesteps < total_timesteps:
-            if self.enable_trajs_learning:
+            if self.enable_trajs_learning or self.model == 'vae':
                 last_obs = self.collect_trajs_rollouts(last_obs, callbacks,num_timesteps)
             else:
                 last_obs = self.collect_rollouts(last_obs, callbacks,num_timesteps)
@@ -248,6 +248,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         all_rewards = [None] * self.num_agents
         all_dones = [None] * self.num_agents
         all_infos = [None] * self.num_agents
+        all_distributions = [None] * self.num_agents
 
         all_obs_trajs,all_actions_trajs,all_rewards_trajs = [],[],[]
         steps = 0
@@ -282,6 +283,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                         all_actions[polid],
                         all_values[polid],
                         all_log_probs[polid],
+                        all_distributions[polid],
                     ) = policy.policy.forward(obs_tensor)
                     clipped_actions = all_actions[polid].cpu().numpy()
                     if isinstance(self.action_space, Box):
@@ -386,6 +388,26 @@ class IndependentPPO(OnPolicyAlgorithm):
                         all_last_episode_starts[polid],
                         all_values[polid],
                         all_log_probs[polid],
+                    )
+                elif self.model == 'vae':
+                    cf_rewards = self.compute_transition_cf_rewards(policy,all_last_obs,all_rewards,all_actions,polid,all_distributions) #SPEED
+                    policy.rollout_buffer.add_sw_traj(
+                        all_last_obs[polid],
+                        all_actions[polid],
+                        all_rewards[polid],
+                        all_last_episode_starts[polid],
+                        all_values[polid],
+                        all_log_probs[polid],
+                        all_last_obs,
+                        rollout_all_actions,
+                        all_rewards,
+                        cf_rewards,
+                        all_obs_trajs,
+                        all_actions_trajs,
+                        all_rewards_trajs,
+                        self.previous_all_last_obs_traj,
+                        self.previous_all_actions_traj,
+                        self.previous_all_rewards_traj,
                     )
                 else:
                     if self.model == 'team':

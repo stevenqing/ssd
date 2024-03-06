@@ -56,7 +56,7 @@ for scenario_tag in SCENARIOs:
             elif scenario_tag == 'Cleanup':
                 data_dict[scenario_tag][method_name][seed] = rewards[60 : 157]
             elif scenario_tag == 'LBF':
-                data_dict[scenario_tag][method_name][seed] = rewards[: 200]
+                data_dict[scenario_tag][method_name][seed] = rewards[: 190]
             else:
                 data_dict[scenario_tag][method_name][seed] = rewards[: 200]
 

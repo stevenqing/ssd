@@ -61,7 +61,7 @@
                 "--env",
                 "lbf10",
                 "--model",
-                "causal",
+                "vae",
                 "--num-agents",
                 "3",
                 "--rollout-len",
@@ -71,7 +71,7 @@
                 "--num-envs",
                 "1",
                 "--extractor",
-                "cbam"
+                "cnn"
             ],
         },
         {

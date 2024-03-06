@@ -8,6 +8,7 @@ from functools import partial
 from typing import Any, Dict, List, Optional, Tuple, Type, TypeVar, Union
 from stable_baselines3.causal_model import CausalModel
 from stable_baselines3.transition_model import Transition_VAE, Transition_Net
+from stable_baselines3.CNN import VAE
 from stable_baselines3.mdrnn import MDRNN
 import numpy as np
 import torch as th
@@ -1077,13 +1078,8 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
         self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf, 1)
         # self.reward_net = CausalModel(self.mlp_extractor.latent_dim_vf+self.action_space.n,self.num_agents) # use individual training
         self.reward_net = CausalModel(self.mlp_extractor.latent_dim_vf + self.action_space.n*self.num_agents , self.num_agents) # use global training
-        self.vae_net = Transition_VAE(hidden_size=self.mlp_extractor.latent_dim_vf,
-                                             dim_o=self.mlp_extractor.latent_dim_vf * self.num_agents,
-                                             dim_a=self.action_space.n * self.num_agents,
-                                            #  dim_s=self.mlp_extractor.latent_dim_vf,
-                                             dim_r=self.num_agents,
-                                             dim_z=self.mlp_extractor.latent_dim_vf) # use global training
-        self.transition_net = MDRNN(self.mlp_extractor.latent_dim_vf, self.action_space.n * self.num_agents, self.mlp_extractor.latent_dim_vf) 
+        self.vae_net = VAE()
+        self.transition_net = MDRNN(self.mlp_extractor.latent_dim_vf, self.action_space.n * self.num_agents, self.mlp_extractor.latent_dim_vf, self.num_agents) 
         # Init weights: use orthogonal initialization
         # with small initial weight for the output
         if self.ortho_init:
@@ -1113,6 +1109,59 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
         # Setup optimizer with initial learning rate
         self.optimizer = self.optimizer_class(self.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)
 
+    def to_latent(self, obs: th.Tensor, next_obs: th.Tensor, batch_size: int, rollout_len: int):
+        with th.no_grad():
+            # obs, next_obs = [
+            #     f.upsample(x.view(-1, 3, 15, 15), size=RED_SIZE,
+            #             mode='bilinear', align_corners=True)
+            #     for x in (obs, next_obs)]
+
+            (obs_mu, obs_logsigma), (next_obs_mu, next_obs_logsigma) = [
+                self.vae_net(x)[1:] for x in (obs, next_obs)]
+
+            latent_obs, latent_next_obs = [
+                (x_mu + x_logsigma.exp() * th.randn_like(x_mu)).view(batch_size, rollout_len, 128)
+                for x_mu, x_logsigma in
+                [(obs_mu, obs_logsigma), (next_obs_mu, next_obs_logsigma)]]
+        return latent_obs, latent_next_obs
+    
+    def get_loss(self, latent_obs, action, reward, terminal,
+                latent_next_obs, include_reward: bool):
+        """ Compute losses.
+
+        The loss that is computed is:
+        (GMMLoss(latent_next_obs, GMMPredicted) + MSE(reward, predicted_reward) +
+            BCE(terminal, logit_terminal)) / (LSIZE + 2)
+        The LSIZE + 2 factor is here to counteract the fact that the GMMLoss scales
+        approximately linearily with LSIZE. All losses are averaged both on the
+        batch and the sequence dimensions (the two first dimensions).
+
+        :args latent_obs: (BSIZE, SEQ_LEN, LSIZE) torch tensor
+        :args action: (BSIZE, SEQ_LEN, ASIZE) torch tensor
+        :args reward: (BSIZE, SEQ_LEN) torch tensor
+        :args latent_next_obs: (BSIZE, SEQ_LEN, LSIZE) torch tensor
+
+        :returns: dictionary of losses, containing the gmm, the mse, the bce and
+            the averaged loss.
+        """
+        latent_obs, action,\
+            reward, terminal,\
+            latent_next_obs = [arr.transpose(1, 0)
+                            for arr in [latent_obs, action,
+                                        reward, terminal,
+                                        latent_next_obs]]
+        mus, sigmas, logpi, rs, ds = self.transition_net(action, latent_obs)
+        gmm = self.transition_net.gmm_loss(latent_next_obs, mus, sigmas, logpi)
+        bce = F.binary_cross_entropy_with_logits(ds, terminal)
+        if include_reward:
+            mse = F.mse_loss(rs, reward)
+            scale = 128 + 2
+        else:
+            mse = 0
+            scale = 128 + 1
+        loss = (gmm + bce + mse) / scale
+        return dict(gmm=gmm, bce=bce, mse=mse, loss=loss)
+    
     def forward(self, obs: th.Tensor, deterministic: bool = False) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
         """
         Forward pass in all the networks (actor and critic)
@@ -1191,11 +1240,7 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
                 self.previous_latent_state = self.previous_latent_state.squeeze(1)
             latent_state = self.vae_net.encoder(obs_action, all_rewards).rsample().squeeze(1)
             # predicted_latent_state = self.transition_net(self.previous_latent_state, all_actions_one_hot)
-            
-            # Loss Calculation
-            # Transition Model Loss
-            # transition_loss = F.mse_loss(latent_state, predicted_latent_state)
-            # VAE Loss
+
             vae_loss, vae_recon_loss, vae_kl_loss = self.vae_net.loss_function(features, all_actions_one_hot, all_rewards)
             # Reward Model Loss
             latent_state_action = th.cat((latent_state,all_actions_one_hot),dim=-1)
