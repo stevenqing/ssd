@@ -1077,8 +1077,8 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
 
         self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf, 1)
         # self.reward_net = CausalModel(self.mlp_extractor.latent_dim_vf+self.action_space.n,self.num_agents) # use individual training
-        self.reward_net = CausalModel(self.mlp_extractor.latent_dim_vf + self.action_space.n*self.num_agents , self.num_agents) # use global training
-        self.vae_net = VAE()
+        self.reward_net = CausalModel((self.mlp_extractor.latent_dim_vf + self.action_space.n)*self.num_agents , self.num_agents) # use global training
+        self.vae_net = VAE(self.observation_space, num_agents=self.num_agents)
         self.transition_net = MDRNN(self.mlp_extractor.latent_dim_vf, self.action_space.n * self.num_agents, self.mlp_extractor.latent_dim_vf, self.num_agents) 
         # Init weights: use orthogonal initialization
         # with small initial weight for the output
@@ -1200,73 +1200,24 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
         return True
 
 
-    def evaluate_actions(self, obs: th.Tensor, actions: th.Tensor, all_last_obs: th.Tensor, all_actions: th.Tensor, all_rewards: th.Tensor, use_all_obs=True) -> Tuple[th.Tensor, th.Tensor, Optional[th.Tensor]]:
-        """
-        Evaluate actions according to the current policy,
-        given the observations.
+    def vae_transition_process(self, all_last_obs:th.Tensor, all_actions:th.Tensor, all_rewards:th.Tensor):
+        # preprocessing 
+        all_last_obs_copy = all_last_obs.clone()
+        all_rewards_copy = all_rewards.clone()
+        all_actions_one_hot_flatten = F.one_hot(all_actions, num_classes=self.action_space.n)
 
-        :param obs: Observation
-        :param actions: Actions
-        :return: estimated value, log likelihood of taking those actions
-            and entropy of the action distribution.
+        # vae loss
+        recon_o, prev_mu, prev_sigma = self.vae_net(all_last_obs_copy, all_actions_one_hot_flatten, all_rewards_copy)
+        recon_loss, kl_loss = self.vae_net.loss_function(recon_o, all_last_obs_copy, prev_mu, prev_sigma)
 
-        Haven't check out the use_all_obs yet, aims to use the observations iteratively.
-        """
-        # Preprocess the observation if needed
-        features,all_actions_one_hot, predicted_reward = [],[],[]
-        obs_features = self.extract_features(obs)
-        for i in range(self.num_agents):
-            features.append(self.extract_features(all_last_obs[:,i,:]))
-            all_actions_one_hot.append(F.one_hot(all_actions[:,i,:], num_classes=self.action_space.n))
+        # transition loss
+        prev_latent_state = self.vae_net.reparameterize(prev_mu, prev_sigma)
+        latent_state = self.transition_net(all_actions_one_hot_flatten.unsqueeze(0), prev_latent_state.unsqueeze(0))
+        latent_state = latent_state[0].squeeze(0)
+        latent_state = latent_state.reshape(latent_state.shape[0],-1)
+        latent_state_action = th.cat((latent_state,all_actions_one_hot_flatten),dim=-1)
+        all_cf_rewards = self.reward_net(latent_state_action)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
 
-        features = th.stack(features,dim=0)
-        all_actions_one_hot = th.stack(all_actions_one_hot,dim=0)
-        all_actions_one_hot = th.squeeze(all_actions_one_hot)
-
-        if use_all_obs:
-            features = th.permute(features,(1,0,2))
-            features = th.reshape(features,(features.shape[0],-1))
-
-            all_actions_one_hot = th.permute(all_actions_one_hot,(1,0,2))
-            all_actions_one_hot = th.reshape(all_actions_one_hot,(all_actions_one_hot.shape[0],-1))
-            obs_action = th.cat((features,all_actions_one_hot),dim=-1)
-
-            # add transition model prdiction
-            # Need to initialize self.previous_state
-            if self.previous_latent_state is None:
-                previous_latent_state_size = (obs.shape[0], self.mlp_extractor.latent_dim_vf)
-                self.previous_latent_state = th.randn(previous_latent_state_size, device=obs.device)
-            else:
-                self.previous_latent_state = self.previous_latent_state.squeeze(1)
-            latent_state = self.vae_net.encoder(obs_action, all_rewards).rsample().squeeze(1)
-            # predicted_latent_state = self.transition_net(self.previous_latent_state, all_actions_one_hot)
-
-            vae_loss, vae_recon_loss, vae_kl_loss = self.vae_net.loss_function(features, all_actions_one_hot, all_rewards)
-            # Reward Model Loss
-            latent_state_action = th.cat((latent_state,all_actions_one_hot),dim=-1)
-            predicted_reward = self.reward_net(latent_state_action)[0]
-            predicted_reward = th.squeeze(predicted_reward)
-            reward_loss = F.mse_loss(predicted_reward, all_rewards)
-            # Update previous state
-            self.previous_latent_state = latent_state
-        else:
-            obs_action = th.cat((features,all_actions_one_hot),dim=-1)
-            for i in range(self.num_agents):
-                predicted_reward.append(th.squeeze(self.reward_net(obs_action[i])[0]))
-            predicted_reward = th.stack(predicted_reward,dim=0)
-
-        if self.share_features_extractor:
-            latent_pi, latent_vf = self.mlp_extractor(obs_features)
-        else:
-            pi_features, vf_features = obs_features
-            latent_pi = self.mlp_extractor.forward_actor(pi_features)
-            latent_vf = self.mlp_extractor.forward_critic(vf_features)
-        distribution = self._get_action_dist_from_latent(latent_pi)
-        log_prob = distribution.log_prob(actions)
-        values = self.value_net(latent_vf)
-        entropy = distribution.entropy()
-        return values, log_prob, entropy, vae_loss, vae_recon_loss, vae_kl_loss, reward_loss, predicted_reward
-    
 
 class RewardActorCriticPolicy(ActorCriticPolicy):
     """

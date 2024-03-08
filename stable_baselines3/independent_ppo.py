@@ -391,7 +391,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                     )
                 elif self.model == 'vae':
                     cf_rewards = self.compute_transition_cf_rewards(policy,all_last_obs,all_rewards,all_actions,polid,all_distributions) #SPEED
-                    policy.rollout_buffer.add_sw_traj(
+                    policy.rollout_buffer.add_sw_traj( #TODO: add the latent state to the buffer
                         all_last_obs[polid],
                         all_actions[polid],
                         all_rewards[polid],
@@ -471,7 +471,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         with th.no_grad():
             for polid, policy in enumerate(self.policies):
                 obs_tensor = obs_as_tensor(all_last_obs[polid], policy.device)
-                _, value, _ = policy.policy.forward(obs_tensor)
+                _, value,_, _ = policy.policy.forward(obs_tensor)
                 if self.model == 'baseline':
                         policy.rollout_buffer.compute_returns_and_advantage(
                         last_values=value, dones=all_dones[polid]
@@ -717,6 +717,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         all_cf_rewards = []
 
         all_last_obs = obs_as_tensor(np.array(all_last_obs), policy.device)
+        all_last_obs = all_last_obs.repeat(1,sample_number,1,1,1)
         all_rewards = obs_as_tensor(np.transpose(np.array(all_rewards),(1,0)), policy.device)
         all_actions = obs_as_tensor(np.transpose(np.array(all_actions),(1,0,2)), policy.device)
 
@@ -746,32 +747,27 @@ class IndependentPPO(OnPolicyAlgorithm):
         total_cf_rewards = []
         for all_actions_one_hot in total_actions:
             if all_actions_one_hot is not None:
-                all_actions_one_hot = all_actions_one_hot.permute(1,2,0,3)
+                all_actions_one_hot = all_actions_one_hot.squeeze(1).permute(1,0,2)
+                all_actions_one_hot_flatten = all_actions_one_hot.reshape(all_actions_one_hot.shape[0],-1)
 
-                all_actions_one_hot = all_actions_one_hot.reshape(all_actions_one_hot.shape[0],all_actions_one_hot.shape[1],-1).permute(1,0,2)
-                all_actions_one_hot_flatten = all_actions_one_hot.reshape(-1,all_actions_one_hot.shape[-1])
-                all_obs_features_copy = all_obs_features.clone().repeat(all_actions_one_hot.shape[0],1,1)
-                
-                all_obs_actions_features = th.cat((all_obs_features_copy,all_actions_one_hot),dim=-1) # Here should be (num_env, sample_number, (feature_dim+action_dim)*num_agents). We won't permute it since we will be using the same form on the action_one_hot(for the transition model)
-                all_obs_actions_features = all_obs_actions_features.reshape(-1,all_obs_actions_features.shape[-1])
 
                 # Let the dimension of the rewards be (num_env, sample_number, num_agents)
                 all_rewards_copy = all_rewards.clone().unsqueeze(1)
-                all_rewards_copy = all_rewards_copy.repeat(1,sample_number,1)
-                all_rewards_copy = all_rewards_copy.reshape(-1,all_rewards_copy.shape[-1])
+                all_rewards_copy = all_rewards_copy.repeat(1,sample_number,1).reshape(-1,all_rewards_copy.shape[-1])
 
-                if self.prev_latent_state == None:
-                    prev_latent_state_size = (all_obs_actions_features.shape[0],int((all_obs_actions_features.shape[-1]-self.num_agents*self.action_space.n)/self.num_agents))
-                    self.prev_latent_state = th.randn(prev_latent_state_size)
-                else:
-                    self.prev_latent_state = self.prev_latent_state.squeeze(1)
+                all_last_obs_copy = all_last_obs.clone().permute(1,2,3,0,4)
+                all_last_obs_copy = all_last_obs_copy.reshape(all_last_obs_copy.shape[0],all_last_obs_copy.shape[1],all_last_obs_copy.shape[2],-1) # stack on the channel dimension
+
 
                 # prev_latent_state = policy.policy.vae_net.encoder(self.prev_latent_state.to(all_obs_actions_features.device), all_obs_actions_features, all_rewards_copy).rsample()
-                prev_latent_state = policy.policy.vae_net.encoder(all_obs_actions_features, all_rewards_copy).rsample()
-                latent_state = policy.policy.transition_net(prev_latent_state.squeeze(1), all_actions_one_hot_flatten)
-                
-                latent_state_action = th.cat((latent_state,all_actions_one_hot_flatten),dim=-1)
-                all_cf_rewards = policy.policy.reward_net(latent_state_action)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
+                with th.no_grad():
+                    prev_mu, prev_sigma = policy.policy.vae_net.encode(all_last_obs_copy, all_actions_one_hot_flatten, all_rewards_copy)
+                    prev_latent_state = policy.policy.vae_net.reparameterize(prev_mu, prev_sigma)
+                    latent_state = policy.policy.transition_net(all_actions_one_hot_flatten.unsqueeze(0), prev_latent_state.unsqueeze(0))
+                    latent_state = latent_state[0].squeeze(0)
+                    latent_state = latent_state.reshape(latent_state.shape[0],-1)
+                    latent_state_action = th.cat((latent_state,all_actions_one_hot_flatten),dim=-1)
+                    all_cf_rewards = policy.policy.reward_net(latent_state_action)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
 
                 all_cf_rewards = th.mean(all_cf_rewards,dim=1) #SPEED? Not sure in here
                 total_cf_rewards.append(all_cf_rewards)

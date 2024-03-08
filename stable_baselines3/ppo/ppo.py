@@ -467,7 +467,7 @@ class PPO(OnPolicyAlgorithm):
                     if self.use_sde:
                         self.policy.reset_noise(self.batch_size)
 
-                    values, log_prob, entropy, vae_loss, vae_recon_loss, vae_kl_loss, reward_loss, predicted_reward = self.policy.evaluate_actions(rollout_data.observations, actions, all_last_obs, all_actions, all_rewards)
+                    values, log_prob, entropy = self.policy.evaluate_actions(rollout_data.observations, actions)
                     values = values.flatten()
                     # Normalize advantage
                     advantages = rollout_data.advantages
