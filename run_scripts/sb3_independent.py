@@ -3,6 +3,7 @@ import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import gym
+from gym import spaces
 import supersuit as ss
 import torch
 import torch.nn.functional as F
@@ -108,6 +109,7 @@ def parse_args():
     parser.add_argument("--using_reward_timestep", type=int, default=2000000)
     parser.add_argument("--extractor", type=str, default='cnn')
     parser.add_argument("--enable_trajs_learning", type=int, default=0,choices=[0, 1])
+    parser.add_argument("--add_spawn_prob", type=bool, default=False)
     args = parser.parse_args()
     return args
 
@@ -147,6 +149,7 @@ class SpatialAttention(nn.Module):
 class CBAM(BaseFeaturesExtractor):
     def __init__(self, 
                  observation_space: gym.spaces.Box, 
+                 add_spawn_prob=False,
                  channel=18, 
                  features_dim=128,
                  view_len=7, 
@@ -156,7 +159,7 @@ class CBAM(BaseFeaturesExtractor):
                  kernel_size=7):
         
         super(CBAM, self).__init__(observation_space,features_dim)
-
+        self.add_spawn_prob = add_spawn_prob
         self.ca = ChannelAttention(channel, reduction)
         self.sa = SpatialAttention(kernel_size)
 
@@ -167,6 +170,7 @@ class CBAM(BaseFeaturesExtractor):
 
     def forward(self, x):
         x = x.permute(0, 3, 1, 2)
+        # x = x.permute(0, 3, 1, 2)
         x = self.ca(x)
         x = self.sa(x)
 
@@ -230,6 +234,7 @@ def main(args):
     total_timesteps = args.total_timesteps
     use_collective_reward = args.use_collective_reward
     inequity_averse_reward = args.inequity_averse_reward
+    add_spawn_prob = args.add_spawn_prob
     alpha = args.alpha
     beta = args.beta
     num_cpus = args.num_cpus
@@ -264,7 +269,10 @@ def main(args):
         alpha=alpha,
         beta=beta,
     )
-    env = ss.observation_lambda_v0(env, lambda x, _: x["curr_obs"], lambda s: s["curr_obs"])
+    if add_spawn_prob:
+        env = ss.observation_lambda_v0(env, lambda x, _: {"curr_obs": x["curr_obs"], "vector_state": x["vector_state"]}, lambda s: spaces.Dict({"curr_obs": s["curr_obs"], "vector_state": s["vector_state"]}))
+    else:
+        env = ss.observation_lambda_v0(env, lambda x, _: x["curr_obs"], lambda s: s["curr_obs"])
     env = ss.frame_stack_v1(env, num_frames)
     env = ss.pettingzoo_env_to_vec_env_v1(env)
     env = ss.concat_vec_envs_v1(
@@ -308,11 +316,12 @@ def main(args):
         policy_kwargs = dict(
             features_extractor_class=CBAM,
             features_extractor_kwargs=dict(
-                features_dim=features_dim, num_frames=num_frames, fcnet_hiddens=fcnet_hiddens
+                features_dim=features_dim, num_frames=num_frames, fcnet_hiddens=fcnet_hiddens,  add_spawn_prob=add_spawn_prob
             ),
             net_arch=[features_dim],
             num_agents=args.num_agents,
-            env_name=env_name
+            env_name=env_name,
+           
         )
     else:
         policy_kwargs = dict(
@@ -348,7 +357,8 @@ def main(args):
             model=args.model,
             using_reward_timestep=using_reward_timestep,
             enable_trajs_learning=enable_trajs_learning,
-            env_name=env_name
+            env_name=env_name,
+            add_spawn_prob=add_spawn_prob
         )
     else:
         model = IndependentPPO(
@@ -371,7 +381,8 @@ def main(args):
             model=args.model,
             using_reward_timestep=using_reward_timestep,
             enable_trajs_learning=enable_trajs_learning,
-            env_name=env_name
+            env_name=env_name,
+            add_spawn_prob=add_spawn_prob
         )
     model.learn(total_timesteps=total_timesteps)
 

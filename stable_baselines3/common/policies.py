@@ -1013,6 +1013,7 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
         num_agents: int = 3,
         env_name: str = 'harvest',
+        add_spawn_prob: bool = False,
     ):
         super().__init__(
             observation_space,
@@ -1035,6 +1036,7 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
         )
         self.num_agents = num_agents
         self.env_name = env_name
+        self.add_spawn_prob = add_spawn_prob
         self._build(lr_schedule)
 
     def _build_mlp_extractor(self) -> None:
@@ -1107,6 +1109,30 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
         # Setup optimizer with initial learning rate
         self.optimizer = self.optimizer_class(self.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)
 
+    def extract_features(self, key: str, obs: th.Tensor) -> th.Tensor:
+        """
+        Preprocess the observation if needed and extract features.
+
+         :param obs: The observation
+         :param features_extractor: The features extractor to use. If it is set to None,
+            the features extractor of the policy is used.
+         :return: The features
+        """
+        features_extractor = self.features_extractor
+        if features_extractor is None:
+            warnings.warn(
+                (
+                    "When calling extract_features(), you should explicitely pass a features_extractor as parameter. "
+                    "This will be mandatory in Stable-Baselines v1.8.0"
+                ),
+                DeprecationWarning,
+            )
+
+
+        assert features_extractor is not None, "No features extractor was set"
+        preprocessed_obs = preprocess_obs(obs, self.observation_space[key], normalize_images=self.normalize_images)
+        return features_extractor(preprocessed_obs)
+
     def forward(self, obs: th.Tensor, deterministic: bool = False) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
         """
         Forward pass in all the networks (actor and critic)
@@ -1116,7 +1142,7 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
         :return: action, value and log probability of the action
         """
         # Preprocess the observation if needed
-        features = self.extract_features(obs)
+        features = self.extract_features('curr_obs', obs['curr_obs'])
         if self.share_features_extractor:
             latent_pi, latent_vf = self.mlp_extractor(features)
         else:

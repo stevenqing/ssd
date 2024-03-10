@@ -13,6 +13,7 @@ from stable_baselines3.common.type_aliases import (
     ReplayBufferSamples,
     RolloutBufferSamples,
     RewardRolloutBufferSamples,
+    RewardDictRolloutBufferSamples,
     RewardTrajsRolloutBufferSamples
 )
 from stable_baselines3.common.utils import get_device
@@ -1008,6 +1009,7 @@ class DictRolloutBuffer(RolloutBuffer):
         gae_lambda: float = 1,
         gamma: float = 0.99,
         n_envs: int = 1,
+        num_agents: int=5,
     ):
 
         super(RolloutBuffer, self).__init__(buffer_size, observation_space, action_space, device, n_envs=n_envs)
@@ -1017,15 +1019,20 @@ class DictRolloutBuffer(RolloutBuffer):
         self.gae_lambda = gae_lambda
         self.gamma = gamma
         self.observations, self.actions, self.rewards, self.advantages = None, None, None, None
+        self.all_last_obs, self.all_actions, self.all_rewards, self.cf_rewards = None, None, None, None
         self.returns, self.episode_starts, self.values, self.log_probs = None, None, None, None
         self.generator_ready = False
+        self.agent_number = num_agents
         self.reset()
 
     def reset(self) -> None:
         assert isinstance(self.obs_shape, dict), "DictRolloutBuffer must be used with Dict obs space only"
         self.observations = {}
+        self.all_last_obs = [{}] * self.agent_number
         for key, obs_input_shape in self.obs_shape.items():
             self.observations[key] = np.zeros((self.buffer_size, self.n_envs) + obs_input_shape, dtype=np.float32)
+            for agent_number in range(self.agent_number):
+                self.all_last_obs[agent_number][key] = np.zeros((self.buffer_size, self.n_envs, self.agent_number) + obs_input_shape, dtype=np.float32)
         self.actions = np.zeros((self.buffer_size, self.n_envs, self.action_dim), dtype=np.float32)
         self.rewards = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.returns = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
@@ -1034,6 +1041,12 @@ class DictRolloutBuffer(RolloutBuffer):
         self.log_probs = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.advantages = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.generator_ready = False
+        
+        self.all_actions = np.zeros((self.buffer_size, self.n_envs, self.agent_number, self.action_dim), dtype=np.float32)
+        self.all_rewards = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
+        self.cf_rewards = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
+        
+        
         super(RolloutBuffer, self).reset()
 
     def add(
@@ -1075,6 +1088,116 @@ class DictRolloutBuffer(RolloutBuffer):
         self.pos += 1
         if self.pos == self.buffer_size:
             self.full = True
+
+    def add_sw(
+        self,
+        obs: Dict[str, np.ndarray],
+        action: np.ndarray,
+        reward: np.ndarray,
+        episode_start: np.ndarray,
+        value: th.Tensor,
+        log_prob: th.Tensor,
+        all_last_obs: Dict[str, np.ndarray],
+        all_actions: np.ndarray,
+        all_rewards: np.ndarray,
+        cf_rewards: np.ndarray,
+    ) -> None:  # pytype: disable=signature-mismatch
+        """
+        :param obs: Observation
+        :param action: Action
+        :param reward:
+        :param episode_start: Start of episode signal.
+        :param value: estimated value of the current state
+            following the current policy.
+        :param log_prob: log probability of the action
+            following the current policy.
+        """
+        if len(log_prob.shape) == 0:
+            # Reshape 0-d tensor to avoid error
+            log_prob = log_prob.reshape(-1, 1)
+
+        for key in self.observations.keys():
+            obs_ = np.array(obs[key]).copy()
+            all_obs_ = []
+            for agent_number in range(self.agent_number):
+                all_obs_.append(np.array(all_last_obs[agent_number][key]).copy())
+            # Reshape needed when using multiple envs with discrete observations
+            # as numpy cannot broadcast (n_discrete,) to (n_discrete, 1)
+            if isinstance(self.observation_space.spaces[key], spaces.Discrete):
+                obs_ = obs_.reshape((self.n_envs,) + self.obs_shape[key])
+                all_obs_ = np.array(all_obs_).reshape((self.n_envs, self.agent_number) + self.obs_shape[key])
+            self.observations[key][self.pos] = obs_
+            for agent_number in range(self.agent_number):
+                if key == 'curr_obs':
+                    self.all_last_obs[agent_number][key][self.pos] = np.transpose(np.array(all_obs_),(1,0,2,3,4))
+                elif key == 'vector_state':
+                    self.all_last_obs[agent_number][key][self.pos] = np.transpose(np.array(all_obs_),(1,0,2))
+        for key in self.observations.keys():
+            for agent_number in range(self.agent_number):
+                self.all_last_obs[agent_number][key] = self.all_last_obs[agent_number][key].squeeze()
+        self.actions[self.pos] = np.array(action).copy()
+        self.rewards[self.pos] = np.array(reward).copy()
+        self.episode_starts[self.pos] = np.array(episode_start).copy()
+        self.values[self.pos] = value.clone().cpu().numpy().flatten()
+        self.log_probs[self.pos] = log_prob.clone().cpu().numpy()
+        
+        self.all_actions[self.pos] = np.transpose(np.array(all_actions).copy(),(1,0,2))
+        self.all_rewards[self.pos] = np.transpose(np.array(all_rewards).copy(),(1,0))
+        self.cf_rewards[self.pos] = np.array(cf_rewards).copy()
+        
+        self.pos += 1
+        if self.pos == self.buffer_size:
+            self.full = True
+
+
+
+    def get_sw(self, batch_size: Optional[int] = None) -> Generator[DictRolloutBufferSamples, None, None]:
+        assert self.full, ""
+        indices = np.random.permutation(self.buffer_size * self.n_envs)
+        # Prepare the data
+        if not self.generator_ready:
+
+            for key, obs in self.observations.items():
+                self.observations[key] = self.swap_and_flatten(obs)
+            all_last_obs_list = copy.deepcopy(self.all_last_obs)
+            for agent_number in range(self.agent_number):
+                for key in self.all_last_obs[agent_number].keys():
+                    obs_list = all_last_obs_list[agent_number][key].reshape(-1,*all_last_obs_list[agent_number][key].shape[2:])
+                    self.all_last_obs[agent_number][key] = obs_list[:,agent_number]
+                #TODO:Might be wrong in vector state and online branch, Here is right, need to fix the other branch
+            _tensor_names = ["actions", "values", "log_probs", "advantages", "returns", "all_actions", "all_rewards", "cf_rewards"]
+
+            for tensor in _tensor_names:
+                self.__dict__[tensor] = self.swap_and_flatten(self.__dict__[tensor])
+            self.generator_ready = True
+
+        # Return everything, don't create minibatches
+        if batch_size is None:
+            batch_size = self.buffer_size * self.n_envs
+
+        start_idx = 0
+        while start_idx < self.buffer_size * self.n_envs:
+            yield self._get_sw_samples(indices[start_idx : start_idx + batch_size])
+            start_idx += batch_size
+
+    def _get_sw_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> DictRolloutBufferSamples:
+        all_last_obs_list = []
+        for agent_number in range(self.agent_number):
+            all_last_obs_list.append({key: self.to_torch(all_last_obs[batch_inds]) for (key, all_last_obs) in self.all_last_obs[agent_number].items()})
+        return RewardDictRolloutBufferSamples(
+            observations={key: self.to_torch(obs[batch_inds]) for (key, obs) in self.observations.items()},
+            all_last_obs=all_last_obs_list,
+            actions=self.to_torch(self.actions[batch_inds]),
+            old_values=self.to_torch(self.values[batch_inds].flatten()),
+            old_log_prob=self.to_torch(self.log_probs[batch_inds].flatten()),
+            advantages=self.to_torch(self.advantages[batch_inds].flatten()),
+            returns=self.to_torch(self.returns[batch_inds].flatten()),
+            all_actions=self.to_torch(self.all_actions[batch_inds]),
+            all_rewards=self.to_torch(self.all_rewards[batch_inds]),
+            cf_rewards=self.to_torch(self.cf_rewards[batch_inds]),
+        )
+
+
 
     def get(self, batch_size: Optional[int] = None) -> Generator[DictRolloutBufferSamples, None, None]:
         assert self.full, ""

@@ -69,7 +69,11 @@
                 "--user_name",
                 "1160677229",
                 "--num-envs",
-                "2",
+                "3",
+                "--add_spawn_prob",
+                "True",
+                "--extractor",
+                "cbam"
             ],
         },
     ]

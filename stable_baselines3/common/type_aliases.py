@@ -38,6 +38,18 @@ class RewardRolloutBufferSamples(NamedTuple):
     all_actions: th.Tensor
     all_rewards: th.Tensor
     cf_rewards: th.Tensor
+    
+class RewardDictRolloutBufferSamples(NamedTuple):
+    observations: TensorDict
+    all_last_obs: list
+    actions: th.Tensor
+    old_values: th.Tensor
+    old_log_prob: th.Tensor
+    advantages: th.Tensor
+    returns: th.Tensor
+    all_actions: th.Tensor
+    all_rewards: th.Tensor
+    cf_rewards: th.Tensor
 
 class RewardTrajsRolloutBufferSamples(NamedTuple):
     observations: th.Tensor
