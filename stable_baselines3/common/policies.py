@@ -1157,7 +1157,7 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
             latent_vf = self.mlp_extractor.forward_critic(vf_features)
         # Evaluate the values for the given observations
         if self.add_spawn_prob:
-            values = self.value_net(th.cat((latent_vf, self.apple_growth_rate_net(th.mean(obs['vector_state'],-1).unsqueeze(-1))), dim=-1))
+            values = self.value_net(th.cat((latent_vf, self.apple_growth_rate_net(th.mean(obs['vector_state'].float(),-1).unsqueeze(-1))), dim=-1))
         else:
             values = self.value_net(latent_vf)
         distribution = self._get_action_dist_from_latent(latent_pi)
