@@ -170,7 +170,6 @@ class CBAM(BaseFeaturesExtractor):
 
     def forward(self, x):
         x = x.permute(0, 3, 1, 2)
-        # x = x.permute(0, 3, 1, 2)
         x = self.ca(x)
         x = self.sa(x)
 
