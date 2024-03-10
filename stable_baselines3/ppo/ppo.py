@@ -107,7 +107,8 @@ class PPO(OnPolicyAlgorithm):
         num_agents: int = 3,
         enable_trajs_learning: bool = False,
         polid: Optional[int] = None,
-        env_name: Optional[str] = 'harvest'
+        env_name: Optional[str] = 'harvest',
+        add_spawn_prob: bool = False,
     ):
 
         super().__init__(
@@ -128,6 +129,7 @@ class PPO(OnPolicyAlgorithm):
             device=device,
             seed=seed,
             _init_setup_model=False,
+            add_spawn_prob=add_spawn_prob,
             supported_action_spaces=(
                 spaces.Box,
                 spaces.Discrete,
@@ -171,6 +173,7 @@ class PPO(OnPolicyAlgorithm):
         self.enable_trajs_learning = enable_trajs_learning
         self.polid = polid
         self.env_name = env_name
+        self.add_spawn_prob = add_spawn_prob
         if _init_setup_model:
             self._setup_model()
 
@@ -185,6 +188,7 @@ class PPO(OnPolicyAlgorithm):
 
             self.clip_range_vf = get_schedule_fn(self.clip_range_vf)
         self.policy.num_agents = self.num_agents
+        self.policy.add_spawn_prob = self.add_spawn_prob
 
 
 

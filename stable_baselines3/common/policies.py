@@ -1078,8 +1078,11 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
             self.action_net = self.action_dist.proba_distribution_net(latent_dim=latent_dim_pi)
         else:
             raise NotImplementedError(f"Unsupported distribution '{self.action_dist}'.")
-
-        self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf, 1)
+        if self.add_spawn_prob:
+            self.apple_growth_rate_net = nn.Linear(1, 32)
+            self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf + 32, 1)
+        else:
+            self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf, 1)
         # self.reward_net = CausalModel(self.mlp_extractor.latent_dim_vf+self.action_space.n,self.num_agents) # use individual training
         self.reward_net = CausalModel((self.mlp_extractor.latent_dim_vf+self.action_space.n) * self.num_agents,self.num_agents,env_name=self.env_name) # use global training
         # Init weights: use orthogonal initialization
@@ -1109,7 +1112,7 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
         # Setup optimizer with initial learning rate
         self.optimizer = self.optimizer_class(self.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)
 
-    def extract_features(self, key: str, obs: th.Tensor) -> th.Tensor:
+    def extract_dict_features(self, key: str, obs: th.Tensor) -> th.Tensor:
         """
         Preprocess the observation if needed and extract features.
 
@@ -1142,7 +1145,10 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
         :return: action, value and log probability of the action
         """
         # Preprocess the observation if needed
-        features = self.extract_features('curr_obs', obs['curr_obs'])
+        if self.add_spawn_prob:
+            features = self.extract_dict_features('curr_obs', obs['curr_obs'])
+        else:
+            features = self.extract_features(obs)
         if self.share_features_extractor:
             latent_pi, latent_vf = self.mlp_extractor(features)
         else:
@@ -1150,7 +1156,10 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
             latent_pi = self.mlp_extractor.forward_actor(pi_features)
             latent_vf = self.mlp_extractor.forward_critic(vf_features)
         # Evaluate the values for the given observations
-        values = self.value_net(latent_vf)
+        if self.add_spawn_prob:
+            values = self.value_net(th.cat((latent_vf, self.apple_growth_rate_net(th.mean(obs['vector_state'],-1).unsqueeze(-1))), dim=-1))
+        else:
+            values = self.value_net(latent_vf)
         distribution = self._get_action_dist_from_latent(latent_pi)
         actions = distribution.get_actions(deterministic=deterministic)
         log_prob = distribution.log_prob(actions)
@@ -1185,9 +1194,16 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
         """
         # Preprocess the observation if needed
         features,all_actions_one_hot, predicted_reward = [],[],[]
-        obs_features = self.extract_features(obs)
+        if self.add_spawn_prob:
+            obs_features = self.extract_dict_features('curr_obs', obs['curr_obs'])
+            spawn_features = self.apple_growth_rate_net(th.mean(obs['vector_state'],-1).unsqueeze(-1))
+        else:
+            obs_features = self.extract_features(obs)
         for i in range(self.num_agents):
-            features.append(self.extract_features(all_last_obs[:,i,:]))
+            if self.add_spawn_prob:
+                features.append(self.extract_dict_features('curr_obs', all_last_obs[i]['curr_obs']))
+            else:
+                features.append(self.extract_features(all_last_obs[:,i,:]))
             all_actions_one_hot.append(F.one_hot(all_actions[:,i,:], num_classes=self.action_space.n)) #SPEED, Not sure if here could be faster
         features = th.stack(features,dim=0)
         all_actions_one_hot = th.stack(all_actions_one_hot,dim=0)
@@ -1221,7 +1237,10 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
             latent_vf = self.mlp_extractor.forward_critic(vf_features)
         distribution = self._get_action_dist_from_latent(latent_pi)
         log_prob = distribution.log_prob(actions)
-        values = self.value_net(latent_vf)
+        if self.add_spawn_prob:
+            values = self.value_net(th.cat((latent_vf, spawn_features), dim=-1))
+        else:
+            values = self.value_net(latent_vf)
         entropy = distribution.entropy()
         return values, log_prob, entropy, predicted_reward
     

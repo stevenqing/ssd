@@ -74,6 +74,7 @@ class OnPolicyAlgorithm(BaseAlgorithm):
         supported_action_spaces: Optional[Tuple[spaces.Space, ...]] = None,
         num_agents: int = 3,
         env_name: str = 'harvest',
+        add_spawn_prob: bool = False,
     ):
 
         super().__init__(
@@ -100,6 +101,7 @@ class OnPolicyAlgorithm(BaseAlgorithm):
         self.rollout_buffer = None
         self.num_agents = num_agents
         self.env_name = env_name
+        self.add_spawn_prob = add_spawn_prob
         if _init_setup_model:
             self._setup_model()
 
@@ -124,6 +126,7 @@ class OnPolicyAlgorithm(BaseAlgorithm):
             self.action_space,
             self.lr_schedule,
             use_sde=self.use_sde,
+            add_spawn_prob=self.add_spawn_prob,
             **self.policy_kwargs  # pytype:disable=not-instantiable
         )
         self.policy = self.policy.to(self.device)

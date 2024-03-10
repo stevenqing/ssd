@@ -100,6 +100,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                 enable_trajs_learning=self.enable_trajs_learning,
                 polid=polid,
                 env_name=self.env_name,
+                add_spawn_prob=self.add_spawn_prob,
             )
             for polid in range(self.num_agents)
         ]
@@ -603,9 +604,12 @@ class IndependentPPO(OnPolicyAlgorithm):
                             cf_rewards=None,
                         )
                     else:
-                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs[polid],all_actions,polid, 'vector_state')
-                        if num_timesteps <= self.using_reward_timestep:
-                            cf_rewards = np.zeros_like(cf_rewards)
+                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid, all_distributions)
+                        reward_mapping_func = np.frompyfunc(lambda key: ENV_REWARD_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][0]), 1, 1) #SPEED, Can the function be jit?
+                        all_discrete_rewards = reward_mapping_func(all_rewards)
+                        detected_OOD = np.array(all_rewards)[all_discrete_rewards == OOD_INDEX[self.env_name][0]]
+                        if len(detected_OOD) != 0:
+                            print('OOD reward detected! mean reward:',detected_OOD)
                         policy.rollout_buffer.add_sw(
                             all_last_obs[polid],
                             all_actions[polid],
@@ -615,7 +619,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                             all_log_probs[polid],
                             all_last_obs,
                             rollout_all_actions,
-                            all_rewards,
+                            all_discrete_rewards,
                             cf_rewards,
                         )
             all_last_obs = all_obs
@@ -624,7 +628,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         with th.no_grad():
             for polid, policy in enumerate(self.policies):
                 obs_tensor = obs_as_tensor(all_last_obs[polid], policy.device)
-                _, value, _ = policy.policy.forward(obs_tensor)
+                _, value, _, _ = policy.policy.forward(obs_tensor)
                 if self.model == 'baseline':
                         policy.rollout_buffer.compute_returns_and_advantage(
                         last_values=value, dones=all_dones[polid]
@@ -846,15 +850,23 @@ class IndependentPPO(OnPolicyAlgorithm):
 
     def compute_cf_rewards(self,policy,all_last_obs,all_actions,polid,all_distributions,sample_number=10):
         all_cf_rewards = []
-
-        all_last_obs = obs_as_tensor(np.array(all_last_obs['curr_obs']), policy.device)
+        if self.add_spawn_prob:
+            all_last_obs_list = []
+            for i in range(self.num_agents):
+                all_last_obs_list.append(obs_as_tensor(np.array(all_last_obs[i]['curr_obs']), policy.device))
+            all_last_obs = th.stack(all_last_obs_list,dim=0)
+        else:
+            all_last_obs = obs_as_tensor(np.array(all_last_obs), policy.device)
 
         # batch_size, num_agents, 1
         all_actions = obs_as_tensor(np.transpose(np.array(all_actions),(1,0,2)), policy.device)
         
         # extract obs features
         all_obs_features = []
-        all_obs_features= [policy.policy.extract_features('curr_obs', all_last_obs[i]) for i in range(self.num_agents)]
+        if self.add_spawn_prob:
+            all_obs_features= [policy.policy.extract_dict_features('curr_obs', all_last_obs[i]) for i in range(self.num_agents)]
+        else:
+            all_obs_features = [policy.policy.extract_features(all_last_obs[i]) for i in range(self.num_agents)]
         all_obs_features = th.stack(all_obs_features,dim=0).permute(1,0,2)
 
         # num_env, num_agent, obs_feat_size
