@@ -265,6 +265,7 @@ def main(args):
         alpha=alpha,
         beta=beta,
     )
+
     env = ss.observation_lambda_v0(env, lambda x, _: x["curr_obs"], lambda s: s["curr_obs"])
     env = ss.frame_stack_v1(env, num_frames)
     env = ss.pettingzoo_env_to_vec_env_v1(env)

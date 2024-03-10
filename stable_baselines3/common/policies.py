@@ -1270,6 +1270,7 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
         num_agents: int = 3,
+        add_apple_growth_rate: bool = False,
     ):
         super().__init__(
             observation_space,
@@ -1291,6 +1292,7 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
             optimizer_kwargs,
         )
         self.num_agents = num_agents
+        self.add_apple_growth_rate = add_apple_growth_rate
         self._build(lr_schedule)
 
     def _build_mlp_extractor(self) -> None:
@@ -1332,8 +1334,11 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
             self.action_net = self.action_dist.proba_distribution_net(latent_dim=latent_dim_pi)
         else:
             raise NotImplementedError(f"Unsupported distribution '{self.action_dist}'.")
-
-        self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf, 1)
+        if self.add_apple_growth_rate:
+            self.apple_growth_rate_net = nn.Linear(1, self.mlp_extractor.latent_dim_vf)
+            self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf * 2, 1)
+        else:
+            self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf, 1)
         # self.reward_net = CausalModel(self.mlp_extractor.latent_dim_vf+self.action_space.n,self.num_agents) # use individual training
         self.reward_net = CausalModel((self.mlp_extractor.latent_dim_vf+self.action_space.n) * self.num_agents,self.num_agents) # use global training
         # Init weights: use orthogonal initialization
@@ -1380,6 +1385,8 @@ class RewardActorCriticPolicy(ActorCriticPolicy):
             latent_pi = self.mlp_extractor.forward_actor(pi_features)
             latent_vf = self.mlp_extractor.forward_critic(vf_features)
         # Evaluate the values for the given observations
+        if self.add_apple_growth_rate:
+            apple_growth_rate = self.apple_growth_rate_net(obs[:, -1].unsqueeze(-1))
         values = self.value_net(latent_vf)
         distribution = self._get_action_dist_from_latent(latent_pi)
         actions = distribution.get_actions(deterministic=deterministic)
