@@ -762,7 +762,8 @@ class IndependentPPO(OnPolicyAlgorithm):
                 # prev_latent_state = policy.policy.vae_net.encoder(self.prev_latent_state.to(all_obs_actions_features.device), all_obs_actions_features, all_rewards_copy).rsample()
                 with th.no_grad():
                     prev_mu, prev_sigma = policy.policy.vae_net.encode(all_last_obs_copy, all_actions_one_hot_flatten, all_rewards_copy)
-                    prev_latent_state = policy.policy.vae_net.reparameterize(prev_mu, prev_sigma)
+                    # prev_latent_state = policy.policy.vae_net.reparameterize(prev_mu, prev_sigma)
+                    prev_latent_state = prev_mu
                     latent_state = policy.policy.transition_net(all_actions_one_hot_flatten.unsqueeze(0), prev_latent_state.unsqueeze(0))
                     latent_state = latent_state[0].squeeze(0)
                     latent_state = latent_state.reshape(latent_state.shape[0],-1)

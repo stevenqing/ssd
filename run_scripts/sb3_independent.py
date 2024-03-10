@@ -108,6 +108,7 @@ def parse_args():
     parser.add_argument("--using_reward_timestep", type=int, default=2000000)
     parser.add_argument("--extractor", type=str, default='cnn')
     parser.add_argument("--enable_trajs_learning", type=int, default=0,choices=[0, 1])
+    parser.add_argument("--add_apple_growth_rate",type=bool, default=False)
     args = parser.parse_args()
     return args
 
@@ -230,6 +231,7 @@ def main(args):
     total_timesteps = args.total_timesteps
     use_collective_reward = args.use_collective_reward
     inequity_averse_reward = args.inequity_averse_reward
+    add_apple_growth_rate = args.add_apple_growth_rate
     alpha = args.alpha
     beta = args.beta
     num_cpus = args.num_cpus
@@ -287,7 +289,7 @@ def main(args):
                             entity=args.user_name, 
                             notes=socket.gethostname(),
                             name=str(env_name) +"_" + str(extractor) + "_112_" + str(model),
-                            group=str(env_name) + "_cf_lbf_modified_" + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha) + "_inequity_averse_" + str(args.inequity_averse_reward) + "_collective_" + str(args.use_collective_reward),
+                            group=str(env_name) + "_cf_lbf_modified_146" + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha) + "_inequity_averse_" + str(args.inequity_averse_reward) + "_collective_" + str(args.use_collective_reward),
                             dir="./",
                             job_type="training",
                             reinit=True)
