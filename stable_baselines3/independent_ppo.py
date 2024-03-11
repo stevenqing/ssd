@@ -408,6 +408,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                         self.previous_all_last_obs_traj,
                         self.previous_all_actions_traj,
                         self.previous_all_rewards_traj,
+                        all_dones,
                     )
                 else:
                     if self.model == 'team':
