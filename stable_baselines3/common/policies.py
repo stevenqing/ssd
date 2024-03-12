@@ -1115,9 +1115,10 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
             #     f.upsample(x.view(-1, 3, 15, 15), size=RED_SIZE,
             #             mode='bilinear', align_corners=True)
             #     for x in (obs, next_obs)]
-
+            (obs_mu, obs_logsigma) = [self.vae_net(x[0],x[1],x[2])[1:] for x in zip(obs, action, reward)]
+            (next_obs_mu, next_obs_logsigma) = [self.vae_net(x[0],x[1],x[2])[1:] for x in zip(next_obs, action, reward)]
             (obs_mu, obs_logsigma), (next_obs_mu, next_obs_logsigma) = [
-                self.vae_net(x)[1:] for x in (obs, next_obs, action, reward)]
+                self.vae_net(x)[1:] for x in zip(obs, next_obs, action, reward)]
 
             latent_obs, latent_next_obs = [
                 (x_mu + x_logsigma.exp() * th.randn_like(x_mu)).view(batch_size, rollout_len, 128)

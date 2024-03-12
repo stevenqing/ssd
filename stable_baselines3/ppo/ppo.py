@@ -470,6 +470,7 @@ class PPO(OnPolicyAlgorithm):
                     all_rewards_traj = rollout_data.all_rewards_traj[seq_index].permute(1,0,2)
                     prev_rewards_traj = rollout_data.prev_rewards_traj[seq_index].permute(1,0,2)
 
+                    # shaping the obs: [seq_len,batch_size,channel,view_len*2+1,view_len*2+1,num_frames*num_agents] -> [seq_len,batch_size,channel*num_frames*num_agents,view_len*2+1,view_len*2+1]
 
                     if isinstance(self.action_space, spaces.Discrete):
                         # Convert discrete action from float to long
@@ -533,6 +534,7 @@ class PPO(OnPolicyAlgorithm):
                     vae_loss = self.policy.vae_net.loss_function(self.policy.vae_net(stacked_obs,all_actions_one_hot,all_rewards)[0], stacked_obs, self.policy.vae_net(stacked_obs,all_actions_one_hot,all_rewards)[1], self.policy.vae_net(stacked_obs,all_actions_one_hot,all_rewards)[2])
 
                     # Transition Loss
+                    
                     latent_obs_traj, latent_next_obs_traj = self.policy.to_latent(prev_obs_traj,all_obs_traj,all_actions_traj,all_rewards_traj,self.batch_size,seq_length)
                     transition_loss = self.policy.get_loss(latent_obs_traj, all_actions_traj, all_rewards_traj, all_dones,latent_next_obs_traj, include_reward = True)
 
