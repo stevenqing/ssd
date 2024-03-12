@@ -861,6 +861,7 @@ class RolloutBuffer(BaseBuffer):
         self.previous_all_last_obs_traj = np.pad(self.previous_all_last_obs_traj, pad_width_obs, 'constant', constant_values=0)
         self.previous_all_actions_traj = np.pad(self.previous_all_actions_traj, pad_width_action, 'constant', constant_values=0)
         self.previous_all_rewards_traj = np.pad(self.previous_all_rewards_traj, pad_width_action, 'constant', constant_values=0)
+        
         data = (
             self.observations[batch_inds],
             self.actions[batch_inds],
@@ -868,7 +869,7 @@ class RolloutBuffer(BaseBuffer):
             self.log_probs[batch_inds].flatten(),
             self.advantages[batch_inds].flatten(),
             self.returns[batch_inds].flatten(),
-            self.all_last_obs[batch_inds],
+            self.all_last_obs[batch_inds], 
             self.all_actions[batch_inds],
             self.all_rewards[batch_inds],
             self.cf_rewards[batch_inds],

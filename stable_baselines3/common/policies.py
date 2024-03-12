@@ -1109,7 +1109,7 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
         # Setup optimizer with initial learning rate
         self.optimizer = self.optimizer_class(self.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)
 
-    def to_latent(self, obs: th.Tensor, next_obs: th.Tensor, batch_size: int, rollout_len: int):
+    def to_latent(self, obs: th.Tensor, next_obs: th.Tensor, action: th.Tensor, reward: th.Tensor, batch_size: int, rollout_len: int):
         with th.no_grad():
             # obs, next_obs = [
             #     f.upsample(x.view(-1, 3, 15, 15), size=RED_SIZE,
@@ -1117,7 +1117,7 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
             #     for x in (obs, next_obs)]
 
             (obs_mu, obs_logsigma), (next_obs_mu, next_obs_logsigma) = [
-                self.vae_net(x)[1:] for x in (obs, next_obs)]
+                self.vae_net(x)[1:] for x in (obs, next_obs, action, reward)]
 
             latent_obs, latent_next_obs = [
                 (x_mu + x_logsigma.exp() * th.randn_like(x_mu)).view(batch_size, rollout_len, 128)

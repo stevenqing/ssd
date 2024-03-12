@@ -455,9 +455,21 @@ class PPO(OnPolicyAlgorithm):
             elif self.model == 'vae':
                 for rollout_data in self.rollout_buffer.get_sw_traj(self.batch_size):
                     self.timestep += 1
+                    seq_length = 32
                     all_last_obs = rollout_data.all_last_obs
                     all_rewards = rollout_data.all_rewards
+                    all_dones = rollout_data.all_dones
                     actions = rollout_data.actions
+
+                    # Randomly sample a sequence index
+                    seq_index = th.randint(0, rollout_data.traj_length, (self.batch_size, seq_length))
+                    all_obs_traj = rollout_data.all_obs_traj[seq_index].permute(1,0,2,3,4,5)
+                    prev_obs_traj = rollout_data.prev_obs_traj[seq_index].permute(1,0,2,3,4,5)
+                    all_actions_traj = rollout_data.all_action_traj[seq_index].permute(1,0,2)
+                    prev_actions_traj = rollout_data.prev_action_traj[seq_index].permute(1,0,2)
+                    all_rewards_traj = rollout_data.all_rewards_traj[seq_index].permute(1,0,2)
+                    prev_rewards_traj = rollout_data.prev_rewards_traj[seq_index].permute(1,0,2)
+
 
                     if isinstance(self.action_space, spaces.Discrete):
                         # Convert discrete action from float to long
@@ -510,8 +522,24 @@ class PPO(OnPolicyAlgorithm):
 
                     entropy_losses.append(entropy_loss.item())
                     
+                    # VAE Loss
+                    # Obs Stacked
+                    stacked_obs = all_last_obs.permute(0, 2, 3, 1, 4)
+                    stacked_obs = stacked_obs.reshape(stacked_obs.shape[0], stacked_obs.shape[1], stacked_obs.shape[2], -1)
+                    # Action one hot
+                    eye_matrix = th.eye(self.action_space.n,device=all_actions.device)
+                    all_actions_one_hot = eye_matrix[all_actions.squeeze(-1)]
+                    all_actions_one_hot = all_actions_one_hot.reshape(all_actions_one_hot.shape[0], -1)
+                    vae_loss = self.policy.vae_net.loss_function(self.policy.vae_net(stacked_obs,all_actions_one_hot,all_rewards)[0], stacked_obs, self.policy.vae_net(stacked_obs,all_actions_one_hot,all_rewards)[1], self.policy.vae_net(stacked_obs,all_actions_one_hot,all_rewards)[2])
+
+                    # Transition Loss
+                    latent_obs_traj, latent_next_obs_traj = self.policy.to_latent(prev_obs_traj,all_obs_traj,all_actions_traj,all_rewards_traj,self.batch_size,seq_length)
+                    transition_loss = self.policy.get_loss(latent_obs_traj, all_actions_traj, all_rewards_traj, all_dones,latent_next_obs_traj, include_reward = True)
+
+
+
                     
-                    loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + vae_loss + reward_loss
+                    loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + vae_loss + transition_loss + reward_loss
 
                     # Calculate approximate form of reverse KL Divergence for early stopping
                     # see issue #417: https://github.com/DLR-RM/stable-baselines3/issues/417

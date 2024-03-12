@@ -55,7 +55,9 @@ class CNN_Encoder(nn.Module):
         observations = F.relu(self.conv_1(observations.float()/255.0))
         features = torch.flatten(F.relu(self.conv_2(observations)), start_dim=1)
         obs_features = self.fc(features)
-
+        if action.dtype != torch.float32:
+            action = action.float()
+            reward = reward.float()
         action_features = F.relu(self.action_layer(action))
         reward_features = F.relu(self.reward_layer(reward))
         features = torch.cat([obs_features, action_features, reward_features], dim=-1)
@@ -85,21 +87,24 @@ class CNN_Decoder(nn.Module):
         # We assume CxHxW images (channels first)
         # Re-ordering will be done by pre-preprocessing or wrapper
 
-        flat_out = num_frames * 12 * (view_len * 2 - 1) ** 2
+        flat_out = num_frames * num_agents * 3 * (view_len * 2 - 3) ** 2
+        self.view_len = view_len
+        self.num_frames = num_frames
+        self.num_agents = num_agents
         self.fc1 = nn.Linear(in_features=fcnet_hiddens[1], out_features=flat_out)
         self.conv_1 = nn.ConvTranspose2d(
-            in_channels=num_frames * 12,  # Input: (3 * 4) x 15 x 15
-            out_channels=num_frames * 6,  # Output: 24 x 13 x 13
+            in_channels=num_frames * 3 * num_agents,  # Input: (3 * 4) x 15 x 15
+            out_channels=num_frames * 6 * num_agents,  # Output: 24 x 13 x 13
             kernel_size=3,
             stride=1,
-            padding="valid",
+            # padding="valid",
         )
         self.conv_2 = nn.ConvTranspose2d(
-            in_channels=num_frames * 6,  # Input: 24 x 13 x 13
-            out_channels=num_frames * 3,  # Output: 48 x 11 x 11
+            in_channels=num_frames * 6 * num_agents,  # Input: 24 x 13 x 13
+            out_channels=num_frames * 3 * num_agents,  # Output: 48 x 11 x 11
             kernel_size=3,
             stride=1,
-            padding="valid",
+            # padding="valid",
         )
 
 
@@ -107,6 +112,7 @@ class CNN_Decoder(nn.Module):
         # Convert to tensor, rescale to [0, 1], and convert from B x H x W x C to B x C x H x W
         features = self.fc1(features)
         features = features.unsqueeze(-1).unsqueeze(-1)
+        features = features.view(-1, self.num_frames*3*self.num_agents, self.view_len*2-3, self.view_len*2-3)
         features = F.relu(self.conv_1(features))
         recon = F.sigmoid(self.conv_2(features))
 
@@ -135,6 +141,9 @@ class VAE(nn.Module):
         return recon, mu, sigma
 
     def encode(self, obs, action, reward):
+        if action.dtype != reward.dtype:
+            action = action.float()
+            reward = reward.float()
         mu, sigma = self.encoder(obs, action, reward)
         return mu, sigma
 
@@ -144,6 +153,7 @@ class VAE(nn.Module):
         return mu + eps * std
 
     def loss_function(self, recon_x, x, mu, logvar):
-        BCE = F.binary_cross_entropy(recon_x, x, reduction='sum')
+        x = x.permute(0, 3, 1, 2)
+        BCE = F.mse_loss(recon_x, x, size_average=False)
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         return BCE + KLD
