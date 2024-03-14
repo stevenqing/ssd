@@ -852,7 +852,7 @@ class RolloutBuffer(BaseBuffer):
     def _get_sw_traj_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> RolloutBufferSamples:
         index = np.arange(len(batch_inds))   #TODO: the index should be renewed, now it samples the first batch_size of samples everytime
         traj_length = self.all_last_obs_traj.shape[0]
-        pad_length = len(batch_inds) - traj_length
+        pad_length = max(self.observations.shape[0] - traj_length, 0)
         pad_width_obs = ((0, pad_length), (0, 0), (0, 0), (0, 0), (0, 0))
         pad_width_action  = ((0, pad_length), (0, 0))
         self.all_last_obs_traj = np.pad(self.all_last_obs_traj, pad_width_obs, 'constant', constant_values=0)

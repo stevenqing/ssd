@@ -111,7 +111,7 @@
 //             "name": "Python: main",
 //             "type": "python",
 //             "request": "launch",
-//             "program": "exp_results/plot.py",
+//             "program": "exp_results/plot_additional_results.py",
 //             "console": "integratedTerminal",
 //             "python": "/home/shuqingshi/miniconda3/envs/ssd/bin/python",
 //             "justMyCode": false,

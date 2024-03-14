@@ -765,11 +765,12 @@ class IndependentPPO(OnPolicyAlgorithm):
                     prev_mu, prev_sigma = policy.policy.vae_net.encode(all_last_obs_copy, all_actions_one_hot_flatten, all_rewards_copy)
                     # prev_latent_state = policy.policy.vae_net.reparameterize(prev_mu, prev_sigma)
                     prev_latent_state = prev_mu
-                    latent_state = policy.policy.transition_net(all_actions_one_hot_flatten.unsqueeze(0), prev_latent_state.unsqueeze(0))
-                    latent_state = latent_state[0].squeeze(0)
-                    latent_state = latent_state.reshape(latent_state.shape[0],-1)
-                    latent_state_action = th.cat((latent_state,all_actions_one_hot_flatten),dim=-1)
-                    all_cf_rewards = policy.policy.reward_net(latent_state_action)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
+                    latent_state_space = policy.policy.transition_net(all_actions_one_hot_flatten.unsqueeze(0), prev_latent_state.unsqueeze(0))
+                    latent_state = latent_state_space[0].squeeze(0)
+                    all_cf_rewards = latent_state[3]
+                    # latent_state = latent_state.reshape(latent_state.shape[0],-1)
+                    # latent_state_action = th.cat((latent_state,all_actions_one_hot_flatten),dim=-1)
+                    # all_cf_rewards = policy.policy.reward_net(latent_state_action)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
 
                 all_cf_rewards = th.mean(all_cf_rewards,dim=1) #SPEED? Not sure in here
                 total_cf_rewards.append(all_cf_rewards)
