@@ -748,8 +748,8 @@ class IndependentPPO(OnPolicyAlgorithm):
         total_cf_rewards = []
         for all_actions_one_hot in total_actions:
             if all_actions_one_hot is not None:
-                all_actions_one_hot = all_actions_one_hot.squeeze(1).permute(1,0,2)
-                all_actions_one_hot_flatten = all_actions_one_hot.reshape(all_actions_one_hot.shape[0],-1)
+                all_actions_one_hot = all_actions_one_hot.permute(1,2,0,3)
+                all_actions_one_hot_flatten = all_actions_one_hot.reshape(all_actions_one_hot.shape[0] * all_actions_one_hot.shape[1],-1) # all_actions_one_hot should be [num_envs, sample_number, num_agents, action_dim]
 
 
                 # Let the dimension of the rewards be (num_env, sample_number, num_agents)

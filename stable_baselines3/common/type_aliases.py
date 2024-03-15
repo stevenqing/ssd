@@ -93,14 +93,14 @@ class RewardTrajsRolloutBufferSamples(NamedTuple):
     all_actions: th.Tensor
     all_rewards: th.Tensor
     cf_rewards: th.Tensor
-    all_obs_traj: th.Tensor
-    all_action_traj: th.Tensor
-    all_rewards_traj: th.Tensor
-    prev_obs_traj: th.Tensor
-    prev_action_traj: th.Tensor
-    prev_rewards_traj: th.Tensor
+    all_obs_traj: list
+    all_action_traj: list
+    all_rewards_traj: list
+    prev_obs_traj: list
+    prev_action_traj: list
+    prev_rewards_traj: list
     all_dones: th.Tensor
-    traj_length: int
+    # traj_length: int
 
 class RolloutBufferSamples(NamedTuple):
     observations: th.Tensor

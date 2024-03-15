@@ -8,6 +8,7 @@ from ray.rllib.agents.callbacks import DefaultCallbacks
 from ray.rllib.env import MultiAgentEnv
 import json
 import torch
+import wandb
 import time
 # from reward_prediction_torch import CausalModel
 from ray.rllib.models import ModelCatalog
@@ -142,6 +143,7 @@ class MapEnv(MultiAgentEnv):
         self.sample_number = sample_number
         self.store_trajs = store_trajs
         self.timestep = 0
+        self.episode = 0
         self.num_agents = num_agents
         self.agent_id_matrix = np.eye(self.num_agents,dtype=int).astype(np.uint8)
         self.use_reward_model = use_reward_model
@@ -405,9 +407,9 @@ class MapEnv(MultiAgentEnv):
                     self.single_update_map(apple[0],apple[1],new_char)
                     # Modify the reward
                     if len(agent_id) > 0:
-                        total_reward = apple_type_list[i] * 1.2
-                    else:
                         total_reward = apple_type_list[i] if apple_type_list[i] == 1 else apple_type_list[i] * 2
+                    else:
+                        total_reward = apple_type_list[i]
                     for agent in self.agents.values():
                         if agent.agent_id in agent_id:
                             agent.reward += total_reward / total_agent_level
@@ -574,6 +576,14 @@ class MapEnv(MultiAgentEnv):
             rewards = temp_rewards
 
         dones["__all__"] = np.any(list(dones.values()))
+        if dones["__all__"] or self.timestep == 1000:
+             apple_1_num = np.count_nonzero(np.array(apple_type_list) == 1)
+             apple_2_num = np.count_nonzero(np.array(apple_type_list) == 2)
+             apple_3_num = np.count_nonzero(np.array(apple_type_list) == 3)
+             wandb.log({f"env/apples_1": apple_1_num}, step=self.episode)
+             wandb.log({f"env/apples_2": apple_2_num}, step=self.episode)
+             wandb.log({f"env/apples_3": apple_3_num}, step=self.episode)
+             self.timestep = 0
         return observations, rewards, dones, infos
     
 
@@ -612,7 +622,7 @@ class MapEnv(MultiAgentEnv):
         self.setup_agents()
         self.reset_map()
         self.custom_map_update()
-
+        self.timestep = 0
         map_with_agents = self.get_map_with_agents()
 
         observations = {}

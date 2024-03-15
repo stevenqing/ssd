@@ -58,6 +58,7 @@ class BaseBuffer(ABC):
 
         self.action_dim = get_action_dim(action_space)
         self.pos = 0
+        self.traj_pos = 0
         self.full = False
         self.device = get_device(device)
         self.n_envs = n_envs
@@ -75,6 +76,13 @@ class BaseBuffer(ABC):
         shape = arr.shape
         if len(shape) < 3:
             shape = shape + (1,)
+        if np.unique(np.array([len(item) for item in arr])).shape[0] > 1: # for the traj data
+            swap_arr = []
+            shape = arr[0].shape
+            for i in range(len(arr)):
+                shape = arr[i].shape
+                arr[i] = arr[i].swapaxes(0, 1).reshape(shape[0] * shape[1], *shape[2:])
+            return arr
         return arr.swapaxes(0, 1).reshape(shape[0] * shape[1], *shape[2:])
 
     def size(self) -> int:
@@ -104,6 +112,7 @@ class BaseBuffer(ABC):
         Reset the buffer.
         """
         self.pos = 0
+        self.traj_pos = 0
         self.full = False
 
     def sample(self, batch_size: int, env: Optional[VecNormalize] = None):
@@ -139,7 +148,10 @@ class BaseBuffer(ABC):
         :return:
         """
         if copy:
-            return th.tensor(array, device=self.device)
+            if array.dtype == object: # for the traj data
+                return [th.tensor(item) for item in array]
+            else:
+                return th.tensor(array, device=self.device)
         return th.as_tensor(array, device=self.device)
 
     @staticmethod
@@ -393,12 +405,12 @@ class RolloutBuffer(BaseBuffer):
         self.cf_rewards = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
         self.inequity_rewards = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
 
-        self.all_last_obs_traj = self.all_last_obs.copy()
-        self.all_actions_traj = self.all_actions.copy()
-        self.all_rewards_traj = self.all_rewards.copy()
-        self.previous_all_last_obs_traj = self.all_last_obs.copy()
-        self.previous_all_actions_traj = self.all_actions.copy()
-        self.previous_all_rewards_traj = self.all_rewards.copy()
+        self.all_last_obs_traj = []
+        self.all_actions_traj = []
+        self.all_rewards_traj = []
+        self.previous_all_last_obs_traj = self.all_last_obs_traj.copy()
+        self.previous_all_actions_traj = self.all_actions_traj.copy()
+        self.previous_all_rewards_traj = self.all_rewards_traj.copy()
         self.env_id = 0
 
         super().reset()
@@ -716,14 +728,15 @@ class RolloutBuffer(BaseBuffer):
         self.cf_rewards[self.pos] = np.array(cf_rewards).copy()
 
         if isinstance(all_last_obs_traj, np.ndarray):
-            self.all_last_obs_traj = np.transpose(all_last_obs_traj.copy(),(0,2,1,3,4,5))
-            self.all_actions_traj = np.transpose(all_actions_traj.copy(),(0,2,1))
-            self.all_rewards_traj = np.transpose(all_rewards_traj.copy(),(0,2,1))
+            self.all_last_obs_traj.append(np.transpose(all_last_obs_traj.copy(),(0,2,1,3,4,5)))
+            self.all_actions_traj.append(np.transpose(all_actions_traj.copy(),(0,2,1)))
+            self.all_rewards_traj.append(np.transpose(all_rewards_traj.copy(),(0,2,1)))
 
-            self.previous_all_last_obs_traj = np.transpose(prev_all_last_obs_traj.copy(),(0,2,1,3,4,5))
-            self.previous_all_actions_traj = np.transpose(prev_all_actions_traj.copy(),(0,2,1))
-            self.previous_all_rewards_traj = np.transpose(prev_all_rewards_traj.copy(),(0,2,1))
-
+            self.previous_all_last_obs_traj.append(np.transpose(prev_all_last_obs_traj.copy(),(0,2,1,3,4,5)))
+            self.previous_all_actions_traj.append(np.transpose(prev_all_actions_traj.copy(),(0,2,1)))
+            self.previous_all_rewards_traj.append(np.transpose(prev_all_rewards_traj.copy(),(0,2,1)))
+            
+            self.traj_pos += 1
 
         self.pos += 1
         if self.pos == self.buffer_size:
@@ -835,7 +848,12 @@ class RolloutBuffer(BaseBuffer):
                 "previous_all_actions_traj",
                 "previous_all_rewards_traj",
             ]
-
+            self.all_last_obs_traj = np.array(self.all_last_obs_traj)
+            self.all_actions_traj = np.array(self.all_actions_traj)
+            self.all_rewards_traj = np.array(self.all_rewards_traj)
+            self.previous_all_last_obs_traj = np.array(self.previous_all_last_obs_traj)
+            self.previous_all_actions_traj = np.array(self.previous_all_actions_traj)
+            self.previous_all_rewards_traj = np.array(self.previous_all_rewards_traj)
             for tensor in _tensor_names:
                 self.__dict__[tensor] = self.swap_and_flatten(self.__dict__[tensor])
             self.generator_ready = True
@@ -850,18 +868,29 @@ class RolloutBuffer(BaseBuffer):
             start_idx += batch_size
 
     def _get_sw_traj_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> RolloutBufferSamples:
-        index = np.arange(len(batch_inds))   #TODO: the index should be renewed, now it samples the first batch_size of samples everytime
-        traj_length = self.all_last_obs_traj.shape[0]
-        pad_length = max(self.observations.shape[0] - traj_length, 0)
-        pad_width_obs = ((0, pad_length), (0, 0), (0, 0), (0, 0), (0, 0))
-        pad_width_action  = ((0, pad_length), (0, 0))
-        self.all_last_obs_traj = np.pad(self.all_last_obs_traj, pad_width_obs, 'constant', constant_values=0)
-        self.all_actions_traj = np.pad(self.all_actions_traj, pad_width_action, 'constant', constant_values=0)
-        self.all_rewards_traj = np.pad(self.all_rewards_traj, pad_width_action, 'constant', constant_values=0)
-        self.previous_all_last_obs_traj = np.pad(self.previous_all_last_obs_traj, pad_width_obs, 'constant', constant_values=0)
-        self.previous_all_actions_traj = np.pad(self.previous_all_actions_traj, pad_width_action, 'constant', constant_values=0)
-        self.previous_all_rewards_traj = np.pad(self.previous_all_rewards_traj, pad_width_action, 'constant', constant_values=0)
-        
+        index = np.arange(1000)   #TODO: the index should be renewed, now it samples the first batch_size of samples everytime
+        # traj_length = self.all_last_obs_traj.shape[0]
+        if isinstance(self.all_last_obs_traj, list):
+            for i in range(len(self.all_last_obs_traj)):
+                pad_length = 1000 - self.all_last_obs_traj[i].shape[0]
+                prev_pad_length = 1000 - self.previous_all_last_obs_traj[i].shape[0]
+                pad_width_obs = ((0, pad_length), (0, 0), (0, 0), (0, 0), (0, 0))
+                prev_pad_width_obs = ((0, prev_pad_length), (0, 0), (0, 0), (0, 0), (0, 0))
+                pad_width_action  = ((0, pad_length), (0, 0))
+                prev_pad_width_action  = ((0, prev_pad_length), (0, 0))
+
+                self.all_last_obs_traj[i] = np.pad(self.all_last_obs_traj[i], pad_width_obs, 'constant', constant_values=0)
+                self.all_actions_traj[i] = np.pad(self.all_actions_traj[i], pad_width_action, 'constant', constant_values=0)
+                self.all_rewards_traj[i] = np.pad(self.all_rewards_traj[i], pad_width_action, 'constant', constant_values=0)
+                self.previous_all_last_obs_traj[i] = np.pad(self.previous_all_last_obs_traj[i], prev_pad_width_obs, 'constant', constant_values=0)
+                self.previous_all_actions_traj[i] = np.pad(self.previous_all_actions_traj[i], prev_pad_width_action, 'constant', constant_values=0)
+                self.previous_all_rewards_traj[i] = np.pad(self.previous_all_rewards_traj[i], prev_pad_width_action, 'constant', constant_values=0)
+            self.all_last_obs_traj = np.stack(self.all_last_obs_traj)
+            self.all_actions_traj = np.stack(self.all_actions_traj)
+            self.all_rewards_traj = np.stack(self.all_rewards_traj)
+            self.previous_all_last_obs_traj = np.stack(self.previous_all_last_obs_traj)
+            self.previous_all_actions_traj = np.stack(self.previous_all_actions_traj)
+            self.previous_all_rewards_traj = np.stack(self.previous_all_rewards_traj)
         data = (
             self.observations[batch_inds],
             self.actions[batch_inds],
@@ -873,14 +902,20 @@ class RolloutBuffer(BaseBuffer):
             self.all_actions[batch_inds],
             self.all_rewards[batch_inds],
             self.cf_rewards[batch_inds],
-            self.all_last_obs_traj[index], # would not work in len < 1000(coin3, lbf)
-            self.all_actions_traj[index],
-            self.all_rewards_traj[index],
-            self.previous_all_last_obs_traj[index],
-            self.previous_all_actions_traj[index],
-            self.previous_all_rewards_traj[index],
+            # self.all_last_obs_traj[index], # would not work in len < 1000(coin3, lbf)
+            # self.all_actions_traj[index],
+            # self.all_rewards_traj[index],
+            # self.previous_all_last_obs_traj[index],
+            # self.previous_all_actions_traj[index],
+            # self.previous_all_rewards_traj[index],
+            self.all_last_obs_traj,
+            self.all_actions_traj,
+            self.all_rewards_traj,
+            self.previous_all_last_obs_traj,
+            self.previous_all_actions_traj,
+            self.previous_all_rewards_traj,
             self.all_dones[index],
-            traj_length,
+            # traj_length,
         )
         return RewardTrajsRolloutBufferSamples(*tuple(map(self.to_torch, data)))
 

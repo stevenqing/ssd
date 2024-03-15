@@ -462,7 +462,7 @@ class PPO(OnPolicyAlgorithm):
                     actions = rollout_data.actions
 
                     # Randomly sample a sequence index
-                    seq_index = th.randint(0, rollout_data.all_obs_traj.shape[0], (self.batch_size, seq_length))
+                    seq_index = th.randint(0, len(rollout_data.all_obs_traj), (self.batch_size, seq_length))
                     all_obs_traj = rollout_data.all_obs_traj[seq_index].permute(1,0,2,3,4,5)
                     prev_obs_traj = rollout_data.prev_obs_traj[seq_index].permute(1,0,2,3,4,5)
                     all_actions_traj = rollout_data.all_action_traj[seq_index].permute(1,0,2)
@@ -531,6 +531,7 @@ class PPO(OnPolicyAlgorithm):
 
                     entropy_losses.append(entropy_loss.item())
                     
+                    #TODO: check if the loss is correct
                     # VAE Loss
                     # Obs Stacked
                     stacked_obs = all_last_obs.permute(0, 2, 3, 1, 4)
@@ -544,7 +545,7 @@ class PPO(OnPolicyAlgorithm):
                     # Transition Loss
                     all_actions_traj_one_hot = eye_matrix[all_actions_traj]
                     all_actions_traj_one_hot = all_actions_traj_one_hot.reshape(all_actions_traj_one_hot.shape[0], all_actions_traj_one_hot.shape[1], -1)
-                    latent_obs_traj, latent_next_obs_traj = self.policy.to_latent(prev_obs_traj,all_obs_traj,all_actions_traj_one_hot,all_rewards_traj,self.batch_size,seq_length)
+                    latent_obs_traj, latent_next_obs_traj = self.policy.to_latent(prev_obs_traj,all_obs_traj,all_actions_traj_one_hot,all_rewards_traj,self.batch_size,seq_length) #TODO: check the to_latent function, I did some significant changes in here
                     transition_loss = self.policy.get_loss(latent_obs_traj, all_actions_traj, all_rewards_traj, all_dones_traj,latent_next_obs_traj, include_reward = True)
 
                     
