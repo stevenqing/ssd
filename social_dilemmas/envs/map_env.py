@@ -589,6 +589,8 @@ class MapEnv(MultiAgentEnv):
                     if not file_exists:
                         writer.writerow(["episode","apple_1_num","apple_2_num","apple_3_num"])
                     writer.writerow([self.episode,apple_1_num,apple_2_num,apple_3_num])
+                self.timestep = 0
+                self.episode += 1
         return observations, rewards, dones, infos
     
 
