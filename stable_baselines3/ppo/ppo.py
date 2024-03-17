@@ -460,7 +460,7 @@ class PPO(OnPolicyAlgorithm):
                     all_rewards = rollout_data.all_rewards
                     all_dones = rollout_data.all_dones
                     actions = rollout_data.actions
-                    traj_length = rollout_data.traj_length
+                    traj_length = rollout_data.traj_length.tolist()
 
                     # Randomly sample a sequence index
                     all_obs_traj = th.zeros(self.batch_size,seq_length,self.n_envs,self.num_agents,15,15,18)
@@ -472,7 +472,7 @@ class PPO(OnPolicyAlgorithm):
 
                     for i in range(len(traj_length)):
                         if traj_length[i] < seq_length:
-                            traj_length.pop(i)
+                            traj_length = traj_length.pop(i)
                     for i in range(self.batch_size):
                             # 随机选择一个维度
                             dim = th.randint(0, len(traj_length), (1,)).item()
