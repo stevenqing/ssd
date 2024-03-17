@@ -1163,7 +1163,7 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
             mse = 0
             scale = 128 + 1
         loss = (gmm + mse) / scale
-        return dict(gmm=gmm, mse=mse, loss=loss)
+        return dict(gmm=gmm, mse=mse, loss=loss), reward
     
     def forward(self, obs: th.Tensor, deterministic: bool = False) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
         """
