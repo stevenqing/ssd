@@ -1147,12 +1147,12 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
         :returns: dictionary of losses, containing the gmm, the mse, the bce and
             the averaged loss.
         """
-        latent_obs, action,\
-            reward, terminal,\
-            latent_next_obs = [arr.transpose(1, 0)
-                            for arr in [latent_obs, action,
-                                        reward, terminal,
-                                        latent_next_obs]]
+        # latent_obs, action,\
+        #     reward, terminal,\
+        #     latent_next_obs = [arr.transpose(1, 0)
+        #                     for arr in [latent_obs, action,
+        #                                 reward, terminal,
+        #                                 latent_next_obs]]
         mus, sigmas, logpi, rs, ds = self.transition_net(action, latent_obs)
         gmm = self.transition_net.gmm_loss(latent_next_obs, mus, sigmas, logpi)
         # bce = F.binary_cross_entropy_with_logits(ds, terminal)
