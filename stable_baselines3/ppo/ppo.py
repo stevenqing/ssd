@@ -470,12 +470,13 @@ class PPO(OnPolicyAlgorithm):
                     all_rewards_traj = th.zeros(self.batch_size,seq_length,self.n_envs,self.num_agents)
                     prev_rewards_traj = th.zeros(self.batch_size,seq_length,self.n_envs,self.num_agents)
 
+                    for i in range(len(traj_length)):
+                        if traj_length[i] < seq_length:
+                            traj_length.pop(i)
                     for i in range(self.batch_size):
                             # 随机选择一个维度
                             dim = th.randint(0, len(traj_length), (1,)).item()
                             # 确定这个维度的最大有效起始索引
-                            while traj_length[dim] - seq_length < 0:
-                                dim = th.randint(0, len(traj_length), (1,)).item()
                             max_start = traj_length[dim] - seq_length
                             # 随机选择一个起始索引，这里考虑序列长度为1，因为我们逐个时间点采样
                             start_idx = th.randint(0, max_start, (1,)).item()
