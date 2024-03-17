@@ -148,6 +148,8 @@ class BaseBuffer(ABC):
         :return:
         """
         if copy:
+            if isinstance(array, list):
+                return th.tensor(array, device=self.device)
             if array.dtype == object: # for the traj data
                 return [th.tensor(item) for item in array]
             else:
@@ -870,8 +872,10 @@ class RolloutBuffer(BaseBuffer):
     def _get_sw_traj_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> RolloutBufferSamples:
         index = np.arange(1000)   #TODO: the index should be renewed, now it samples the first batch_size of samples everytime
         # traj_length = self.all_last_obs_traj.shape[0]
-        if isinstance(self.all_last_obs_traj, list):
+        traj_length = []
+        if isinstance(self.all_last_obs_traj, list) or isinstance(self.all_last_obs_traj, np.ndarray):
             for i in range(len(self.all_last_obs_traj)):
+                traj_length.append(self.all_last_obs_traj[i].shape[0])
                 pad_length = 1000 - self.all_last_obs_traj[i].shape[0]
                 prev_pad_length = 1000 - self.previous_all_last_obs_traj[i].shape[0]
                 pad_width_obs = ((0, pad_length), (0, 0), (0, 0), (0, 0), (0, 0))
@@ -915,7 +919,7 @@ class RolloutBuffer(BaseBuffer):
             self.previous_all_actions_traj,
             self.previous_all_rewards_traj,
             self.all_dones[index],
-            # traj_length,
+            traj_length,
         )
         return RewardTrajsRolloutBufferSamples(*tuple(map(self.to_torch, data)))
 

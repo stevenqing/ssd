@@ -460,9 +460,23 @@ class PPO(OnPolicyAlgorithm):
                     all_rewards = rollout_data.all_rewards
                     all_dones = rollout_data.all_dones
                     actions = rollout_data.actions
+                    traj_length = rollout_data.traj_length
 
                     # Randomly sample a sequence index
-                    seq_index = th.randint(0, len(rollout_data.all_obs_traj), (self.batch_size, seq_length))
+                    all_obs_traj = th.zeros_like(seq_length,self.batch_size,self.num_agents,15,15,18)
+                    all_actions_traj = th.zeros_like(seq_length,self.batch_size,self.num_agents)
+                    all_rewards_traj = th.zeros_like(seq_length,self.batch_size,self.num_agents)
+
+                    for i in range(self.batch_size):
+                        for j in range(seq_length):
+                            # 随机选择一个维度
+                            dim = th.randint(0, 6, (1,)).item()
+                            # 确定这个维度的最大有效起始索引
+                            max_start = traj_length[dim] - 32
+                            # 随机选择一个起始索引，这里考虑序列长度为1，因为我们逐个时间点采样
+                            start_idx = th.randint(0, max_start, (1,)).item()
+                            # 采样
+                            all_obs_traj[i, j, :] = all_obs_traj[dim, start_idx, :]
                     all_obs_traj = rollout_data.all_obs_traj[seq_index].permute(1,0,2,3,4,5)
                     prev_obs_traj = rollout_data.prev_obs_traj[seq_index].permute(1,0,2,3,4,5)
                     all_actions_traj = rollout_data.all_action_traj[seq_index].permute(1,0,2)
