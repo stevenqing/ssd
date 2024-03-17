@@ -470,9 +470,8 @@ class PPO(OnPolicyAlgorithm):
                     all_rewards_traj = th.zeros(self.batch_size,seq_length,self.n_envs,self.num_agents)
                     prev_rewards_traj = th.zeros(self.batch_size,seq_length,self.n_envs,self.num_agents)
 
-                    for i in range(len(traj_length)):
-                        if traj_length[i] < seq_length:
-                            traj_length = traj_length.pop(i)
+
+                    traj_length = [item for item in traj_length if item < seq_length]
                     for i in range(self.batch_size):
                             # 随机选择一个维度
                             dim = th.randint(0, len(traj_length), (1,)).item()
