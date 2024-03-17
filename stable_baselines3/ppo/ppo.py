@@ -563,6 +563,13 @@ class PPO(OnPolicyAlgorithm):
 
                     # Transition Loss
                     # set all dones to 0
+                    prev_obs_traj = prev_obs_traj.to(self.device)
+                    all_obs_traj = all_obs_traj.to(self.device)
+                    all_actions_traj = all_actions_traj.to(self.device)
+                    prev_actions_traj = prev_actions_traj.to(self.device)
+                    all_rewards_traj = all_rewards_traj.to(self.device)
+                    prev_rewards_traj = prev_rewards_traj.to(self.device)
+
                     all_actions_traj_one_hot = eye_matrix[all_actions_traj.to(int)]
                     all_actions_traj_one_hot = all_actions_traj_one_hot.reshape(all_actions_traj_one_hot.shape[0], all_actions_traj_one_hot.shape[1], -1)
                     latent_obs_traj, latent_next_obs_traj = self.policy.to_latent(prev_obs_traj,all_obs_traj,all_actions_traj_one_hot,all_rewards_traj,self.batch_size,seq_length) #TODO: check the to_latent function, I did some significant changes in here
