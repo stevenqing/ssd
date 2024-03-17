@@ -78,7 +78,7 @@ class BaseBuffer(ABC):
             shape = arr[0].shape
             for i in range(len(arr)):
                 shape = arr[i].shape
-                arr[i] = arr[i].swapaxes(0, 1).reshape(shape[0] * shape[1], *shape[2:])
+                # arr[i] = arr[i].swapaxes(0, 1).reshape(shape[0] * shape[1], *shape[2:])
             return arr
         shape = arr.shape
         if len(shape) < 3:
@@ -885,10 +885,10 @@ class RolloutBuffer(BaseBuffer):
                 traj_length.append(self.all_last_obs_traj[i].shape[0])
                 pad_length = 1000 - self.all_last_obs_traj[i].shape[0]
                 prev_pad_length = 1000 - self.previous_all_last_obs_traj[i].shape[0]
-                pad_width_obs = ((0, pad_length), (0, 0), (0, 0), (0, 0), (0, 0))
-                prev_pad_width_obs = ((0, prev_pad_length), (0, 0), (0, 0), (0, 0), (0, 0))
-                pad_width_action  = ((0, pad_length), (0, 0))
-                prev_pad_width_action  = ((0, prev_pad_length), (0, 0))
+                pad_width_obs = ((0, pad_length), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0))
+                prev_pad_width_obs = ((0, prev_pad_length), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0))
+                pad_width_action  = ((0, pad_length), (0, 0), (0, 0))
+                prev_pad_width_action  = ((0, prev_pad_length), (0, 0), (0, 0))
 
                 all_last_obs_traj[i] = np.pad(self.all_last_obs_traj[i], pad_width_obs, 'constant', constant_values=0)
                 all_actions_traj[i] = np.pad(self.all_actions_traj[i], pad_width_action, 'constant', constant_values=0)

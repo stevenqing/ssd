@@ -463,17 +463,19 @@ class PPO(OnPolicyAlgorithm):
                     traj_length = rollout_data.traj_length
 
                     # Randomly sample a sequence index
-                    all_obs_traj = th.zeros(self.batch_size,seq_length,self.num_agents,15,15,18)
-                    prev_obs_traj = th.zeros(self.batch_size,seq_length,self.num_agents,15,15,18)
-                    all_actions_traj = th.zeros(self.batch_size,seq_length,self.num_agents)
-                    prev_actions_traj = th.zeros(self.batch_size,seq_length,self.num_agents)
-                    all_rewards_traj = th.zeros(self.batch_size,seq_length,self.num_agents)
-                    prev_rewards_traj = th.zeros(self.batch_size,seq_length,self.num_agents)
+                    all_obs_traj = th.zeros(self.batch_size,seq_length,self.n_envs,self.num_agents,15,15,18)
+                    prev_obs_traj = th.zeros(self.batch_size,seq_length,self.n_envs,self.num_agents,15,15,18)
+                    all_actions_traj = th.zeros(self.batch_size,seq_length,self.n_envs,self.num_agents)
+                    prev_actions_traj = th.zeros(self.batch_size,seq_length,self.n_envs,self.num_agents)
+                    all_rewards_traj = th.zeros(self.batch_size,seq_length,self.n_envs,self.num_agents)
+                    prev_rewards_traj = th.zeros(self.batch_size,seq_length,self.n_envs,self.num_agents)
 
                     for i in range(self.batch_size):
                             # 随机选择一个维度
                             dim = th.randint(0, len(traj_length), (1,)).item()
                             # 确定这个维度的最大有效起始索引
+                            while traj_length[dim] - seq_length < 0:
+                                dim = th.randint(0, len(traj_length), (1,)).item()
                             max_start = traj_length[dim] - seq_length
                             # 随机选择一个起始索引，这里考虑序列长度为1，因为我们逐个时间点采样
                             start_idx = th.randint(0, max_start, (1,)).item()
@@ -488,13 +490,15 @@ class PPO(OnPolicyAlgorithm):
                     # all_dones_traj = rollout_data.all_dones[seq_index].squeeze(2)
                     # all_dones_traj,_ = th.max(all_dones_traj,-1)
                     # all_dones_traj = th.permute(all_dones_traj,(1,0))
-
-                    prev_obs_traj = th.permute(prev_obs_traj,(0,1,2,5,3,4))
-                    all_obs_traj = th.permute(all_obs_traj,(0,1,2,5,3,4))
-                    prev_obs_traj = prev_obs_traj.reshape(prev_obs_traj.shape[0],prev_obs_traj.shape[1],-1,prev_obs_traj.shape[4],prev_obs_traj.shape[5])
-                    all_obs_traj = all_obs_traj.reshape(all_obs_traj.shape[0],all_obs_traj.shape[1],-1,all_obs_traj.shape[4],all_obs_traj.shape[5])
+                    
+                    prev_obs_traj = th.permute(prev_obs_traj,(2,0,1,3,6,4,5))
+                    all_obs_traj = th.permute(all_obs_traj,(2,0,1,3,6,4,5))
+                    prev_obs_traj = prev_obs_traj.reshape(prev_obs_traj.shape[0]*prev_obs_traj.shape[1],prev_obs_traj.shape[2],-1,prev_obs_traj.shape[5],prev_obs_traj.shape[6])
+                    all_obs_traj = all_obs_traj.reshape(all_obs_traj.shape[0]*all_obs_traj.shape[1],all_obs_traj.shape[2],-1,all_obs_traj.shape[5],all_obs_traj.shape[6])
+                    prev_obs_traj = prev_obs_traj.permute(1,0,2,3,4)
+                    all_obs_traj = all_obs_traj.permute(1,0,2,3,4)
                     # shaping the obs: [seq_len,batch_size,channel,view_len*2+1,view_len*2+1,num_frames*num_agents] -> [seq_len,batch_size,channel*num_frames*num_agents,view_len*2+1,view_len*2+1]
-
+                        
                     if isinstance(self.action_space, spaces.Discrete):
                         # Convert discrete action from float to long
                         actions = rollout_data.actions.long().flatten()
