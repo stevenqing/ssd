@@ -1,6 +1,6 @@
 import warnings
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Generator, List, Optional, Union
+from typing import Any, Dict, Generator, List, Optional, Union, Tuple
 
 import numpy as np
 import torch as th
@@ -13,12 +13,16 @@ from stable_baselines3.common.type_aliases import (
     ReplayBufferSamples,
     RolloutBufferSamples,
     RewardRolloutBufferSamples,
-    RewardDictRolloutBufferSamples,
-    RewardTrajsRolloutBufferSamples
+    RewardTrajsRolloutBufferSamples,
+    TransitionRolloutBufferSamples,
+    RecurrentDictRolloutBufferSamples,
+    RecurrentRolloutBufferSamples,
+    RNNStates,
 )
+
 from stable_baselines3.common.utils import get_device
 from stable_baselines3.common.vec_env import VecNormalize
-import copy
+
 try:
     # Check memory used by replay buffer when possible
     import psutil
@@ -54,6 +58,7 @@ class BaseBuffer(ABC):
 
         self.action_dim = get_action_dim(action_space)
         self.pos = 0
+        self.traj_pos = 0
         self.full = False
         self.device = get_device(device)
         self.n_envs = n_envs
@@ -71,6 +76,13 @@ class BaseBuffer(ABC):
         shape = arr.shape
         if len(shape) < 3:
             shape = shape + (1,)
+        if np.unique(np.array([len(item) for item in arr])).shape[0] > 1: # for the traj data
+            swap_arr = []
+            shape = arr[0].shape
+            for i in range(len(arr)):
+                shape = arr[i].shape
+                arr[i] = arr[i].swapaxes(0, 1).reshape(shape[0] * shape[1], *shape[2:])
+            return arr
         return arr.swapaxes(0, 1).reshape(shape[0] * shape[1], *shape[2:])
 
     def size(self) -> int:
@@ -100,6 +112,7 @@ class BaseBuffer(ABC):
         Reset the buffer.
         """
         self.pos = 0
+        self.traj_pos = 0
         self.full = False
 
     def sample(self, batch_size: int, env: Optional[VecNormalize] = None):
@@ -135,7 +148,12 @@ class BaseBuffer(ABC):
         :return:
         """
         if copy:
-            return th.tensor(array, device=self.device)
+            if isinstance(array, list):
+                return th.tensor(array, device=self.device)
+            if array.dtype == object: # for the traj data
+                return [th.tensor(item) for item in array]
+            else:
+                return th.tensor(array, device=self.device)
         return th.as_tensor(array, device=self.device)
 
     @staticmethod
@@ -360,10 +378,11 @@ class RolloutBuffer(BaseBuffer):
         self.gamma = gamma
         self.agent_number = num_agents
         self.observations, self.actions, self.rewards, self.advantages = None, None, None, None
-        self.all_last_obs, self.all_actions, self.all_rewards, self.cf_rewards = None, None, None, None
+        self.all_last_obs, self.all_actions, self.all_rewards, self.cf_rewards, self.inequity_rewards = None, None, None, None, None
         self.all_last_obs_traj, self.all_actions_traj, self.all_rewards_traj = None, None, None
         self.previous_all_last_obs_traj, self.previous_all_actions_traj, self.previous_all_rewards_traj = None, None, None
         self.returns, self.episode_starts, self.values, self.log_probs = None, None, None, None
+        self.all_dones = None
         self.generator_ready = False
         self.model = model
         self.env_id = 0
@@ -384,14 +403,16 @@ class RolloutBuffer(BaseBuffer):
         self.all_last_obs = np.zeros((self.buffer_size, self.n_envs, self.agent_number) + self.obs_shape, dtype=np.float32)
         self.all_actions = np.zeros((self.buffer_size, self.n_envs, self.agent_number, self.action_dim), dtype=np.float32)
         self.all_rewards = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
+        self.all_dones = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
         self.cf_rewards = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
+        self.inequity_rewards = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
 
-        self.all_last_obs_traj = self.all_last_obs.copy()
-        self.all_actions_traj = self.all_actions.copy()
-        self.all_rewards_traj = self.all_rewards.copy()
-        self.previous_all_last_obs_traj = self.all_last_obs.copy()
-        self.previous_all_actions_traj = self.all_actions.copy()
-        self.previous_all_rewards_traj = self.all_rewards.copy()
+        self.all_last_obs_traj = []
+        self.all_actions_traj = []
+        self.all_rewards_traj = []
+        self.previous_all_last_obs_traj = self.all_last_obs_traj.copy()
+        self.previous_all_actions_traj = self.all_actions_traj.copy()
+        self.previous_all_rewards_traj = self.all_rewards_traj.copy()
         self.env_id = 0
 
         super().reset()
@@ -428,6 +449,43 @@ class RolloutBuffer(BaseBuffer):
                 next_non_terminal = 1.0 - self.episode_starts[step + 1]
                 next_values = self.values[step + 1]
             delta = self.rewards[step] + self.gamma * next_values * next_non_terminal - self.values[step]
+            last_gae_lam = delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam
+            self.advantages[step] = last_gae_lam
+        # TD(lambda) estimator, see Github PR #375 or "Telescoping in TD(lambda)"
+        # in David Silver Lecture 4: https://www.youtube.com/watch?v=PnHCvfgC_ZA
+        self.returns = self.advantages + self.values
+
+    def compute_inequity_returns_and_advantage(self, last_values: th.Tensor, dones: np.ndarray, polid: int) -> None:
+        """
+        Post-processing step: compute the lambda-return (TD(lambda) estimate)
+        and GAE(lambda) advantage.
+
+        Uses Generalized Advantage Estimation (https://arxiv.org/abs/1506.02438)
+        to compute the advantage. To obtain Monte-Carlo advantage estimate (A(s) = R - V(S))
+        where R is the sum of discounted reward with value bootstrap
+        (because we don't always have full episode), set ``gae_lambda=1.0`` during initialization.
+
+        The TD(lambda) estimator has also two special cases:
+        - TD(1) is Monte-Carlo estimate (sum of discounted rewards)
+        - TD(0) is one-step estimate with bootstrapping (r_t + gamma * v(s_{t+1}))
+
+        For more information, see discussion in https://github.com/DLR-RM/stable-baselines3/pull/375.
+
+        :param last_values: state value estimation for the last step (one for each env)
+        :param dones: if the last step was a terminal step (one bool for each env).
+        """
+        # Convert to numpy
+        last_values = last_values.clone().cpu().numpy().flatten()
+
+        last_gae_lam = 0
+        for step in reversed(range(self.buffer_size)):
+            if step == self.buffer_size - 1:
+                next_non_terminal = 1.0 - dones
+                next_values = last_values
+            else:
+                next_non_terminal = 1.0 - self.episode_starts[step + 1]
+                next_values = self.values[step + 1]
+            delta = self.inequity_rewards[step] + self.gamma * next_values * next_non_terminal - self.values[step]
             last_gae_lam = delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam
             self.advantages[step] = last_gae_lam
         # TD(lambda) estimator, see Github PR #375 or "Telescoping in TD(lambda)"
@@ -556,8 +614,7 @@ class RolloutBuffer(BaseBuffer):
         if self.pos == self.buffer_size:
             self.full = True
 
-
-    def add_sw_traj(
+    def add_inequity_sw(
         self,
         obs: np.ndarray,
         action: np.ndarray,
@@ -568,13 +625,7 @@ class RolloutBuffer(BaseBuffer):
         all_last_obs: np.ndarray,
         all_actions: np.ndarray,
         all_rewards: np.ndarray,
-        cf_rewards: np.ndarray,
-        all_last_obs_traj: np.ndarray,
-        all_actions_traj: np.ndarray,
-        all_rewards_traj: np.ndarray,
-        prev_all_last_obs_traj: np.ndarray,
-        prev_all_actions_traj: np.ndarray,
-        prev_all_rewards_traj: np.ndarray,
+        inequity_rewards: np.ndarray,
     ) -> None:
         """
         :param obs: Observation
@@ -612,17 +663,82 @@ class RolloutBuffer(BaseBuffer):
         self.all_last_obs[self.pos] = np.transpose(np.array(all_last_obs).copy(),(1,0,2,3,4))
         self.all_actions[self.pos] = np.transpose(np.array(all_actions).copy(),(1,0,2))
         self.all_rewards[self.pos] = np.transpose(np.array(all_rewards).copy(),(1,0))
+        self.inequity_rewards[self.pos] = np.array(inequity_rewards).copy()
+
+        self.pos += 1
+        if self.pos == self.buffer_size:
+            self.full = True
+
+    def add_sw_traj(
+        self,
+        obs: np.ndarray,
+        action: np.ndarray,
+        reward: np.ndarray,
+        episode_start: np.ndarray,
+        value: th.Tensor,
+        log_prob: th.Tensor,
+        all_last_obs: np.ndarray,
+        all_actions: np.ndarray,
+        all_rewards: np.ndarray,
+        cf_rewards: np.ndarray,
+        all_last_obs_traj: np.ndarray,
+        all_actions_traj: np.ndarray,
+        all_rewards_traj: np.ndarray,
+        prev_all_last_obs_traj: np.ndarray,
+        prev_all_actions_traj: np.ndarray,
+        prev_all_rewards_traj: np.ndarray,
+        all_dones: np.ndarray,
+    ) -> None:
+        """
+        :param obs: Observation
+        :param action: Action
+        :param reward:
+        :param episode_start: Start of episode signal.
+        :param value: estimated value of the current state
+            following the current policy.
+        :param log_prob: log probability of the action
+            following the current policy.
+        """
+        if len(log_prob.shape) == 0:
+            # Reshape 0-d tensor to avoid error
+            log_prob = log_prob.reshape(-1, 1)
+
+        # Reshape needed when using multiple envs with discrete observations
+        # as numpy cannot broadcast (n_discrete,) to (n_discrete, 1)
+        if isinstance(self.observation_space, spaces.Discrete):
+            obs = obs.reshape((self.n_envs,) + self.obs_shape)
+
+        # Same reshape, for actions
+        action = action.reshape((self.n_envs, self.action_dim))
+
+        all_last_obs = np.array(all_last_obs)
+        all_actions = np.array(all_actions)
+        all_rewards = np.array(all_rewards)
+
+        self.observations[self.pos] = np.array(obs).copy()
+        self.actions[self.pos] = np.array(action).copy()
+        self.rewards[self.pos] = np.array(reward).copy()
+        self.episode_starts[self.pos] = np.array(episode_start).copy()
+        self.values[self.pos] = value.clone().cpu().numpy().flatten()
+        self.log_probs[self.pos] = log_prob.clone().cpu().numpy()
+
+        self.all_last_obs[self.pos] = np.transpose(np.array(all_last_obs).copy(),(1,0,2,3,4))
+        self.all_actions[self.pos] = np.transpose(np.array(all_actions).copy(),(1,0,2))
+        self.all_rewards[self.pos] = np.transpose(np.array(all_rewards).copy(),(1,0))
+        self.all_dones[self.pos] = np.transpose(np.array(all_dones).copy(),(1,0))
+
         self.cf_rewards[self.pos] = np.array(cf_rewards).copy()
 
         if isinstance(all_last_obs_traj, np.ndarray):
-            self.all_last_obs_traj = np.transpose(all_last_obs_traj.copy(),(0,2,1,3,4,5))
-            self.all_actions_traj = np.transpose(all_actions_traj.copy(),(0,2,1))
-            self.all_rewards_traj = np.transpose(all_rewards_traj.copy(),(0,2,1))
+            self.all_last_obs_traj.append(np.transpose(all_last_obs_traj.copy(),(0,2,1,3,4,5)))
+            self.all_actions_traj.append(np.transpose(all_actions_traj.copy(),(0,2,1)))
+            self.all_rewards_traj.append(np.transpose(all_rewards_traj.copy(),(0,2,1)))
 
-            self.previous_all_last_obs_traj = np.transpose(prev_all_last_obs_traj.copy(),(0,2,1,3,4,5))
-            self.previous_all_actions_traj = np.transpose(prev_all_actions_traj.copy(),(0,2,1))
-            self.previous_all_rewards_traj = np.transpose(prev_all_rewards_traj.copy(),(0,2,1))
-
+            self.previous_all_last_obs_traj.append(np.transpose(prev_all_last_obs_traj.copy(),(0,2,1,3,4,5)))
+            self.previous_all_actions_traj.append(np.transpose(prev_all_actions_traj.copy(),(0,2,1)))
+            self.previous_all_rewards_traj.append(np.transpose(prev_all_rewards_traj.copy(),(0,2,1)))
+            
+            self.traj_pos += 1
 
         self.pos += 1
         if self.pos == self.buffer_size:
@@ -710,7 +826,7 @@ class RolloutBuffer(BaseBuffer):
         return RolloutBufferSamples(*tuple(map(self.to_torch, data)))
 
 
-    def get_sw_traj(self, batch_size: Optional[int] = None) -> Generator[RolloutBufferSamples, None, None]:
+    def get_sw_traj(self, batch_size: Optional[int] = None, seq_size: Optional[int] = None) -> Generator[RolloutBufferSamples, None, None]:
         assert self.full, ""
         indices = np.random.permutation(self.buffer_size * self.n_envs)
         # Prepare the data
@@ -734,7 +850,12 @@ class RolloutBuffer(BaseBuffer):
                 "previous_all_actions_traj",
                 "previous_all_rewards_traj",
             ]
-
+            self.all_last_obs_traj = np.array(self.all_last_obs_traj)
+            self.all_actions_traj = np.array(self.all_actions_traj)
+            self.all_rewards_traj = np.array(self.all_rewards_traj)
+            self.previous_all_last_obs_traj = np.array(self.previous_all_last_obs_traj)
+            self.previous_all_actions_traj = np.array(self.previous_all_actions_traj)
+            self.previous_all_rewards_traj = np.array(self.previous_all_rewards_traj)
             for tensor in _tensor_names:
                 self.__dict__[tensor] = self.swap_and_flatten(self.__dict__[tensor])
             self.generator_ready = True
@@ -749,8 +870,95 @@ class RolloutBuffer(BaseBuffer):
             start_idx += batch_size
 
     def _get_sw_traj_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> RolloutBufferSamples:
-        index = np.arange(len(batch_inds))   #TODO: the index should be renewed, now it samples the first batch_size of samples everytime
-        
+        index = np.arange(1000)   #TODO: the index should be renewed, now it samples the first batch_size of samples everytime
+        # traj_length = self.all_last_obs_traj.shape[0]
+        traj_length = []
+        if isinstance(self.all_last_obs_traj, list) or isinstance(self.all_last_obs_traj, np.ndarray):
+            for i in range(len(self.all_last_obs_traj)):
+                traj_length.append(self.all_last_obs_traj[i].shape[0])
+                pad_length = 1000 - self.all_last_obs_traj[i].shape[0]
+                prev_pad_length = 1000 - self.previous_all_last_obs_traj[i].shape[0]
+                pad_width_obs = ((0, pad_length), (0, 0), (0, 0), (0, 0), (0, 0))
+                prev_pad_width_obs = ((0, prev_pad_length), (0, 0), (0, 0), (0, 0), (0, 0))
+                pad_width_action  = ((0, pad_length), (0, 0))
+                prev_pad_width_action  = ((0, prev_pad_length), (0, 0))
+
+                self.all_last_obs_traj[i] = np.pad(self.all_last_obs_traj[i], pad_width_obs, 'constant', constant_values=0)
+                self.all_actions_traj[i] = np.pad(self.all_actions_traj[i], pad_width_action, 'constant', constant_values=0)
+                self.all_rewards_traj[i] = np.pad(self.all_rewards_traj[i], pad_width_action, 'constant', constant_values=0)
+                self.previous_all_last_obs_traj[i] = np.pad(self.previous_all_last_obs_traj[i], prev_pad_width_obs, 'constant', constant_values=0)
+                self.previous_all_actions_traj[i] = np.pad(self.previous_all_actions_traj[i], prev_pad_width_action, 'constant', constant_values=0)
+                self.previous_all_rewards_traj[i] = np.pad(self.previous_all_rewards_traj[i], prev_pad_width_action, 'constant', constant_values=0)
+            self.all_last_obs_traj = np.stack(self.all_last_obs_traj)
+            self.all_actions_traj = np.stack(self.all_actions_traj)
+            self.all_rewards_traj = np.stack(self.all_rewards_traj)
+            self.previous_all_last_obs_traj = np.stack(self.previous_all_last_obs_traj)
+            self.previous_all_actions_traj = np.stack(self.previous_all_actions_traj)
+            self.previous_all_rewards_traj = np.stack(self.previous_all_rewards_traj)
+        data = (
+            self.observations[batch_inds],
+            self.actions[batch_inds],
+            self.values[batch_inds].flatten(),
+            self.log_probs[batch_inds].flatten(),
+            self.advantages[batch_inds].flatten(),
+            self.returns[batch_inds].flatten(),
+            self.all_last_obs[batch_inds], 
+            self.all_actions[batch_inds],
+            self.all_rewards[batch_inds],
+            self.cf_rewards[batch_inds],
+            # self.all_last_obs_traj[index], # would not work in len < 1000(coin3, lbf)
+            # self.all_actions_traj[index],
+            # self.all_rewards_traj[index],
+            # self.previous_all_last_obs_traj[index],
+            # self.previous_all_actions_traj[index],
+            # self.previous_all_rewards_traj[index],
+            self.all_last_obs_traj,
+            self.all_actions_traj,
+            self.all_rewards_traj,
+            self.previous_all_last_obs_traj,
+            self.previous_all_actions_traj,
+            self.previous_all_rewards_traj,
+            self.all_dones[index],
+            traj_length,
+        )
+        return RewardTrajsRolloutBufferSamples(*tuple(map(self.to_torch, data)))
+
+    def get_vae_sw(self, batch_size: Optional[int] = None) -> Generator[RolloutBufferSamples, None, None]:
+        assert self.full, ""
+        indices = np.random.permutation(self.buffer_size * self.n_envs)
+        # Prepare the data
+        if not self.generator_ready:
+
+            _tensor_names = [
+                "observations",
+                "actions",
+                "values",
+                "log_probs",
+                "advantages",
+                "returns",
+                "all_last_obs",
+                "all_actions",
+                "all_rewards",
+                "all_next_obs",
+                "all_next_actions",
+                "all_next_rewards",
+                "cf_rewards",
+            ]
+
+            for tensor in _tensor_names:
+                self.__dict__[tensor] = self.swap_and_flatten(self.__dict__[tensor])
+            self.generator_ready = True
+
+        # Return everything, don't create minibatches
+        if batch_size is None:
+            batch_size = self.buffer_size * self.n_envs
+
+        start_idx = 0
+        while start_idx < self.buffer_size * self.n_envs:
+            yield self._get_sw_samples(indices[start_idx : start_idx + batch_size])
+            start_idx += batch_size
+
+    def _get_vae_sw_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> RolloutBufferSamples:
         data = (
             self.observations[batch_inds],
             self.actions[batch_inds],
@@ -761,16 +969,12 @@ class RolloutBuffer(BaseBuffer):
             self.all_last_obs[batch_inds],
             self.all_actions[batch_inds],
             self.all_rewards[batch_inds],
+            self.all_last_obs[batch_inds+1],
+            self.all_actions[batch_inds+1],
+            self.all_rewards[batch_inds+1],
             self.cf_rewards[batch_inds],
-            self.all_last_obs_traj[index], # would not work in len < 1000(coin3, lbf)
-            self.all_actions_traj[index],
-            self.all_rewards_traj[index],
-            self.previous_all_last_obs_traj[index],
-            self.previous_all_actions_traj[index],
-            self.previous_all_rewards_traj[index],
         )
-        return RewardTrajsRolloutBufferSamples(*tuple(map(self.to_torch, data)))
-
+        return TransitionRolloutBufferSamples(*tuple(map(self.to_torch, data)))
 
     def get_sw(self, batch_size: Optional[int] = None) -> Generator[RolloutBufferSamples, None, None]:
         assert self.full, ""
@@ -818,6 +1022,152 @@ class RolloutBuffer(BaseBuffer):
             self.cf_rewards[batch_inds],
         )
         return RewardRolloutBufferSamples(*tuple(map(self.to_torch, data)))
+
+class RecurrentRolloutBuffer(RolloutBuffer):
+    """
+    Rollout buffer that also stores the LSTM cell and hidden states.
+
+    :param buffer_size: Max number of element in the buffer
+    :param observation_space: Observation space
+    :param action_space: Action space
+    :param hidden_state_shape: Shape of the buffer that will collect lstm states
+        (n_steps, lstm.num_layers, n_envs, lstm.hidden_size)
+    :param device: PyTorch device
+    :param gae_lambda: Factor for trade-off of bias vs variance for Generalized Advantage Estimator
+        Equivalent to classic advantage when set to 1.
+    :param gamma: Discount factor
+    :param n_envs: Number of parallel environments
+    """
+
+    def __init__(
+        self,
+        buffer_size: int,
+        observation_space: spaces.Space,
+        action_space: spaces.Space,
+        hidden_state_shape: Tuple[int, int, int, int],
+        device: Union[th.device, str] = "auto",
+        gae_lambda: float = 1,
+        gamma: float = 0.99,
+        n_envs: int = 1,
+    ):
+        self.hidden_state_shape = hidden_state_shape
+        self.seq_start_indices, self.seq_end_indices = None, None
+        super().__init__(buffer_size, observation_space, action_space, device, gae_lambda, gamma, n_envs)
+
+    def reset(self):
+        super().reset()
+        self.hidden_states_pi = np.zeros(self.hidden_state_shape, dtype=np.float32)
+        self.cell_states_pi = np.zeros(self.hidden_state_shape, dtype=np.float32)
+        self.hidden_states_vf = np.zeros(self.hidden_state_shape, dtype=np.float32)
+        self.cell_states_vf = np.zeros(self.hidden_state_shape, dtype=np.float32)
+
+    def add(self, *args, lstm_states: RNNStates, **kwargs) -> None:
+        """
+        :param hidden_states: LSTM cell and hidden state
+        """
+        self.hidden_states_pi[self.pos] = np.array(lstm_states.pi[0].cpu().numpy())
+        self.cell_states_pi[self.pos] = np.array(lstm_states.pi[1].cpu().numpy())
+        self.hidden_states_vf[self.pos] = np.array(lstm_states.vf[0].cpu().numpy())
+        self.cell_states_vf[self.pos] = np.array(lstm_states.vf[1].cpu().numpy())
+
+        super().add(*args, **kwargs)
+
+    def get(self, batch_size: Optional[int] = None) -> Generator[RecurrentRolloutBufferSamples, None, None]:
+        assert self.full, "Rollout buffer must be full before sampling from it"
+
+        # Prepare the data
+        if not self.generator_ready:
+            # hidden_state_shape = (self.n_steps, lstm.num_layers, self.n_envs, lstm.hidden_size)
+            # swap first to (self.n_steps, self.n_envs, lstm.num_layers, lstm.hidden_size)
+            for tensor in ["hidden_states_pi", "cell_states_pi", "hidden_states_vf", "cell_states_vf"]:
+                self.__dict__[tensor] = self.__dict__[tensor].swapaxes(1, 2)
+
+            # flatten but keep the sequence order
+            # 1. (n_steps, n_envs, *tensor_shape) -> (n_envs, n_steps, *tensor_shape)
+            # 2. (n_envs, n_steps, *tensor_shape) -> (n_envs * n_steps, *tensor_shape)
+            for tensor in [
+                "observations",
+                "actions",
+                "values",
+                "log_probs",
+                "advantages",
+                "returns",
+                "hidden_states_pi",
+                "cell_states_pi",
+                "hidden_states_vf",
+                "cell_states_vf",
+                "episode_starts",
+            ]:
+                self.__dict__[tensor] = self.swap_and_flatten(self.__dict__[tensor])
+            self.generator_ready = True
+
+        # Return everything, don't create minibatches
+        if batch_size is None:
+            batch_size = self.buffer_size * self.n_envs
+
+        # Sampling strategy that allows any mini batch size but requires
+        # more complexity and use of padding
+        # Trick to shuffle a bit: keep the sequence order
+        # but split the indices in two
+        split_index = np.random.randint(self.buffer_size * self.n_envs)
+        indices = np.arange(self.buffer_size * self.n_envs)
+        indices = np.concatenate((indices[split_index:], indices[:split_index]))
+
+        env_change = np.zeros(self.buffer_size * self.n_envs).reshape(self.buffer_size, self.n_envs)
+        # Flag first timestep as change of environment
+        env_change[0, :] = 1.0
+        env_change = self.swap_and_flatten(env_change)
+
+        start_idx = 0
+        while start_idx < self.buffer_size * self.n_envs:
+            batch_inds = indices[start_idx : start_idx + batch_size]
+            yield self._get_samples(batch_inds, env_change)
+            start_idx += batch_size
+
+    def _get_samples(
+        self,
+        batch_inds: np.ndarray,
+        env_change: np.ndarray,
+        env: Optional[VecNormalize] = None,
+    ) -> RecurrentRolloutBufferSamples:
+        # Retrieve sequence starts and utility function
+        self.seq_start_indices, self.pad, self.pad_and_flatten = create_sequencers(
+            self.episode_starts[batch_inds], env_change[batch_inds], self.device
+        )
+
+        # Number of sequences
+        n_seq = len(self.seq_start_indices)
+        max_length = self.pad(self.actions[batch_inds]).shape[1]
+        padded_batch_size = n_seq * max_length
+        # We retrieve the lstm hidden states that will allow
+        # to properly initialize the LSTM at the beginning of each sequence
+        lstm_states_pi = (
+            # 1. (n_envs * n_steps, n_layers, dim) -> (batch_size, n_layers, dim)
+            # 2. (batch_size, n_layers, dim)  -> (n_seq, n_layers, dim)
+            # 3. (n_seq, n_layers, dim) -> (n_layers, n_seq, dim)
+            self.hidden_states_pi[batch_inds][self.seq_start_indices].swapaxes(0, 1),
+            self.cell_states_pi[batch_inds][self.seq_start_indices].swapaxes(0, 1),
+        )
+        lstm_states_vf = (
+            # (n_envs * n_steps, n_layers, dim) -> (n_layers, n_seq, dim)
+            self.hidden_states_vf[batch_inds][self.seq_start_indices].swapaxes(0, 1),
+            self.cell_states_vf[batch_inds][self.seq_start_indices].swapaxes(0, 1),
+        )
+        lstm_states_pi = (self.to_torch(lstm_states_pi[0]).contiguous(), self.to_torch(lstm_states_pi[1]).contiguous())
+        lstm_states_vf = (self.to_torch(lstm_states_vf[0]).contiguous(), self.to_torch(lstm_states_vf[1]).contiguous())
+
+        return RecurrentRolloutBufferSamples(
+            # (batch_size, obs_dim) -> (n_seq, max_length, obs_dim) -> (n_seq * max_length, obs_dim)
+            observations=self.pad(self.observations[batch_inds]).reshape((padded_batch_size, *self.obs_shape)),
+            actions=self.pad(self.actions[batch_inds]).reshape((padded_batch_size,) + self.actions.shape[1:]),
+            old_values=self.pad_and_flatten(self.values[batch_inds]),
+            old_log_prob=self.pad_and_flatten(self.log_probs[batch_inds]),
+            advantages=self.pad_and_flatten(self.advantages[batch_inds]),
+            returns=self.pad_and_flatten(self.returns[batch_inds]),
+            lstm_states=RNNStates(lstm_states_pi, lstm_states_vf),
+            episode_starts=self.pad_and_flatten(self.episode_starts[batch_inds]),
+            mask=self.pad_and_flatten(np.ones_like(self.returns[batch_inds])),
+        )
 
 
 class DictReplayBuffer(ReplayBuffer):
@@ -1009,7 +1359,6 @@ class DictRolloutBuffer(RolloutBuffer):
         gae_lambda: float = 1,
         gamma: float = 0.99,
         n_envs: int = 1,
-        num_agents: int=5,
     ):
 
         super(RolloutBuffer, self).__init__(buffer_size, observation_space, action_space, device, n_envs=n_envs)
@@ -1019,20 +1368,15 @@ class DictRolloutBuffer(RolloutBuffer):
         self.gae_lambda = gae_lambda
         self.gamma = gamma
         self.observations, self.actions, self.rewards, self.advantages = None, None, None, None
-        self.all_last_obs, self.all_actions, self.all_rewards, self.cf_rewards = None, None, None, None
         self.returns, self.episode_starts, self.values, self.log_probs = None, None, None, None
         self.generator_ready = False
-        self.agent_number = num_agents
         self.reset()
 
     def reset(self) -> None:
         assert isinstance(self.obs_shape, dict), "DictRolloutBuffer must be used with Dict obs space only"
         self.observations = {}
-        self.all_last_obs = [{}] * self.agent_number
         for key, obs_input_shape in self.obs_shape.items():
             self.observations[key] = np.zeros((self.buffer_size, self.n_envs) + obs_input_shape, dtype=np.float32)
-            for agent_number in range(self.agent_number):
-                self.all_last_obs[agent_number][key] = np.zeros((self.buffer_size, self.n_envs, self.agent_number) + obs_input_shape, dtype=np.float32)
         self.actions = np.zeros((self.buffer_size, self.n_envs, self.action_dim), dtype=np.float32)
         self.rewards = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.returns = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
@@ -1041,12 +1385,6 @@ class DictRolloutBuffer(RolloutBuffer):
         self.log_probs = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.advantages = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.generator_ready = False
-        
-        self.all_actions = np.zeros((self.buffer_size, self.n_envs, self.agent_number, self.action_dim), dtype=np.float32)
-        self.all_rewards = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
-        self.cf_rewards = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
-        
-        
         super(RolloutBuffer, self).reset()
 
     def add(
@@ -1088,116 +1426,6 @@ class DictRolloutBuffer(RolloutBuffer):
         self.pos += 1
         if self.pos == self.buffer_size:
             self.full = True
-
-    def add_sw(
-        self,
-        obs: Dict[str, np.ndarray],
-        action: np.ndarray,
-        reward: np.ndarray,
-        episode_start: np.ndarray,
-        value: th.Tensor,
-        log_prob: th.Tensor,
-        all_last_obs: Dict[str, np.ndarray],
-        all_actions: np.ndarray,
-        all_rewards: np.ndarray,
-        cf_rewards: np.ndarray,
-    ) -> None:  # pytype: disable=signature-mismatch
-        """
-        :param obs: Observation
-        :param action: Action
-        :param reward:
-        :param episode_start: Start of episode signal.
-        :param value: estimated value of the current state
-            following the current policy.
-        :param log_prob: log probability of the action
-            following the current policy.
-        """
-        if len(log_prob.shape) == 0:
-            # Reshape 0-d tensor to avoid error
-            log_prob = log_prob.reshape(-1, 1)
-
-        for key in self.observations.keys():
-            obs_ = np.array(obs[key]).copy()
-            all_obs_ = []
-            for agent_number in range(self.agent_number):
-                all_obs_.append(np.array(all_last_obs[agent_number][key]).copy())
-            # Reshape needed when using multiple envs with discrete observations
-            # as numpy cannot broadcast (n_discrete,) to (n_discrete, 1)
-            if isinstance(self.observation_space.spaces[key], spaces.Discrete):
-                obs_ = obs_.reshape((self.n_envs,) + self.obs_shape[key])
-                all_obs_ = np.array(all_obs_).reshape((self.n_envs, self.agent_number) + self.obs_shape[key])
-            self.observations[key][self.pos] = obs_
-            for agent_number in range(self.agent_number):
-                if key == 'curr_obs':
-                    self.all_last_obs[agent_number][key][self.pos] = np.transpose(np.array(all_obs_),(1,0,2,3,4))
-                elif key == 'vector_state':
-                    self.all_last_obs[agent_number][key][self.pos] = np.transpose(np.array(all_obs_),(1,0,2))
-        for key in self.observations.keys():
-            for agent_number in range(self.agent_number):
-                self.all_last_obs[agent_number][key] = self.all_last_obs[agent_number][key].squeeze()
-        self.actions[self.pos] = np.array(action).copy()
-        self.rewards[self.pos] = np.array(reward).copy()
-        self.episode_starts[self.pos] = np.array(episode_start).copy()
-        self.values[self.pos] = value.clone().cpu().numpy().flatten()
-        self.log_probs[self.pos] = log_prob.clone().cpu().numpy()
-        
-        self.all_actions[self.pos] = np.transpose(np.array(all_actions).copy(),(1,0,2))
-        self.all_rewards[self.pos] = np.transpose(np.array(all_rewards).copy(),(1,0))
-        self.cf_rewards[self.pos] = np.array(cf_rewards).copy()
-        
-        self.pos += 1
-        if self.pos == self.buffer_size:
-            self.full = True
-
-
-
-    def get_sw(self, batch_size: Optional[int] = None) -> Generator[DictRolloutBufferSamples, None, None]:
-        assert self.full, ""
-        indices = np.random.permutation(self.buffer_size * self.n_envs)
-        # Prepare the data
-        if not self.generator_ready:
-
-            for key, obs in self.observations.items():
-                self.observations[key] = self.swap_and_flatten(obs)
-            all_last_obs_list = copy.deepcopy(self.all_last_obs)
-            for agent_number in range(self.agent_number):
-                for key in self.all_last_obs[agent_number].keys():
-                    obs_list = all_last_obs_list[agent_number][key].reshape(-1,*all_last_obs_list[agent_number][key].shape[2:])
-                    self.all_last_obs[agent_number][key] = obs_list[:,agent_number]
-                #TODO:Might be wrong in vector state and online branch, Here is right, need to fix the other branch
-            _tensor_names = ["actions", "values", "log_probs", "advantages", "returns", "all_actions", "all_rewards", "cf_rewards"]
-
-            for tensor in _tensor_names:
-                self.__dict__[tensor] = self.swap_and_flatten(self.__dict__[tensor])
-            self.generator_ready = True
-
-        # Return everything, don't create minibatches
-        if batch_size is None:
-            batch_size = self.buffer_size * self.n_envs
-
-        start_idx = 0
-        while start_idx < self.buffer_size * self.n_envs:
-            yield self._get_sw_samples(indices[start_idx : start_idx + batch_size])
-            start_idx += batch_size
-
-    def _get_sw_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> DictRolloutBufferSamples:
-        all_last_obs_list = []
-        for agent_number in range(self.agent_number):
-            all_last_obs_list.append({key: self.to_torch(all_last_obs[batch_inds]) for (key, all_last_obs) in self.all_last_obs[agent_number].items()})
-        return RewardDictRolloutBufferSamples(
-            observations={key: self.to_torch(obs[batch_inds]) for (key, obs) in self.observations.items()},
-            all_last_obs=all_last_obs_list,
-            actions=self.to_torch(self.actions[batch_inds]),
-            old_values=self.to_torch(self.values[batch_inds].flatten()),
-            old_log_prob=self.to_torch(self.log_probs[batch_inds].flatten()),
-            advantages=self.to_torch(self.advantages[batch_inds].flatten()),
-            returns=self.to_torch(self.returns[batch_inds].flatten()),
-            all_actions=self.to_torch(self.all_actions[batch_inds]),
-            all_rewards=self.to_torch(self.all_rewards[batch_inds]),
-            cf_rewards=self.to_torch(self.cf_rewards[batch_inds]),
-        )
-
-
 
     def get(self, batch_size: Optional[int] = None) -> Generator[DictRolloutBufferSamples, None, None]:
         assert self.full, ""

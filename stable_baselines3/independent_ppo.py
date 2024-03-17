@@ -167,7 +167,7 @@ class IndependentPPO(OnPolicyAlgorithm):
             policy._last_episode_starts = np.ones((self.num_envs,), dtype=bool)
 
         while num_timesteps < total_timesteps:
-            if self.enable_trajs_learning:
+            if self.enable_trajs_learning or self.model == 'vae':
                 last_obs = self.collect_trajs_rollouts(last_obs, callbacks,num_timesteps)
             else:
                 if self.add_spawn_prob:
