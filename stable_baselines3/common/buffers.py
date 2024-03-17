@@ -73,9 +73,6 @@ class BaseBuffer(ABC):
         :param arr:
         :return:
         """
-        shape = arr.shape
-        if len(shape) < 3:
-            shape = shape + (1,)
         if np.unique(np.array([len(item) for item in arr])).shape[0] > 1: # for the traj data
             swap_arr = []
             shape = arr[0].shape
@@ -83,6 +80,10 @@ class BaseBuffer(ABC):
                 shape = arr[i].shape
                 arr[i] = arr[i].swapaxes(0, 1).reshape(shape[0] * shape[1], *shape[2:])
             return arr
+        shape = arr.shape
+        if len(shape) < 3:
+            shape = shape + (1,)
+
         return arr.swapaxes(0, 1).reshape(shape[0] * shape[1], *shape[2:])
 
     def size(self) -> int:
