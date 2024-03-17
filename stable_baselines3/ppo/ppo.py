@@ -562,7 +562,7 @@ class PPO(OnPolicyAlgorithm):
                     vae_loss = self.policy.vae_net.loss_function(self.policy.vae_net(stacked_obs,all_actions_one_hot,all_rewards)[0], stacked_obs, self.policy.vae_net(stacked_obs,all_actions_one_hot,all_rewards)[1], self.policy.vae_net(stacked_obs,all_actions_one_hot,all_rewards)[2])
 
                     # Transition Loss
-                    # set all dones to 0
+                    # set all dones to 0, solve cpu and gpu problem
                     prev_obs_traj = prev_obs_traj.to(self.device)
                     all_obs_traj = all_obs_traj.to(self.device)
                     all_actions_traj = all_actions_traj.to(self.device)
@@ -570,8 +570,16 @@ class PPO(OnPolicyAlgorithm):
                     all_rewards_traj = all_rewards_traj.to(self.device)
                     prev_rewards_traj = prev_rewards_traj.to(self.device)
 
+                    # preprocessing
                     all_actions_traj_one_hot = eye_matrix[all_actions_traj.to(int)]
-                    all_actions_traj_one_hot = all_actions_traj_one_hot.reshape(all_actions_traj_one_hot.shape[0], all_actions_traj_one_hot.shape[1], -1)
+                    all_actions_traj_one_hot = all_actions_traj_one_hot.permute(2,0,1,3,4)
+
+                    all_actions_traj_one_hot = all_actions_traj_one_hot.reshape(all_actions_traj_one_hot.shape[0]*all_actions_traj_one_hot.shape[1], seq_length, -1)
+                    all_actions_traj_one_hot = all_actions_traj_one_hot.permute(1,0,2)
+
+                    all_rewards_traj = all_rewards_traj.permute(2,0,1,3)
+                    all_rewards_traj = all_rewards_traj.reshape(all_rewards_traj.shape[0]*all_rewards_traj.shape[1], seq_length, -1)
+                    
                     latent_obs_traj, latent_next_obs_traj = self.policy.to_latent(prev_obs_traj,all_obs_traj,all_actions_traj_one_hot,all_rewards_traj,self.batch_size,seq_length) #TODO: check the to_latent function, I did some significant changes in here
                     transition_loss = self.policy.get_loss(latent_obs_traj, all_actions_traj, all_rewards_traj, all_dones,latent_next_obs_traj, include_reward = True)
 
