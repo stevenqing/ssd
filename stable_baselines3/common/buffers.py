@@ -850,12 +850,12 @@ class RolloutBuffer(BaseBuffer):
                 "previous_all_actions_traj",
                 "previous_all_rewards_traj",
             ]
-            self.all_last_obs_traj = np.array(self.all_last_obs_traj)
-            self.all_actions_traj = np.array(self.all_actions_traj)
-            self.all_rewards_traj = np.array(self.all_rewards_traj)
-            self.previous_all_last_obs_traj = np.array(self.previous_all_last_obs_traj)
-            self.previous_all_actions_traj = np.array(self.previous_all_actions_traj)
-            self.previous_all_rewards_traj = np.array(self.previous_all_rewards_traj)
+            # self.all_last_obs_traj = np.array(self.all_last_obs_traj)
+            # self.all_actions_traj = np.array(self.all_actions_traj)
+            # self.all_rewards_traj = np.array(self.all_rewards_traj)
+            # self.previous_all_last_obs_traj = np.array(self.previous_all_last_obs_traj)
+            # self.previous_all_actions_traj = np.array(self.previous_all_actions_traj)
+            # self.previous_all_rewards_traj = np.array(self.previous_all_rewards_traj)
             for tensor in _tensor_names:
                 self.__dict__[tensor] = self.swap_and_flatten(self.__dict__[tensor])
             self.generator_ready = True
