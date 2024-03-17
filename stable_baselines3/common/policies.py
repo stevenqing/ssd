@@ -1155,15 +1155,15 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
                                         latent_next_obs]]
         mus, sigmas, logpi, rs, ds = self.transition_net(action, latent_obs)
         gmm = self.transition_net.gmm_loss(latent_next_obs, mus, sigmas, logpi)
-        bce = F.binary_cross_entropy_with_logits(ds, terminal)
+        # bce = F.binary_cross_entropy_with_logits(ds, terminal)
         if include_reward:
             mse = F.mse_loss(rs, reward)
             scale = 128 + 2
         else:
             mse = 0
             scale = 128 + 1
-        loss = (gmm + bce + mse) / scale
-        return dict(gmm=gmm, bce=bce, mse=mse, loss=loss)
+        loss = (gmm + mse) / scale
+        return dict(gmm=gmm, mse=mse, loss=loss)
     
     def forward(self, obs: th.Tensor, deterministic: bool = False) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
         """

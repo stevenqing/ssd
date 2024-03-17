@@ -463,30 +463,31 @@ class PPO(OnPolicyAlgorithm):
                     traj_length = rollout_data.traj_length
 
                     # Randomly sample a sequence index
-                    all_obs_traj = th.zeros_like(seq_length,self.batch_size,self.num_agents,15,15,18)
-                    all_actions_traj = th.zeros_like(seq_length,self.batch_size,self.num_agents)
-                    all_rewards_traj = th.zeros_like(seq_length,self.batch_size,self.num_agents)
+                    all_obs_traj = th.zeros(self.batch_size,seq_length,self.num_agents,15,15,18)
+                    prev_obs_traj = th.zeros(self.batch_size,seq_length,self.num_agents,15,15,18)
+                    all_actions_traj = th.zeros(self.batch_size,seq_length,self.num_agents)
+                    prev_actions_traj = th.zeros(self.batch_size,seq_length,self.num_agents)
+                    all_rewards_traj = th.zeros(self.batch_size,seq_length,self.num_agents)
+                    prev_rewards_traj = th.zeros(self.batch_size,seq_length,self.num_agents)
 
                     for i in range(self.batch_size):
-                        for j in range(seq_length):
                             # 随机选择一个维度
-                            dim = th.randint(0, 6, (1,)).item()
+                            dim = th.randint(0, len(traj_length), (1,)).item()
                             # 确定这个维度的最大有效起始索引
-                            max_start = traj_length[dim] - 32
+                            max_start = traj_length[dim] - seq_length
                             # 随机选择一个起始索引，这里考虑序列长度为1，因为我们逐个时间点采样
                             start_idx = th.randint(0, max_start, (1,)).item()
                             # 采样
-                            all_obs_traj[i, j, :] = all_obs_traj[dim, start_idx, :]
-                    all_obs_traj = rollout_data.all_obs_traj[seq_index].permute(1,0,2,3,4,5)
-                    prev_obs_traj = rollout_data.prev_obs_traj[seq_index].permute(1,0,2,3,4,5)
-                    all_actions_traj = rollout_data.all_action_traj[seq_index].permute(1,0,2)
-                    prev_actions_traj = rollout_data.prev_action_traj[seq_index].permute(1,0,2)
-                    all_rewards_traj = rollout_data.all_rewards_traj[seq_index].permute(1,0,2)
-                    prev_rewards_traj = rollout_data.prev_rewards_traj[seq_index].permute(1,0,2)
+                            all_obs_traj[i,:] = rollout_data.all_obs_traj[dim, start_idx:start_idx+seq_length, :]
+                            all_actions_traj[i,:] = rollout_data.all_action_traj[dim, start_idx:start_idx+seq_length, :]
+                            all_rewards_traj[i,:] = rollout_data.all_rewards_traj[dim, start_idx:start_idx+seq_length, :]
+                            prev_obs_traj[i,:] = rollout_data.prev_obs_traj[dim, start_idx:start_idx+seq_length, :]
+                            prev_actions_traj[i,:] = rollout_data.prev_action_traj[dim, start_idx:start_idx+seq_length, :]
+                            prev_rewards_traj[i,:] = rollout_data.prev_rewards_traj[dim, start_idx:start_idx+seq_length, :]
 
-                    all_dones_traj = rollout_data.all_dones[seq_index].squeeze(2)
-                    all_dones_traj,_ = th.max(all_dones_traj,-1)
-                    all_dones_traj = th.permute(all_dones_traj,(1,0))
+                    # all_dones_traj = rollout_data.all_dones[seq_index].squeeze(2)
+                    # all_dones_traj,_ = th.max(all_dones_traj,-1)
+                    # all_dones_traj = th.permute(all_dones_traj,(1,0))
 
                     prev_obs_traj = th.permute(prev_obs_traj,(0,1,2,5,3,4))
                     all_obs_traj = th.permute(all_obs_traj,(0,1,2,5,3,4))
@@ -557,10 +558,11 @@ class PPO(OnPolicyAlgorithm):
                     vae_loss = self.policy.vae_net.loss_function(self.policy.vae_net(stacked_obs,all_actions_one_hot,all_rewards)[0], stacked_obs, self.policy.vae_net(stacked_obs,all_actions_one_hot,all_rewards)[1], self.policy.vae_net(stacked_obs,all_actions_one_hot,all_rewards)[2])
 
                     # Transition Loss
-                    all_actions_traj_one_hot = eye_matrix[all_actions_traj]
+                    # set all dones to 0
+                    all_actions_traj_one_hot = eye_matrix[all_actions_traj.to(int)]
                     all_actions_traj_one_hot = all_actions_traj_one_hot.reshape(all_actions_traj_one_hot.shape[0], all_actions_traj_one_hot.shape[1], -1)
                     latent_obs_traj, latent_next_obs_traj = self.policy.to_latent(prev_obs_traj,all_obs_traj,all_actions_traj_one_hot,all_rewards_traj,self.batch_size,seq_length) #TODO: check the to_latent function, I did some significant changes in here
-                    transition_loss = self.policy.get_loss(latent_obs_traj, all_actions_traj, all_rewards_traj, all_dones_traj,latent_next_obs_traj, include_reward = True)
+                    transition_loss = self.policy.get_loss(latent_obs_traj, all_actions_traj, all_rewards_traj, all_dones,latent_next_obs_traj, include_reward = True)
 
                     
                     loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + vae_loss + transition_loss['loss']
