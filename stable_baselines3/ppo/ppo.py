@@ -579,7 +579,7 @@ class PPO(OnPolicyAlgorithm):
 
                     all_rewards_traj = all_rewards_traj.permute(2,0,1,3)
                     all_rewards_traj = all_rewards_traj.reshape(all_rewards_traj.shape[0]*all_rewards_traj.shape[1], seq_length, -1)
-                    
+                    all_rewards_traj = all_rewards_traj.permute(1,0,2)
                     latent_obs_traj, latent_next_obs_traj = self.policy.to_latent(prev_obs_traj,all_obs_traj,all_actions_traj_one_hot,all_rewards_traj,self.batch_size,seq_length) #TODO: check the to_latent function, I did some significant changes in here
                     transition_loss = self.policy.get_loss(latent_obs_traj, all_actions_traj, all_rewards_traj, all_dones,latent_next_obs_traj, include_reward = True)
 
