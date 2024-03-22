@@ -381,7 +381,7 @@ class RolloutBuffer(BaseBuffer):
         self.observations, self.actions, self.rewards, self.advantages = None, None, None, None
         self.all_last_obs, self.all_actions, self.all_rewards, self.cf_rewards, self.inequity_rewards = None, None, None, None, None
         self.all_last_obs_traj, self.all_actions_traj, self.all_rewards_traj = None, None, None
-        self.previous_all_last_obs_traj, self.previous_all_actions_traj, self.previous_all_rewards_traj = None, None, None
+        # self.previous_all_last_obs_traj, self.previous_all_actions_traj, self.previous_all_rewards_traj = None, None, None
         self.returns, self.episode_starts, self.values, self.log_probs = None, None, None, None
         self.all_dones = None
         self.generator_ready = False
@@ -411,9 +411,9 @@ class RolloutBuffer(BaseBuffer):
         self.all_last_obs_traj = []
         self.all_actions_traj = []
         self.all_rewards_traj = []
-        self.previous_all_last_obs_traj = self.all_last_obs_traj.copy()
-        self.previous_all_actions_traj = self.all_actions_traj.copy()
-        self.previous_all_rewards_traj = self.all_rewards_traj.copy()
+        # self.previous_all_last_obs_traj = self.all_last_obs_traj.copy()
+        # self.previous_all_actions_traj = self.all_actions_traj.copy()
+        # self.previous_all_rewards_traj = self.all_rewards_traj.copy()
         self.env_id = 0
 
         super().reset()
@@ -685,9 +685,9 @@ class RolloutBuffer(BaseBuffer):
         all_last_obs_traj: np.ndarray,
         all_actions_traj: np.ndarray,
         all_rewards_traj: np.ndarray,
-        prev_all_last_obs_traj: np.ndarray,
-        prev_all_actions_traj: np.ndarray,
-        prev_all_rewards_traj: np.ndarray,
+        # prev_all_last_obs_traj: np.ndarray,
+        # prev_all_actions_traj: np.ndarray,
+        # prev_all_rewards_traj: np.ndarray,
         all_dones: np.ndarray,
     ) -> None:
         """
@@ -735,9 +735,9 @@ class RolloutBuffer(BaseBuffer):
             self.all_actions_traj.append(np.transpose(all_actions_traj.copy(),(0,2,1)))
             self.all_rewards_traj.append(np.transpose(all_rewards_traj.copy(),(0,2,1)))
 
-            self.previous_all_last_obs_traj.append(np.transpose(prev_all_last_obs_traj.copy(),(0,2,1,3,4,5)))
-            self.previous_all_actions_traj.append(np.transpose(prev_all_actions_traj.copy(),(0,2,1)))
-            self.previous_all_rewards_traj.append(np.transpose(prev_all_rewards_traj.copy(),(0,2,1)))
+            # self.previous_all_last_obs_traj.append(np.transpose(prev_all_last_obs_traj.copy(),(0,2,1,3,4,5)))
+            # self.previous_all_actions_traj.append(np.transpose(prev_all_actions_traj.copy(),(0,2,1)))
+            # self.previous_all_rewards_traj.append(np.transpose(prev_all_rewards_traj.copy(),(0,2,1)))
             
             self.traj_pos += 1
 
@@ -847,16 +847,16 @@ class RolloutBuffer(BaseBuffer):
                 "all_last_obs_traj",
                 "all_actions_traj",
                 "all_rewards_traj",
-                "previous_all_last_obs_traj",
-                "previous_all_actions_traj",
-                "previous_all_rewards_traj",
+                # "previous_all_last_obs_traj",
+                # "previous_all_actions_traj",
+                # "previous_all_rewards_traj",
             ]
             self.all_last_obs_traj = np.array(self.all_last_obs_traj,dtype=object)
             self.all_actions_traj = np.array(self.all_actions_traj,dtype=object)
             self.all_rewards_traj = np.array(self.all_rewards_traj,dtype=object)
-            self.previous_all_last_obs_traj = np.array(self.previous_all_last_obs_traj,dtype=object)
-            self.previous_all_actions_traj = np.array(self.previous_all_actions_traj,dtype=object)
-            self.previous_all_rewards_traj = np.array(self.previous_all_rewards_traj,dtype=object)
+            # self.previous_all_last_obs_traj = np.array(self.previous_all_last_obs_traj,dtype=object)
+            # self.previous_all_actions_traj = np.array(self.previous_all_actions_traj,dtype=object)
+            # self.previous_all_rewards_traj = np.array(self.previous_all_rewards_traj,dtype=object)
             for tensor in _tensor_names:
                 self.__dict__[tensor] = self.swap_and_flatten(self.__dict__[tensor])
             self.generator_ready = True
@@ -877,31 +877,28 @@ class RolloutBuffer(BaseBuffer):
         all_last_obs_traj = self.all_last_obs_traj.copy()
         all_actions_traj = self.all_actions_traj.copy()
         all_rewards_traj = self.all_rewards_traj.copy()
-        previous_all_last_obs_traj = self.previous_all_last_obs_traj.copy()
-        previous_all_actions_traj = self.previous_all_actions_traj.copy()
-        previous_all_rewards_traj = self.previous_all_rewards_traj.copy()
+        # previous_all_last_obs_traj = self.previous_all_last_obs_traj.copy()
+        # previous_all_actions_traj = self.previous_all_actions_traj.copy()
+        # previous_all_rewards_traj = self.previous_all_rewards_traj.copy()
         if isinstance(self.all_last_obs_traj, list) or isinstance(self.all_last_obs_traj, np.ndarray):
             for i in range(len(self.all_last_obs_traj)):
                 traj_length.append(self.all_last_obs_traj[i].shape[0])
                 pad_length = 1000 - self.all_last_obs_traj[i].shape[0]
-                prev_pad_length = 1000 - self.previous_all_last_obs_traj[i].shape[0]
                 pad_width_obs = ((0, pad_length), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0))
-                prev_pad_width_obs = ((0, prev_pad_length), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0))
                 pad_width_action  = ((0, pad_length), (0, 0), (0, 0))
-                prev_pad_width_action  = ((0, prev_pad_length), (0, 0), (0, 0))
 
                 all_last_obs_traj[i] = np.pad(self.all_last_obs_traj[i], pad_width_obs, 'constant', constant_values=0)
                 all_actions_traj[i] = np.pad(self.all_actions_traj[i], pad_width_action, 'constant', constant_values=0)
                 all_rewards_traj[i] = np.pad(self.all_rewards_traj[i], pad_width_action, 'constant', constant_values=0)
-                previous_all_last_obs_traj[i] = np.pad(self.previous_all_last_obs_traj[i], prev_pad_width_obs, 'constant', constant_values=0)
-                previous_all_actions_traj[i] = np.pad(self.previous_all_actions_traj[i], prev_pad_width_action, 'constant', constant_values=0)
-                previous_all_rewards_traj[i] = np.pad(self.previous_all_rewards_traj[i], prev_pad_width_action, 'constant', constant_values=0)
+                # previous_all_last_obs_traj[i] = np.pad(self.previous_all_last_obs_traj[i], prev_pad_width_obs, 'constant', constant_values=0)
+                # previous_all_actions_traj[i] = np.pad(self.previous_all_actions_traj[i], prev_pad_width_action, 'constant', constant_values=0)
+                # previous_all_rewards_traj[i] = np.pad(self.previous_all_rewards_traj[i], prev_pad_width_action, 'constant', constant_values=0)
             all_last_obs_traj = np.stack(all_last_obs_traj)
             all_actions_traj = np.stack(all_actions_traj)
             all_rewards_traj = np.stack(all_rewards_traj)
-            previous_all_last_obs_traj = np.stack(previous_all_last_obs_traj)
-            previous_all_actions_traj = np.stack(previous_all_actions_traj)
-            previous_all_rewards_traj = np.stack(previous_all_rewards_traj)
+            # previous_all_last_obs_traj = np.stack(previous_all_last_obs_traj)
+            # previous_all_actions_traj = np.stack(previous_all_actions_traj)
+            # previous_all_rewards_traj = np.stack(previous_all_rewards_traj)
         data = (
             self.observations[batch_inds],
             self.actions[batch_inds],
@@ -922,9 +919,9 @@ class RolloutBuffer(BaseBuffer):
             all_last_obs_traj,
             all_actions_traj,
             all_rewards_traj,
-            previous_all_last_obs_traj,
-            previous_all_actions_traj,
-            previous_all_rewards_traj,
+            # previous_all_last_obs_traj,
+            # previous_all_actions_traj,
+            # previous_all_rewards_traj,
             self.all_dones[index],
             traj_length,
         )

@@ -96,9 +96,9 @@ class RewardTrajsRolloutBufferSamples(NamedTuple):
     all_obs_traj: list
     all_action_traj: list
     all_rewards_traj: list
-    prev_obs_traj: list
-    prev_action_traj: list
-    prev_rewards_traj: list
+    # prev_obs_traj: list
+    # prev_action_traj: list
+    # prev_rewards_traj: list
     all_dones: th.Tensor
     traj_length: list
 

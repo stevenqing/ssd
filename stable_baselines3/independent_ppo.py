@@ -104,9 +104,9 @@ class IndependentPPO(OnPolicyAlgorithm):
             )
             for polid in range(self.num_agents)
         ]
-        self.previous_all_last_obs_traj = None
-        self.previous_all_actions_traj = None
-        self.previous_all_rewards_traj = None
+        # self.previous_all_last_obs_traj = None
+        # self.previous_all_actions_traj = None
+        # self.previous_all_rewards_traj = None
         self.prev_latent_state = None
     def learn(
         self,
@@ -315,10 +315,10 @@ class IndependentPPO(OnPolicyAlgorithm):
                     ]
                 )
                 all_rewards_trajs.append(all_rewards)
-                if self.previous_all_last_obs_traj is None or self.previous_all_actions_traj is None or self.previous_all_rewards_traj is None:
-                    self.previous_all_last_obs_traj = np.array(all_obs_trajs)
-                    self.previous_all_actions_traj = np.array(all_actions_trajs)
-                    self.previous_all_rewards_traj = np.array(all_rewards_trajs) 
+                # if self.previous_all_last_obs_traj is None or self.previous_all_actions_traj is None or self.previous_all_rewards_traj is None:
+                #     self.previous_all_last_obs_traj = np.array(all_obs_trajs)
+                #     self.previous_all_actions_traj = np.array(all_actions_trajs)
+                #     self.previous_all_rewards_traj = np.array(all_rewards_trajs) 
                 all_obs_trajs,all_actions_trajs,all_rewards_trajs = np.array(all_obs_trajs),np.array(all_actions_trajs),np.array(all_rewards_trajs)
             else:
                 all_obs_trajs.append(all_last_obs)
@@ -405,9 +405,9 @@ class IndependentPPO(OnPolicyAlgorithm):
                         all_obs_trajs,
                         all_actions_trajs,
                         all_rewards_trajs,
-                        self.previous_all_last_obs_traj,
-                        self.previous_all_actions_traj,
-                        self.previous_all_rewards_traj,
+                        # self.previous_all_last_obs_traj,
+                        # self.previous_all_actions_traj,
+                        # self.previous_all_rewards_traj,
                         all_dones,
                     )
                 else:
@@ -443,9 +443,9 @@ class IndependentPPO(OnPolicyAlgorithm):
                                 all_obs_trajs,
                                 all_actions_trajs,
                                 all_rewards_trajs,
-                                self.previous_all_last_obs_traj,
-                                self.previous_all_actions_traj,
-                                self.previous_all_rewards_traj,
+                                # self.previous_all_last_obs_traj,
+                                # self.previous_all_actions_traj,
+                                # self.previous_all_rewards_traj,
                             )
                         else:   
                             policy.rollout_buffer.add_sw(
@@ -461,9 +461,9 @@ class IndependentPPO(OnPolicyAlgorithm):
                                 cf_rewards,
                             )
             if isinstance(all_obs_trajs, np.ndarray):
-                self.previous_all_last_obs_traj = all_obs_trajs
-                self.previous_all_actions_traj = all_actions_trajs
-                self.previous_all_rewards_traj = all_rewards_trajs
+                # self.previous_all_last_obs_traj = all_obs_trajs
+                # self.previous_all_actions_traj = all_actions_trajs
+                # self.previous_all_rewards_traj = all_rewards_trajs
                 all_obs_trajs,all_actions_trajs,all_rewards_trajs = [],[],[]
 
             all_last_obs = all_obs

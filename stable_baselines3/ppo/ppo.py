@@ -455,7 +455,7 @@ class PPO(OnPolicyAlgorithm):
             elif self.model == 'vae':
                 for rollout_data in self.rollout_buffer.get_sw_traj(self.batch_size):
                     self.timestep += 1
-                    seq_length = 32
+                    seq_length = 8
                     all_last_obs = rollout_data.all_last_obs
                     all_rewards = rollout_data.all_rewards
                     all_dones = rollout_data.all_dones
@@ -471,21 +471,24 @@ class PPO(OnPolicyAlgorithm):
                     prev_rewards_traj = th.zeros(self.batch_size,seq_length,self.n_envs,self.num_agents)
 
 
-                    traj_length = [item for item in traj_length_original if item > seq_length+1]
+                    traj_length = [item for item in traj_length_original if item > seq_length+2]
                     for i in range(self.batch_size):
                             # 随机选择一个维度
                             dim = th.randint(0, len(traj_length), (1,)).item()
                             # 确定这个维度的最大有效起始索引
                             max_start = traj_length[dim] - seq_length
                             # 随机选择一个起始索引，这里考虑序列长度为1，因为我们逐个时间点采样
-                            start_idx = th.randint(0, max_start, (1,)).item()
+                            start_idx = th.randint(1, max_start, (1,)).item()
                             # 采样
                             all_obs_traj[i,:] = rollout_data.all_obs_traj[dim, start_idx:start_idx+seq_length, :]
                             all_actions_traj[i,:] = rollout_data.all_action_traj[dim, start_idx:start_idx+seq_length, :]
                             all_rewards_traj[i,:] = rollout_data.all_rewards_traj[dim, start_idx:start_idx+seq_length, :]
-                            prev_obs_traj[i,:] = rollout_data.prev_obs_traj[dim, start_idx:start_idx+seq_length, :]
-                            prev_actions_traj[i,:] = rollout_data.prev_action_traj[dim, start_idx:start_idx+seq_length, :]
-                            prev_rewards_traj[i,:] = rollout_data.prev_rewards_traj[dim, start_idx:start_idx+seq_length, :]
+                            prev_obs_traj[i,:] = rollout_data.all_obs_traj[dim, start_idx-1:start_idx+seq_length-1, :]
+                            prev_actions_traj[i,:] = rollout_data.all_action_traj[dim, start_idx-1:start_idx+seq_length-1, :]
+                            prev_rewards_traj[i,:] = rollout_data.all_rewards_traj[dim, start_idx-1:start_idx+seq_length-1, :]
+                            # prev_obs_traj[i,:] = rollout_data.prev_obs_traj[dim, start_idx:start_idx+seq_length, :]
+                            # prev_actions_traj[i,:] = rollout_data.prev_action_traj[dim, start_idx:start_idx+seq_length, :]
+                            # prev_rewards_traj[i,:] = rollout_data.prev_rewards_traj[dim, start_idx:start_idx+seq_length, :]
 
                     # all_dones_traj = rollout_data.all_dones[seq_index].squeeze(2)
                     # all_dones_traj,_ = th.max(all_dones_traj,-1)
