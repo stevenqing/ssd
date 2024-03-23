@@ -359,7 +359,7 @@ def main(args):
             env_name=env_name,
             add_spawn_prob=add_spawn_prob
         )
-    else:
+    elif model == 'causal' or model == 'team':
         model = IndependentPPO(
             "RewardPolicy",
             num_agents=num_agents,
@@ -382,6 +382,32 @@ def main(args):
             enable_trajs_learning=enable_trajs_learning,
             env_name=env_name,
             add_spawn_prob=add_spawn_prob
+        )
+    elif model == 'vae':
+        model = IndependentPPO(
+            "TransitionPolicy",
+            num_agents=num_agents,
+            env=env,
+            learning_rate=lr,
+            n_steps=rollout_len,
+            batch_size=batch_size,
+            n_epochs=n_epochs,
+            gamma=gamma,
+            gae_lambda=gae_lambda,
+            ent_coef=ent_coef,
+            max_grad_norm=grad_clip,
+            target_kl=target_kl,
+            policy_kwargs=policy_kwargs,
+            tensorboard_log=tensorboard_log,
+            verbose=verbose,
+            alpha=alpha,
+            beta=beta,
+            model=args.model,
+            using_reward_timestep=using_reward_timestep,
+            enable_trajs_learning=enable_trajs_learning,
+            env_name=env_name,
+            use_collective_reward=use_collective_reward,
+            inequity_averse_reward=inequity_averse_reward,
         )
     model.learn(total_timesteps=total_timesteps)
 
