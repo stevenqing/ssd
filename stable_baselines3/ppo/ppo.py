@@ -10,7 +10,7 @@ from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
 from stable_baselines3.common.policies import ActorCriticCnnPolicy, ActorCriticPolicy, BasePolicy, MultiInputActorCriticPolicy, RewardActorCriticPolicy, TransitionActorCriticPolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import explained_variance, get_schedule_fn
-
+import time
 SelfPPO = TypeVar("SelfPPO", bound="PPO")
 
 
@@ -472,6 +472,7 @@ class PPO(OnPolicyAlgorithm):
 
 
                     traj_length = [item for item in traj_length_original if item > seq_length+2]
+                    initial_time = time.time()
                     for i in range(self.batch_size):
                             # 随机选择一个维度
                             dim = th.randint(0, len(traj_length), (1,)).item()
@@ -493,7 +494,7 @@ class PPO(OnPolicyAlgorithm):
                     # all_dones_traj = rollout_data.all_dones[seq_index].squeeze(2)
                     # all_dones_traj,_ = th.max(all_dones_traj,-1)
                     # all_dones_traj = th.permute(all_dones_traj,(1,0))
-                    
+                    print(time.time() - initial_time)
                     prev_obs_traj = th.permute(prev_obs_traj,(2,0,1,3,6,4,5))
                     all_obs_traj = th.permute(all_obs_traj,(2,0,1,3,6,4,5))
                     prev_obs_traj = prev_obs_traj.reshape(prev_obs_traj.shape[0]*prev_obs_traj.shape[1],prev_obs_traj.shape[2],-1,prev_obs_traj.shape[5],prev_obs_traj.shape[6])

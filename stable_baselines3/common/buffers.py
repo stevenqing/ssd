@@ -927,6 +927,8 @@ class RolloutBuffer(BaseBuffer):
         )
         return RewardTrajsRolloutBufferSamples(*tuple(map(self.to_torch, data)))
 
+    
+    
     def get_vae_sw(self, batch_size: Optional[int] = None) -> Generator[RolloutBufferSamples, None, None]:
         assert self.full, ""
         indices = np.random.permutation(self.buffer_size * self.n_envs)
