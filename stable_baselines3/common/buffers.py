@@ -847,9 +847,6 @@ class RolloutBuffer(BaseBuffer):
                 "all_last_obs_traj",
                 "all_actions_traj",
                 "all_rewards_traj",
-                # "previous_all_last_obs_traj",
-                # "previous_all_actions_traj",
-                # "previous_all_rewards_traj",
             ]
             self.all_last_obs_traj = np.array(self.all_last_obs_traj,dtype=object)
             self.all_actions_traj = np.array(self.all_actions_traj,dtype=object)
@@ -910,18 +907,9 @@ class RolloutBuffer(BaseBuffer):
             self.all_actions[batch_inds],
             self.all_rewards[batch_inds],
             self.cf_rewards[batch_inds],
-            # self.all_last_obs_traj,
-            # self.all_actions_traj,
-            # self.all_rewards_traj,
-            # self.previous_all_last_obs_traj,
-            # self.previous_all_actions_traj,
-            # self.previous_all_rewards_traj,
             all_last_obs_traj,
             all_actions_traj,
             all_rewards_traj,
-            # previous_all_last_obs_traj,
-            # previous_all_actions_traj,
-            # previous_all_rewards_traj,
             self.all_dones[index],
             traj_length,
         )
