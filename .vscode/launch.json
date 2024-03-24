@@ -61,7 +61,7 @@
                 "--env",
                 "harvest",
                 "--model",
-                "causal",
+                "vae",
                 "--num-agents",
                 "5",
                 "--rollout-len",
@@ -70,10 +70,8 @@
                 "1160677229",
                 "--num-envs",
                 "2",
-                "--add_spawn_prob",
-                "True",
                 "--extractor",
-                "cbam"
+                "cbam",
             ],
         },
     ]

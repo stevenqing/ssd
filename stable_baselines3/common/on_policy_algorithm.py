@@ -126,7 +126,7 @@ class OnPolicyAlgorithm(BaseAlgorithm):
             self.action_space,
             self.lr_schedule,
             use_sde=self.use_sde,
-            add_spawn_prob=self.add_spawn_prob,
+            # add_spawn_prob=self.add_spawn_prob,
             **self.policy_kwargs  # pytype:disable=not-instantiable
         )
         self.policy = self.policy.to(self.device)

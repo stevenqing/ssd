@@ -319,8 +319,7 @@ def main(args):
             ),
             net_arch=[features_dim],
             num_agents=args.num_agents,
-            env_name=env_name,
-           
+            # env_name=env_name,       
         )
     else:
         policy_kwargs = dict(
@@ -330,7 +329,7 @@ def main(args):
             ),
             net_arch=[features_dim],
             num_agents=args.num_agents,
-            env_name=env_name
+            # env_name=env_name
         )
 
 
@@ -401,13 +400,13 @@ def main(args):
             tensorboard_log=tensorboard_log,
             verbose=verbose,
             alpha=alpha,
-            beta=beta,
+            # beta=beta,
             model=args.model,
             using_reward_timestep=using_reward_timestep,
             enable_trajs_learning=enable_trajs_learning,
             env_name=env_name,
-            use_collective_reward=use_collective_reward,
-            inequity_averse_reward=inequity_averse_reward,
+            # use_collective_reward=use_collective_reward,
+            # inequity_averse_reward=inequity_averse_reward,
         )
     model.learn(total_timesteps=total_timesteps)
 

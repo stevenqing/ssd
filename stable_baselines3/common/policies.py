@@ -7,6 +7,8 @@ from abc import ABC, abstractmethod
 from functools import partial
 from typing import Any, Dict, List, Optional, Tuple, Type, TypeVar, Union
 from stable_baselines3.causal_model import CausalModel
+from stable_baselines3.CNN import VAE
+from stable_baselines3.mdrnn import MDRNN
 import numpy as np
 import torch as th
 from gym import spaces

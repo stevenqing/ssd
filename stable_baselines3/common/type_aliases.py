@@ -26,6 +26,35 @@ MaybeCallback = Union[None, Callable, List[callbacks.BaseCallback], callbacks.Ba
 # and ouputs a scalar (e.g. learning rate, clip range, ...)
 Schedule = Callable[[float], float]
 
+class RNNStates(NamedTuple):
+    pi: Tuple[th.Tensor, ...]
+    vf: Tuple[th.Tensor, ...]
+
+
+class RecurrentRolloutBufferSamples(NamedTuple):
+    observations: th.Tensor
+    actions: th.Tensor
+    old_values: th.Tensor
+    old_log_prob: th.Tensor
+    advantages: th.Tensor
+    returns: th.Tensor
+    lstm_states: RNNStates
+    episode_starts: th.Tensor
+    mask: th.Tensor
+
+
+class RecurrentDictRolloutBufferSamples(NamedTuple):
+    observations: TensorDict
+    actions: th.Tensor
+    old_values: th.Tensor
+    old_log_prob: th.Tensor
+    advantages: th.Tensor
+    returns: th.Tensor
+    lstm_states: RNNStates
+    episode_starts: th.Tensor
+    mask: th.Tensor
+
+
 # add all information
 class RewardRolloutBufferSamples(NamedTuple):
     observations: th.Tensor
@@ -51,6 +80,24 @@ class RewardDictRolloutBufferSamples(NamedTuple):
     all_rewards: th.Tensor
     cf_rewards: th.Tensor
 
+class TransitionRolloutBufferSamples(NamedTuple):
+    observations: th.Tensor
+    actions: th.Tensor
+    old_values: th.Tensor
+    old_log_prob: th.Tensor
+    advantages: th.Tensor
+    returns: th.Tensor
+    all_last_obs: th.Tensor
+    all_actions: th.Tensor
+    all_rewards: th.Tensor
+    cf_rewards: th.Tensor
+    all_obs_traj: th.Tensor
+    all_action_traj: th.Tensor
+    all_rewards_traj: th.Tensor
+    prev_all_obs_traj: th.Tensor
+    prev_all_action_traj: th.Tensor
+    prev_all_rewards_traj: th.Tensor
+
 class RewardTrajsRolloutBufferSamples(NamedTuple):
     observations: th.Tensor
     actions: th.Tensor
@@ -65,9 +112,11 @@ class RewardTrajsRolloutBufferSamples(NamedTuple):
     all_obs_traj: th.Tensor
     all_action_traj: th.Tensor
     all_rewards_traj: th.Tensor
-    prev_obs_traj: th.Tensor
-    prev_action_traj: th.Tensor
-    prev_rewards_traj: th.Tensor
+    # prev_obs_traj: th.Tensor
+    # prev_action_traj: th.Tensor
+    # prev_rewards_traj: th.Tensor
+    all_dones: th.Tensor
+    traj_length: list
 
 class RolloutBufferSamples(NamedTuple):
     observations: th.Tensor

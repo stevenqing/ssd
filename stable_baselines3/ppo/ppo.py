@@ -7,7 +7,7 @@ from gym import spaces
 from torch.nn import functional as F
 import wandb
 from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
-from stable_baselines3.common.policies import ActorCriticCnnPolicy, ActorCriticPolicy, BasePolicy, MultiInputActorCriticPolicy, RewardActorCriticPolicy
+from stable_baselines3.common.policies import ActorCriticCnnPolicy, ActorCriticPolicy, BasePolicy, MultiInputActorCriticPolicy, RewardActorCriticPolicy, TransitionActorCriticPolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import explained_variance, get_schedule_fn
 from stable_baselines3.common.utils import (configure_logger, obs_as_tensor,
@@ -76,6 +76,7 @@ class PPO(OnPolicyAlgorithm):
         "CnnPolicy": ActorCriticCnnPolicy,
         "MultiInputPolicy": MultiInputActorCriticPolicy,
         "RewardPolicy": RewardActorCriticPolicy,
+        "TransitionPolicy": TransitionActorCriticPolicy,
     }
 
     def __init__(
@@ -174,6 +175,7 @@ class PPO(OnPolicyAlgorithm):
         self.polid = polid
         self.env_name = env_name
         self.add_spawn_prob = add_spawn_prob
+        self.timestep = 0
         if _init_setup_model:
             self._setup_model()
 
@@ -467,47 +469,55 @@ class PPO(OnPolicyAlgorithm):
                         th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
                         self.policy.optimizer.step()
             elif self.model == 'vae':
-                for rollout_data in self.rollout_buffer.get_sw_traj(self.batch_size):
+                for rollout_data in self.rollout_buffer.get_sw(self.batch_size, enable_trajs=True):
                     self.timestep += 1
-                    seq_length = 32
+                    seq_length = 16
                     all_last_obs = rollout_data.all_last_obs
                     all_rewards = rollout_data.all_rewards
-                    all_dones = rollout_data.all_dones
                     actions = rollout_data.actions
-                    traj_length = rollout_data.traj_length
 
+                    all_obs_traj = rollout_data.all_obs_traj.permute(1,0,2,3,4,5)
+                    all_actions_traj = rollout_data.all_action_traj.permute(1,0,2,3)
+                    all_rewards_traj = rollout_data.all_rewards_traj.permute(1,0,2)
+                    prev_obs_traj = rollout_data.prev_all_obs_traj.permute(1,0,2,3,4,5)
+                    prev_actions_traj = rollout_data.prev_all_action_traj.permute(1,0,2,3)
+                    prev_rewards_traj = rollout_data.prev_all_rewards_traj.permute(1,0,2)
                     # Randomly sample a sequence index
-                    all_obs_traj = th.zeros_like(seq_length,self.batch_size,self.num_agents,15,15,18)
-                    all_actions_traj = th.zeros_like(seq_length,self.batch_size,self.num_agents)
-                    all_rewards_traj = th.zeros_like(seq_length,self.batch_size,self.num_agents)
+                    # all_obs_traj = th.zeros(self.batch_size,seq_length,self.n_envs,self.num_agents,15,15,18)
+                    # prev_obs_traj = th.zeros(self.batch_size,seq_length,self.n_envs,self.num_agents,15,15,18)
+                    # all_actions_traj = th.zeros(self.batch_size,seq_length,self.n_envs,self.num_agents)
+                    # prev_actions_traj = th.zeros(self.batch_size,seq_length,self.n_envs,self.num_agents)
+                    # all_rewards_traj = th.zeros(self.batch_size,seq_length,self.n_envs,self.num_agents)
+                    # prev_rewards_traj = th.zeros(self.batch_size,seq_length,self.n_envs,self.num_agents)
 
-                    for i in range(self.batch_size):
-                        for j in range(seq_length):
-                            # 随机选择一个维度
-                            dim = th.randint(0, 6, (1,)).item()
-                            # 确定这个维度的最大有效起始索引
-                            max_start = traj_length[dim] - 32
-                            # 随机选择一个起始索引，这里考虑序列长度为1，因为我们逐个时间点采样
-                            start_idx = th.randint(0, max_start, (1,)).item()
-                            # 采样
-                            all_obs_traj[i, j, :] = all_obs_traj[dim, start_idx, :]
-                    all_obs_traj = rollout_data.all_obs_traj[seq_index].permute(1,0,2,3,4,5)
-                    prev_obs_traj = rollout_data.prev_obs_traj[seq_index].permute(1,0,2,3,4,5)
-                    all_actions_traj = rollout_data.all_action_traj[seq_index].permute(1,0,2)
-                    prev_actions_traj = rollout_data.prev_action_traj[seq_index].permute(1,0,2)
-                    all_rewards_traj = rollout_data.all_rewards_traj[seq_index].permute(1,0,2)
-                    prev_rewards_traj = rollout_data.prev_rewards_traj[seq_index].permute(1,0,2)
 
-                    all_dones_traj = rollout_data.all_dones[seq_index].squeeze(2)
-                    all_dones_traj,_ = th.max(all_dones_traj,-1)
-                    all_dones_traj = th.permute(all_dones_traj,(1,0))
+                    # traj_length = [item for item in traj_length_original if item > seq_length+2]
+                    # for i in range(self.batch_size):
+                    #         # 随机选择一个维度
+                    #         dim = th.randint(0, len(traj_length), (1,)).item()
+                    #         # 确定这个维度的最大有效起始索引
+                    #         max_start = traj_length[dim] - seq_length
+                    #         # 随机选择一个起始索引，这里考虑序列长度为1，因为我们逐个时间点采样
+                    #         start_idx = th.randint(1, max_start, (1,)).item()
+                    #         # 采样
+                    #         all_obs_traj[i,:] = rollout_data.all_obs_traj[dim, start_idx:start_idx+seq_length, :]
+                    #         all_actions_traj[i,:] = rollout_data.all_action_traj[dim, start_idx:start_idx+seq_length, :]
+                    #         all_rewards_traj[i,:] = rollout_data.all_rewards_traj[dim, start_idx:start_idx+seq_length, :]
+                    #         prev_obs_traj[i,:] = rollout_data.all_obs_traj[dim, start_idx-1:start_idx+seq_length-1, :]
+                    #         prev_actions_traj[i,:] = rollout_data.all_action_traj[dim, start_idx-1:start_idx+seq_length-1, :]
+                    #         prev_rewards_traj[i,:] = rollout_data.all_rewards_traj[dim, start_idx-1:start_idx+seq_length-1, :]
+                    #         # prev_obs_traj[i,:] = rollout_data.prev_obs_traj[dim, start_idx:start_idx+seq_length, :]
+                    #         # prev_actions_traj[i,:] = rollout_data.prev_action_traj[dim, start_idx:start_idx+seq_length, :]
+                    #         # prev_rewards_traj[i,:] = rollout_data.prev_rewards_traj[dim, start_idx:start_idx+seq_length, :]
 
-                    prev_obs_traj = th.permute(prev_obs_traj,(0,1,2,5,3,4))
-                    all_obs_traj = th.permute(all_obs_traj,(0,1,2,5,3,4))
-                    prev_obs_traj = prev_obs_traj.reshape(prev_obs_traj.shape[0],prev_obs_traj.shape[1],-1,prev_obs_traj.shape[4],prev_obs_traj.shape[5])
-                    all_obs_traj = all_obs_traj.reshape(all_obs_traj.shape[0],all_obs_traj.shape[1],-1,all_obs_traj.shape[4],all_obs_traj.shape[5])
+                    # prev_obs_traj = th.permute(prev_obs_traj,(2,0,1,3,6,4,5))
+                    # all_obs_traj = th.permute(all_obs_traj,(2,0,1,3,6,4,5))
+                    # prev_obs_traj = prev_obs_traj.reshape(prev_obs_traj.shape[0]*prev_obs_traj.shape[1],prev_obs_traj.shape[2],-1,prev_obs_traj.shape[5],prev_obs_traj.shape[6])
+                    # all_obs_traj = all_obs_traj.reshape(all_obs_traj.shape[0]*all_obs_traj.shape[1],all_obs_traj.shape[2],-1,all_obs_traj.shape[5],all_obs_traj.shape[6])
+                    # prev_obs_traj = prev_obs_traj.permute(1,0,2,3,4)
+                    # all_obs_traj = all_obs_traj.permute(1,0,2,3,4)
                     # shaping the obs: [seq_len,batch_size,channel,view_len*2+1,view_len*2+1,num_frames*num_agents] -> [seq_len,batch_size,channel*num_frames*num_agents,view_len*2+1,view_len*2+1]
-
+                        
                     if isinstance(self.action_space, spaces.Discrete):
                         # Convert discrete action from float to long
                         actions = rollout_data.actions.long().flatten()
@@ -571,10 +581,32 @@ class PPO(OnPolicyAlgorithm):
                     vae_loss = self.policy.vae_net.loss_function(self.policy.vae_net(stacked_obs,all_actions_one_hot,all_rewards)[0], stacked_obs, self.policy.vae_net(stacked_obs,all_actions_one_hot,all_rewards)[1], self.policy.vae_net(stacked_obs,all_actions_one_hot,all_rewards)[2])
 
                     # Transition Loss
-                    all_actions_traj_one_hot = eye_matrix[all_actions_traj]
-                    all_actions_traj_one_hot = all_actions_traj_one_hot.reshape(all_actions_traj_one_hot.shape[0], all_actions_traj_one_hot.shape[1], -1)
+                    # set all dones to 0, solve cpu and gpu problem
+                    prev_obs_traj = prev_obs_traj.to(self.device)
+                    all_obs_traj = all_obs_traj.to(self.device)
+                    all_actions_traj = all_actions_traj.to(self.device)
+                    prev_actions_traj = prev_actions_traj.to(self.device)
+                    all_rewards_traj = all_rewards_traj.to(self.device)
+                    prev_rewards_traj = prev_rewards_traj.to(self.device)
+
+                    prev_obs_traj = prev_obs_traj.permute(0,1,2,5,3,4)
+                    prev_obs_traj = prev_obs_traj.reshape(prev_obs_traj.shape[0],prev_obs_traj.shape[1],-1,prev_obs_traj.shape[4],prev_obs_traj.shape[5])
+                    all_obs_traj = all_obs_traj.permute(0,1,2,5,3,4)
+                    all_obs_traj = all_obs_traj.reshape(all_obs_traj.shape[0],all_obs_traj.shape[1],-1,all_obs_traj.shape[4],all_obs_traj.shape[5])
+                    # preprocessing
+                    all_actions_traj_one_hot = eye_matrix[all_actions_traj.to(int)].squeeze(-2)
+                    
+                    # all_actions_traj_one_hot = all_actions_traj_one_hot.permute(2,0,1,3,4)
+
+                    # all_actions_traj_one_hot = all_actions_traj_one_hot.reshape(all_actions_traj_one_hot.shape[0]*all_actions_traj_one_hot.shape[1], seq_length, -1)
+                    # all_actions_traj_one_hot = all_actions_traj_one_hot.permute(1,0,2)
+
+                    # all_rewards_traj = all_rewards_traj.permute(2,0,1,3)
+                    # all_rewards_traj = all_rewards_traj.reshape(all_rewards_traj.shape[0]*all_rewards_traj.shape[1], seq_length, -1)
+                    # all_rewards_traj = all_rewards_traj.permute(1,0,2)
+
                     latent_obs_traj, latent_next_obs_traj = self.policy.to_latent(prev_obs_traj,all_obs_traj,all_actions_traj_one_hot,all_rewards_traj,self.batch_size,seq_length) #TODO: check the to_latent function, I did some significant changes in here
-                    transition_loss = self.policy.get_loss(latent_obs_traj, all_actions_traj, all_rewards_traj, all_dones_traj,latent_next_obs_traj, include_reward = True)
+                    transition_loss, predicted_reward = self.policy.get_loss(latent_obs_traj, all_actions_traj_one_hot, all_rewards_traj, all_dones,latent_next_obs_traj, include_reward = True)
 
                     
                     loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + vae_loss + transition_loss['loss']

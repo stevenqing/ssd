@@ -167,7 +167,7 @@ class IndependentPPO(OnPolicyAlgorithm):
             policy._last_episode_starts = np.ones((self.num_envs,), dtype=bool)
 
         while num_timesteps < total_timesteps:
-            if self.enable_trajs_learning or self.model == 'vae':
+            if self.enable_trajs_learning:
                 last_obs = self.collect_trajs_rollouts(last_obs, callbacks,num_timesteps)
             else:
                 if self.add_spawn_prob:
@@ -237,238 +237,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         for callback in callbacks:
             callback.on_training_end()
 
-    def collect_trajs_rollouts(self, last_obs, callbacks,num_timesteps):
-
-        all_last_episode_starts = [None] * self.num_agents
-        all_obs = [None] * self.num_agents
-        all_last_obs = [None] * self.num_agents
-        all_rewards = [None] * self.num_agents
-        all_dones = [None] * self.num_agents
-        all_infos = [None] * self.num_agents
-
-        all_obs_trajs,all_actions_trajs,all_rewards_trajs = [],[],[]
-        steps = 0
-
-        for polid, policy in enumerate(self.policies):
-            for envid in range(self.num_envs):
-                assert (
-                    last_obs[envid * self.num_agents + polid] is not None
-                ), f"No previous observation was provided for env_{envid}_policy_{polid}"
-            all_last_obs[polid] = np.array(
-                [
-                    last_obs[envid * self.num_agents + polid]
-                    for envid in range(self.num_envs)
-                ]
-            )
-            policy.policy.set_training_mode(False)
-            policy.rollout_buffer.agent_number = self.num_agents
-            policy.rollout_buffer.model = self.model
-            policy.rollout_buffer.reset()
-            callbacks[polid].on_rollout_start()
-            all_last_episode_starts[polid] = policy._last_episode_starts
-
-        while steps < self.n_steps:
-            all_actions = [None] * self.num_agents
-            all_values = [None] * self.num_agents
-            all_log_probs = [None] * self.num_agents
-            all_clipped_actions = [None] * self.num_agents
-            with th.no_grad():
-                for polid, policy in enumerate(self.policies):
-                    obs_tensor = obs_as_tensor(all_last_obs[polid], policy.device)
-                    (
-                        all_actions[polid],
-                        all_values[polid],
-                        all_log_probs[polid],
-                    ) = policy.policy.forward(obs_tensor)
-                    clipped_actions = all_actions[polid].cpu().numpy()
-                    if isinstance(self.action_space, Box):
-                        clipped_actions = np.clip(
-                            clipped_actions,
-                            self.action_space.low,
-                            self.action_space.high,
-                        )
-                    elif isinstance(self.action_space, Discrete):
-                        # get integer from numpy array
-                        clipped_actions = np.array(
-                            [action.item() for action in clipped_actions]
-                        )
-                    all_clipped_actions[polid] = clipped_actions
-
-            all_clipped_actions = (
-                np.vstack(all_clipped_actions).transpose().reshape(-1)
-            )  # reshape as (env, action)
-            obs, rewards, dones, infos = self.env.step(all_clipped_actions)
-            
-            if dones.any():
-                all_obs_trajs.append(all_last_obs)
-                all_actions_trajs.append(np.array([action.cpu().numpy() for action in all_actions]))
-                for polid in range(self.num_agents):
-                    all_rewards[polid] = np.array(
-                    [
-                        rewards[envid * self.num_agents + polid]
-                        for envid in range(self.num_envs)
-                    ]
-                )
-                all_rewards_trajs.append(all_rewards)
-                if self.previous_all_last_obs_traj is None or self.previous_all_actions_traj is None or self.previous_all_rewards_traj is None:
-                    self.previous_all_last_obs_traj = np.array(all_obs_trajs)
-                    self.previous_all_actions_traj = np.array(all_actions_trajs)
-                    self.previous_all_rewards_traj = np.array(all_rewards_trajs) 
-                all_obs_trajs,all_actions_trajs,all_rewards_trajs = np.array(all_obs_trajs),np.array(all_actions_trajs),np.array(all_rewards_trajs)
-            else:
-                all_obs_trajs.append(all_last_obs)
-                all_actions_trajs.append(np.array([action.cpu().numpy() for action in all_actions]))
-                for polid in range(self.num_agents):
-                    all_rewards[polid] = np.array(
-                    [
-                        rewards[envid * self.num_agents + polid]
-                        for envid in range(self.num_envs)
-                    ]
-                )
-                all_rewards_trajs.append(all_rewards)
-                all_rewards = [None] * self.num_agents
-            ############################################
-            for polid in range(self.num_agents):
-                all_obs[polid] = np.array(
-                    [
-                        obs[envid * self.num_agents + polid]
-                        for envid in range(self.num_envs)
-                    ]
-                )
-                all_rewards[polid] = np.array(
-                    [
-                        rewards[envid * self.num_agents + polid]
-                        for envid in range(self.num_envs)
-                    ]
-                )
-                all_dones[polid] = np.array(
-                    [
-                        dones[envid * self.num_agents + polid]
-                        for envid in range(self.num_envs)
-                    ]
-                )
-                all_infos[polid] = np.array(
-                    [
-                        infos[envid * self.num_agents + polid]
-                        for envid in range(self.num_envs)
-                    ]
-                )
-
-            for policy in self.policies:
-                policy.num_timesteps += self.num_envs
-
-            for callback in callbacks:
-                callback.update_locals(locals())
-            if not [callback.on_step() for callback in callbacks]:
-                break
-
-            for polid, policy in enumerate(self.policies):
-                policy._update_info_buffer(all_infos[polid])
-
-            steps += 1
-
-
-            # add data to the rollout buffers
-            for polid, policy in enumerate(self.policies):
-                if isinstance(self.action_space, Discrete):
-                    all_actions[polid] = all_actions[polid].reshape(-1, 1)
-                all_actions[polid] = all_actions[polid].cpu().numpy()
-            rollout_all_actions = all_actions
-            for polid, policy in enumerate(self.policies):
-                if self.model == 'baseline':
-                    policy.rollout_buffer.add(
-                        all_last_obs[polid],
-                        all_actions[polid],
-                        all_rewards[polid],
-                        all_last_episode_starts[polid],
-                        all_values[polid],
-                        all_log_probs[polid],
-                    )
-                else:
-                    if self.model == 'team':
-                        policy.rollout_buffer.add_sw(
-                            all_last_obs[polid],
-                            all_actions[polid],
-                            all_rewards[polid],
-                            all_last_episode_starts[polid],
-                            all_values[polid],
-                            all_log_probs[polid],
-                            all_last_obs,
-                            rollout_all_actions,
-                            all_rewards,
-                            cf_rewards=None,
-                        )
-                    else:
-                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid)
-                        if num_timesteps <= self.using_reward_timestep:
-                            cf_rewards = np.zeros_like(cf_rewards)
-                        if self.enable_trajs_learning:
-                            policy.rollout_buffer.add_sw_traj( # add_sw
-                                all_last_obs[polid],
-                                all_actions[polid],
-                                all_rewards[polid],
-                                all_last_episode_starts[polid],
-                                all_values[polid],
-                                all_log_probs[polid],
-                                all_last_obs,
-                                rollout_all_actions,
-                                all_rewards,
-                                cf_rewards,
-                                all_obs_trajs,
-                                all_actions_trajs,
-                                all_rewards_trajs,
-                                self.previous_all_last_obs_traj,
-                                self.previous_all_actions_traj,
-                                self.previous_all_rewards_traj,
-                            )
-                        else:   
-                            policy.rollout_buffer.add_sw(
-                                all_last_obs[polid],
-                                all_actions[polid],
-                                all_rewards[polid],
-                                all_last_episode_starts[polid],
-                                all_values[polid],
-                                all_log_probs[polid],
-                                all_last_obs,
-                                rollout_all_actions,
-                                all_rewards,
-                                cf_rewards,
-                            )
-            if isinstance(all_obs_trajs, np.ndarray):
-                self.previous_all_last_obs_traj = all_obs_trajs
-                self.previous_all_actions_traj = all_actions_trajs
-                self.previous_all_rewards_traj = all_rewards_trajs
-                all_obs_trajs,all_actions_trajs,all_rewards_trajs = [],[],[]
-
-            all_last_obs = all_obs
-            all_last_episode_starts = all_dones
-
-        with th.no_grad():
-            for polid, policy in enumerate(self.policies):
-                obs_tensor = obs_as_tensor(all_last_obs[polid], policy.device)
-                _, value, _ = policy.policy.forward(obs_tensor)
-                if self.model == 'baseline':
-                        policy.rollout_buffer.compute_returns_and_advantage(
-                        last_values=value, dones=all_dones[polid]
-                    )
-                else:
-                    if self.model == 'team':
-                        policy.rollout_buffer.compute_sw_returns_and_advantage(
-                        last_values=value, dones=all_dones[polid], alpha=self.alpha, use_team_reward=True
-                    )
-                    else:
-                        policy.rollout_buffer.compute_sw_returns_and_advantage(
-                        last_values=value, dones=all_dones[polid], alpha=self.alpha
-                    )
-
-        for callback in callbacks:
-            callback.on_rollout_end()
-
-        for polid, policy in enumerate(self.policies):
-            policy._last_episode_starts = all_last_episode_starts[polid]
-
-        return obs
-
+ 
     def collect_dict_rollouts(self, last_obs, callbacks,num_timesteps):
         all_obs = [{}] * self.num_agents
         all_last_obs = [{}] * self.num_agents
@@ -783,6 +552,20 @@ class IndependentPPO(OnPolicyAlgorithm):
                             all_rewards,
                             cf_rewards=None,
                         )
+                    elif self.model == 'vae':
+                        cf_rewards = self.compute_transition_cf_rewards(policy,all_last_obs,all_rewards,all_actions,polid,all_distributions) #SPEED
+                        policy.rollout_buffer.add_sw( #TODO: add the latent state to the buffer
+                            all_last_obs[polid],
+                            all_actions[polid],
+                            all_rewards[polid],
+                            all_last_episode_starts[polid],
+                            all_values[polid],
+                            all_log_probs[polid],
+                            all_last_obs,
+                            rollout_all_actions,
+                            all_rewards,
+                            cf_rewards,
+                    )
                     else:
                         cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions) #SPEED, Can the cf rewards be computed in ppo?
                         reward_mapping_func = np.frompyfunc(lambda key: ENV_REWARD_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][0]), 1, 1) #SPEED, Can the function be jit?
@@ -832,6 +615,261 @@ class IndependentPPO(OnPolicyAlgorithm):
         return obs
 
 
+    def collect_trajs_rollouts(self, last_obs, callbacks,num_timesteps):
+
+        all_last_episode_starts = [None] * self.num_agents
+        all_obs = [None] * self.num_agents
+        all_last_obs = [None] * self.num_agents
+        all_rewards = [None] * self.num_agents
+        all_dones = [None] * self.num_agents
+        all_infos = [None] * self.num_agents
+        all_distributions = [None] * self.num_agents
+
+        all_obs_trajs,all_actions_trajs,all_rewards_trajs = [],[],[]
+        steps = 0
+
+        for polid, policy in enumerate(self.policies):
+            for envid in range(self.num_envs):
+                assert (
+                    last_obs[envid * self.num_agents + polid] is not None
+                ), f"No previous observation was provided for env_{envid}_policy_{polid}"
+            all_last_obs[polid] = np.array(
+                [
+                    last_obs[envid * self.num_agents + polid]
+                    for envid in range(self.num_envs)
+                ]
+            )
+            policy.policy.set_training_mode(False)
+            policy.rollout_buffer.agent_number = self.num_agents
+            policy.rollout_buffer.model = self.model
+            policy.rollout_buffer.reset()
+            callbacks[polid].on_rollout_start()
+            all_last_episode_starts[polid] = policy._last_episode_starts
+
+        while steps < self.n_steps:
+            all_actions = [None] * self.num_agents
+            all_values = [None] * self.num_agents
+            all_log_probs = [None] * self.num_agents
+            all_clipped_actions = [None] * self.num_agents
+            with th.no_grad():
+                for polid, policy in enumerate(self.policies):
+                    obs_tensor = obs_as_tensor(all_last_obs[polid], policy.device)
+                    (
+                        all_actions[polid],
+                        all_values[polid],
+                        all_log_probs[polid],
+                        all_distributions[polid],
+                    ) = policy.policy.forward(obs_tensor)
+                    clipped_actions = all_actions[polid].cpu().numpy()
+                    if isinstance(self.action_space, Box):
+                        clipped_actions = np.clip(
+                            clipped_actions,
+                            self.action_space.low,
+                            self.action_space.high,
+                        )
+                    elif isinstance(self.action_space, Discrete):
+                        # get integer from numpy array
+                        clipped_actions = np.array(
+                            [action.item() for action in clipped_actions]
+                        )
+                    all_clipped_actions[polid] = clipped_actions
+
+            all_clipped_actions = (
+                np.vstack(all_clipped_actions).transpose().reshape(-1)
+            )  # reshape as (env, action)
+            obs, rewards, dones, infos = self.env.step(all_clipped_actions)
+            
+            if dones.any():
+                all_obs_trajs.append(all_last_obs)
+                all_actions_trajs.append(np.array([action.cpu().numpy() for action in all_actions]))
+                for polid in range(self.num_agents):
+                    all_rewards[polid] = np.array(
+                    [
+                        rewards[envid * self.num_agents + polid]
+                        for envid in range(self.num_envs)
+                    ]
+                )
+                all_rewards_trajs.append(all_rewards)
+                # if self.previous_all_last_obs_traj is None or self.previous_all_actions_traj is None or self.previous_all_rewards_traj is None:
+                #     self.previous_all_last_obs_traj = np.array(all_obs_trajs)
+                #     self.previous_all_actions_traj = np.array(all_actions_trajs)
+                #     self.previous_all_rewards_traj = np.array(all_rewards_trajs) 
+                all_obs_trajs,all_actions_trajs,all_rewards_trajs = np.array(all_obs_trajs),np.array(all_actions_trajs),np.array(all_rewards_trajs)
+            else:
+                all_obs_trajs.append(all_last_obs)
+                all_actions_trajs.append(np.array([action.cpu().numpy() for action in all_actions]))
+                for polid in range(self.num_agents):
+                    all_rewards[polid] = np.array(
+                    [
+                        rewards[envid * self.num_agents + polid]
+                        for envid in range(self.num_envs)
+                    ]
+                )
+                all_rewards_trajs.append(all_rewards)
+                all_rewards = [None] * self.num_agents
+            ############################################
+            for polid in range(self.num_agents):
+                all_obs[polid] = np.array(
+                    [
+                        obs[envid * self.num_agents + polid]
+                        for envid in range(self.num_envs)
+                    ]
+                )
+                all_rewards[polid] = np.array(
+                    [
+                        rewards[envid * self.num_agents + polid]
+                        for envid in range(self.num_envs)
+                    ]
+                )
+                all_dones[polid] = np.array(
+                    [
+                        dones[envid * self.num_agents + polid]
+                        for envid in range(self.num_envs)
+                    ]
+                )
+                all_infos[polid] = np.array(
+                    [
+                        infos[envid * self.num_agents + polid]
+                        for envid in range(self.num_envs)
+                    ]
+                )
+
+            for policy in self.policies:
+                policy.num_timesteps += self.num_envs
+
+            for callback in callbacks:
+                callback.update_locals(locals())
+            if not [callback.on_step() for callback in callbacks]:
+                break
+
+            for polid, policy in enumerate(self.policies):
+                policy._update_info_buffer(all_infos[polid])
+
+            steps += 1
+
+
+            # add data to the rollout buffers
+            for polid, policy in enumerate(self.policies):
+                if isinstance(self.action_space, Discrete):
+                    all_actions[polid] = all_actions[polid].reshape(-1, 1)
+                all_actions[polid] = all_actions[polid].cpu().numpy()
+            rollout_all_actions = all_actions
+            for polid, policy in enumerate(self.policies):
+                if self.model == 'baseline':
+                    policy.rollout_buffer.add(
+                        all_last_obs[polid],
+                        all_actions[polid],
+                        all_rewards[polid],
+                        all_last_episode_starts[polid],
+                        all_values[polid],
+                        all_log_probs[polid],
+                    )
+                elif self.model == 'vae':
+                    cf_rewards = self.compute_transition_cf_rewards(policy,all_last_obs,all_rewards,all_actions,polid,all_distributions) #SPEED
+                    policy.rollout_buffer.add_sw( #TODO: add the latent state to the buffer
+                        all_last_obs[polid],
+                        all_actions[polid],
+                        all_rewards[polid],
+                        all_last_episode_starts[polid],
+                        all_values[polid],
+                        all_log_probs[polid],
+                        all_last_obs,
+                        rollout_all_actions,
+                        all_rewards,
+                        cf_rewards,
+                        # all_obs_trajs,
+                        # all_actions_trajs,
+                        # all_rewards_trajs,
+                        # self.previous_all_last_obs_traj,
+                        # self.previous_all_actions_traj,
+                        # self.previous_all_rewards_traj,
+                        all_dones,
+                    )
+                else:
+                    if self.model == 'team':
+                        policy.rollout_buffer.add_sw(
+                            all_last_obs[polid],
+                            all_actions[polid],
+                            all_rewards[polid],
+                            all_last_episode_starts[polid],
+                            all_values[polid],
+                            all_log_probs[polid],
+                            all_last_obs,
+                            rollout_all_actions,
+                            all_rewards,
+                            cf_rewards=None,
+                        )
+                    else:
+                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid) 
+                        if num_timesteps <= self.using_reward_timestep:
+                            cf_rewards = np.zeros_like(cf_rewards)
+                        if self.enable_trajs_learning:
+                            policy.rollout_buffer.add_sw_traj( # add_sw
+                                all_last_obs[polid],
+                                all_actions[polid],
+                                all_rewards[polid],
+                                all_last_episode_starts[polid],
+                                all_values[polid],
+                                all_log_probs[polid],
+                                all_last_obs,
+                                rollout_all_actions,
+                                all_rewards,
+                                cf_rewards,
+                                all_obs_trajs,
+                                all_actions_trajs,
+                                all_rewards_trajs,
+                                # self.previous_all_last_obs_traj,
+                                # self.previous_all_actions_traj,
+                                # self.previous_all_rewards_traj,
+                            )
+                        else:   
+                            policy.rollout_buffer.add_sw(
+                                all_last_obs[polid],
+                                all_actions[polid],
+                                all_rewards[polid],
+                                all_last_episode_starts[polid],
+                                all_values[polid],
+                                all_log_probs[polid],
+                                all_last_obs,
+                                rollout_all_actions,
+                                all_rewards,
+                                cf_rewards,
+                            )
+            if isinstance(all_obs_trajs, np.ndarray):
+                # self.previous_all_last_obs_traj = all_obs_trajs
+                # self.previous_all_actions_traj = all_actions_trajs
+                # self.previous_all_rewards_traj = all_rewards_trajs
+                all_obs_trajs,all_actions_trajs,all_rewards_trajs = [],[],[]
+
+            all_last_obs = all_obs
+            all_last_episode_starts = all_dones
+
+        with th.no_grad():
+            for polid, policy in enumerate(self.policies):
+                obs_tensor = obs_as_tensor(all_last_obs[polid], policy.device)
+                _, value,_, _ = policy.policy.forward(obs_tensor)
+                if self.model == 'baseline':
+                        policy.rollout_buffer.compute_returns_and_advantage(
+                        last_values=value, dones=all_dones[polid]
+                    )
+                else:
+                    if self.model == 'team':
+                        policy.rollout_buffer.compute_sw_returns_and_advantage(
+                        last_values=value, dones=all_dones[polid], alpha=self.alpha, use_team_reward=True
+                    )
+                    else:
+                        policy.rollout_buffer.compute_sw_returns_and_advantage(
+                        last_values=value, dones=all_dones[polid], alpha=self.alpha
+                    )
+
+        for callback in callbacks:
+            callback.on_rollout_end()
+
+        for polid, policy in enumerate(self.policies):
+            policy._last_episode_starts = all_last_episode_starts[polid]
+
+        return obs
+
     # def compute_predicted_rewards(self,policy,all_last_obs,all_actions,polid,all_distributions):
     #     all_cf_rewards = []
 
@@ -847,6 +885,89 @@ class IndependentPPO(OnPolicyAlgorithm):
     #     index = 0
     #     all_actions_one_hot = F.one_hot(all_actions, num_classes=self.action_space.n).repeat(1,1,(self.num_agents-1) * self.action_space.n,1)
 
+
+    def compute_transition_cf_rewards(self,policy,all_last_obs,all_rewards,all_actions,polid,all_distributions,sample_number=10):
+        all_cf_rewards = []
+
+        all_last_obs = obs_as_tensor(np.array(all_last_obs), policy.device)
+        all_last_obs = all_last_obs.repeat(1,sample_number,1,1,1)
+        all_rewards = obs_as_tensor(np.transpose(np.array(all_rewards),(1,0)), policy.device)
+        all_actions = obs_as_tensor(np.transpose(np.array(all_actions),(1,0,2)), policy.device)
+
+        all_obs_features = []
+        for i in range(self.num_agents):
+            all_obs_features.append(policy.policy.extract_features(all_last_obs[i]))
+        all_obs_features = th.stack(all_obs_features,dim=0).permute(1,0,2)
+        all_obs_features = all_obs_features.reshape(all_obs_features.shape[0],-1)
+
+        # all_actions_one_hot = all_actions[:,polid,:]
+        # eye_matrix = th.eye(self.action_space.n,device=all_actions_one_hot.device)
+        # all_actions_one_hot = eye_matrix[all_actions_one_hot]
+        # all_actions_one_hot = all_actions_one_hot.unsqueeze(1)
+        # all_actions_one_hot = all_actions_one_hot.repeat(1,1,sample_number,1)
+        # all_actions_one_hot = all_actions_one_hot.repeat(1,self.num_agents,1,1)
+        # all_actions_one_hot_list = all_actions_one_hot.permute(1,0,2,3)
+
+        cf_all_actions = copy.deepcopy(all_actions).squeeze(-1)
+        cf_all_actions = cf_all_actions.unsqueeze(1).repeat(1,sample_number, 1) #.permute(1, 0, 2)
+
+        total_actions = [None] * self.num_agents
+        for i in range(self.num_agents):
+            if i != polid:
+                cf_action_i = self.generate_samples(all_distributions[i],sample_number).permute(1, 0)
+                cf_all_actions_copy = cf_all_actions.clone()
+                # cf_all_actions[:, :, i] = cf_action_i
+                cf_all_actions_copy[:, :, i] = cf_action_i
+                total_actions[i] = cf_all_actions_copy
+        total_cf_rewards = []
+        for all_actions_one_hot in total_actions:
+            if all_actions_one_hot is not None:
+                eye_matrix = th.eye(self.action_space.n,device=all_actions_one_hot.device)
+                cf_all_actions = eye_matrix[all_actions_one_hot]
+
+                # batch_size, sample_size, num_agents * num_action
+                cf_all_actions = cf_all_actions.reshape(cf_all_actions.shape[0]*cf_all_actions.shape[1],-1) #.permute(1,0,2)
+                
+                # batch_size, num_sample, obs_feat_size + num_agents * num_action
+                # all_obs_actions_features = th.cat((all_obs_features,cf_all_actions),dim=-1) #.permute(1,0,2)
+                
+                all_rewards_copy = all_rewards.clone().unsqueeze(1)
+                all_rewards_copy = all_rewards_copy.repeat(1,sample_number,1).reshape(-1,all_rewards_copy.shape[-1])
+
+                all_last_obs_copy = all_last_obs.clone().permute(1,2,3,0,4)
+                all_last_obs_copy = all_last_obs_copy.reshape(all_last_obs_copy.shape[0],all_last_obs_copy.shape[1],all_last_obs_copy.shape[2],-1) # stack on the channel dimension
+
+
+                # all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0]
+                
+                # # argmax
+                # all_cf_rewards_class_index = th.argmax(all_cf_rewards,dim=-1).cpu().numpy()
+
+                # # Set reward not in the dict to be default excluded reward
+                # reverse_reward_mapping_func = np.frompyfunc(lambda key: REWARD_ENV_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][1]), 1, 1) #SPEED, Can the function be jit?
+                # all_cf_rewards_values = reverse_reward_mapping_func(all_cf_rewards_class_index)
+
+                # # average along sample dimension
+                # all_cf_rewards = np.mean(all_cf_rewards_values,axis=1)
+                # total_cf_rewards.append(all_cf_rewards)
+                # prev_latent_state = policy.policy.vae_net.encoder(self.prev_latent_state.to(all_obs_actions_features.device), all_obs_actions_features, all_rewards_copy).rsample()
+                with th.no_grad():
+                    prev_mu, prev_sigma = policy.policy.vae_net.encode(all_last_obs_copy, cf_all_actions, all_rewards_copy)
+                    # prev_latent_state = policy.policy.vae_net.reparameterize(prev_mu, prev_sigma)
+                    prev_latent_state = prev_mu
+                    latent_state_space = policy.policy.transition_net(cf_all_actions.unsqueeze(0), prev_latent_state.unsqueeze(0))
+                    latent_state = latent_state_space[0].squeeze(0)
+                    all_cf_rewards = latent_state[3]
+                    # latent_state = latent_state.reshape(latent_state.shape[0],-1)
+                    # latent_state_action = th.cat((latent_state,all_actions_one_hot_flatten),dim=-1)
+                    # all_cf_rewards = policy.policy.reward_net(latent_state_action)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
+
+                all_cf_rewards = th.mean(all_cf_rewards,dim=1) #SPEED? Not sure in here
+                total_cf_rewards.append(all_cf_rewards)
+        total_cf_rewards = th.stack(total_cf_rewards,dim=0)
+        total_cf_rewards = th.mean(total_cf_rewards,dim=0).cpu().detach().numpy()        
+        self.prev_latent_state = prev_latent_state
+        return total_cf_rewards
 
     def compute_cf_rewards(self,policy,all_last_obs,all_actions,polid,all_distributions,sample_number=10):
         all_cf_rewards = []

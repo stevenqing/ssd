@@ -14,13 +14,13 @@ class CNN_Encoder(nn.Module):
     def __init__(
         self,
         observation_space: gym.spaces.Box,
-        reward_dim=3,
-        action_dim=4*3,
+        reward_dim=5,
+        action_dim=4*10,
         features_dim=128,
         view_len=7,
         num_frames=6,
         fcnet_hiddens=[1024, 128],
-        num_agents=3,
+        num_agents=5,
         enable_action_reward=False,
     ):
         super(CNN_Encoder, self).__init__()
@@ -42,7 +42,7 @@ class CNN_Encoder(nn.Module):
             stride=1,
             padding="valid",
         )
-        self.reward_layer = nn.Linear(in_features=reward_dim, out_features=features_dim)
+        self.reward_layer = nn.Linear(in_features=num_agents, out_features=features_dim)
         self.action_layer = nn.Linear(in_features=action_dim, out_features=features_dim)
         self.fc = nn.Linear(in_features=flat_out, out_features=fcnet_hiddens[0])
 
@@ -123,12 +123,12 @@ class VAE(nn.Module):
     def __init__(self,
         observation_space: gym.spaces.Box,
         reward_dim=3,
-        action_dim=4*3,
+        action_dim=4*10,
         features_dim=128,
         view_len=7,
         num_frames=6,
         fcnet_hiddens=[1024, 128],
-        num_agents=3,
+        num_agents=5,
         enable_action_reward=False,):
         super(VAE, self).__init__()
         self.encoder = CNN_Encoder(observation_space, reward_dim, action_dim, features_dim, view_len, num_frames, fcnet_hiddens, num_agents, enable_action_reward)
