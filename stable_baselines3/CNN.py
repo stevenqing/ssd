@@ -51,7 +51,7 @@ class CNN_Encoder(nn.Module):
 
     def forward(self, observations, action, reward) -> torch.Tensor:
         # Convert to tensor, rescale to [0, 1], and convert from B x H x W x C to B x C x H x W
-        if observations.shape[1] != 54:
+        if observations.shape[1] != 90:
             observations = observations.permute(0, 3, 1, 2)
         observations = F.relu(self.conv_1(observations.float()/255.0))
         features = torch.flatten(F.relu(self.conv_2(observations)), start_dim=1)

@@ -46,7 +46,7 @@ def gmm_loss(batch, mus, sigmas, logpi, reduce=True): # pylint: disable=too-many
     return - log_prob
 
 class _MDRNNBase(nn.Module):
-    def __init__(self, latents, actions, hiddens, gaussians, num_agents=3):
+    def __init__(self, latents, actions, hiddens, gaussians, num_agents=5):
         super().__init__()
         self.latents = latents
         self.actions = actions

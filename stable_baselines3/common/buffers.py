@@ -944,7 +944,7 @@ class RolloutBuffer(BaseBuffer):
     def get_sw(self, batch_size: Optional[int] = None, enable_trajs=False) -> Generator[RolloutBufferSamples, None, None]:
         assert self.full, ""
         indices = np.random.permutation(self.buffer_size * self.n_envs)
-        random_indices = np.random.randint(1, len(indices)-16, len(indices) // (self.n_envs * 4))
+        random_indices = np.random.randint(1, 1000-16, len(indices) // (self.n_envs * 4))
         extended_indices = random_indices[:,np.newaxis] + np.arange(16)
         # Prepare the data
         if not self.generator_ready:

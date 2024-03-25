@@ -595,7 +595,7 @@ class PPO(OnPolicyAlgorithm):
                     all_obs_traj = all_obs_traj.reshape(all_obs_traj.shape[0],all_obs_traj.shape[1],-1,all_obs_traj.shape[4],all_obs_traj.shape[5])
                     # preprocessing
                     all_actions_traj_one_hot = eye_matrix[all_actions_traj.to(int)].squeeze(-2)
-                    
+                    all_actions_traj_one_hot = all_actions_traj_one_hot.reshape(all_actions_traj_one_hot.shape[0], all_actions_traj_one_hot.shape[1], -1)
                     # all_actions_traj_one_hot = all_actions_traj_one_hot.permute(2,0,1,3,4)
 
                     # all_actions_traj_one_hot = all_actions_traj_one_hot.reshape(all_actions_traj_one_hot.shape[0]*all_actions_traj_one_hot.shape[1], seq_length, -1)
@@ -606,7 +606,7 @@ class PPO(OnPolicyAlgorithm):
                     # all_rewards_traj = all_rewards_traj.permute(1,0,2)
 
                     latent_obs_traj, latent_next_obs_traj = self.policy.to_latent(prev_obs_traj,all_obs_traj,all_actions_traj_one_hot,all_rewards_traj,self.batch_size,seq_length) #TODO: check the to_latent function, I did some significant changes in here
-                    transition_loss, predicted_reward = self.policy.get_loss(latent_obs_traj, all_actions_traj_one_hot, all_rewards_traj, all_dones,latent_next_obs_traj, include_reward = True)
+                    transition_loss, predicted_reward = self.policy.get_loss(latent_obs_traj, all_actions_traj_one_hot, all_rewards_traj,latent_next_obs_traj, include_reward = True)
 
                     
                     loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + vae_loss + transition_loss['loss']

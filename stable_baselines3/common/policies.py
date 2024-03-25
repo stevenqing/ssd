@@ -1129,7 +1129,7 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
             next_obs_mu = th.stack([self.vae_net.encoder(x[0],x[1],x[2])[0] for x in zip(next_obs, action, reward)])
         return obs_mu, next_obs_mu
     
-    def get_loss(self, latent_obs, action, reward, terminal,
+    def get_loss(self, latent_obs, action, reward,
                 latent_next_obs, include_reward: bool):
         """ Compute losses.
 
