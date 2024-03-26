@@ -72,6 +72,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         self.using_reward_timestep = using_reward_timestep
         self.enable_trajs_learning = enable_trajs_learning
         self.add_spawn_prob = add_spawn_prob
+        self.hidden_enable = True
         env_fn = lambda: DummyGymEnv(self.observation_space, self.action_space)
         dummy_env = DummyVecEnv([env_fn] * self.num_envs)
         self.policies = [
@@ -553,6 +554,10 @@ class IndependentPPO(OnPolicyAlgorithm):
                             cf_rewards=None,
                         )
                     elif self.model == 'vae':
+                        # if steps % 16 == 0:
+                        #     self.hidden_enable = False
+                        # else:
+                        #     self.hidden_enable = True
                         cf_rewards = self.compute_transition_cf_rewards(policy,all_last_obs,all_rewards,all_actions,polid,all_distributions) #SPEED
                         policy.rollout_buffer.add_sw( #TODO: add the latent state to the buffer
                             all_last_obs[polid],
@@ -886,7 +891,7 @@ class IndependentPPO(OnPolicyAlgorithm):
     #     all_actions_one_hot = F.one_hot(all_actions, num_classes=self.action_space.n).repeat(1,1,(self.num_agents-1) * self.action_space.n,1)
 
 
-    def compute_transition_cf_rewards(self,policy,all_last_obs,all_rewards,all_actions,polid,all_distributions,sample_number=10):
+    def compute_transition_cf_rewards(self,policy,all_last_obs,all_rewards,all_actions,polid,all_distributions,hidden_enable,sample_number=10):
         all_cf_rewards = []
 
         all_last_obs = obs_as_tensor(np.array(all_last_obs), policy.device)
