@@ -59,7 +59,7 @@
             "justMyCode": false,
             "args": [
                 "--env",
-                "cleanup",
+                "harvest",
                 "--model",
                 "vae",
                 "--num-agents",

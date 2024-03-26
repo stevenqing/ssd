@@ -558,7 +558,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                         #     self.hidden_enable = False
                         # else:
                         #     self.hidden_enable = True
-                        cf_rewards = self.compute_transition_cf_rewards(policy,all_last_obs,all_rewards,all_actions,polid,all_distributions) #SPEED
+                        cf_rewards = self.compute_transition_cf_rewards(policy,all_last_obs,all_rewards,all_actions,polid,all_distributions,enable_multi_step=True) #SPEED
                         policy.rollout_buffer.add_sw( #TODO: add the latent state to the buffer
                             all_last_obs[polid],
                             all_actions[polid],
@@ -891,7 +891,7 @@ class IndependentPPO(OnPolicyAlgorithm):
     #     all_actions_one_hot = F.one_hot(all_actions, num_classes=self.action_space.n).repeat(1,1,(self.num_agents-1) * self.action_space.n,1)
 
 
-    def compute_transition_cf_rewards(self,policy,all_last_obs,all_rewards,all_actions,polid,all_distributions,sample_number=10):
+    def compute_transition_cf_rewards(self,policy,all_last_obs,all_rewards,all_actions,polid,all_distributions,enable_multi_step=False,sample_number=10):
         all_cf_rewards = []
 
         all_last_obs = obs_as_tensor(np.array(all_last_obs), policy.device)
@@ -956,17 +956,33 @@ class IndependentPPO(OnPolicyAlgorithm):
                 # all_cf_rewards = np.mean(all_cf_rewards_values,axis=1)
                 # total_cf_rewards.append(all_cf_rewards)
                 # prev_latent_state = policy.policy.vae_net.encoder(self.prev_latent_state.to(all_obs_actions_features.device), all_obs_actions_features, all_rewards_copy).rsample()
+                prev_mu = None
                 with th.no_grad():
-                    prev_mu, prev_sigma = policy.policy.vae_net.encode(all_last_obs_copy, cf_all_actions, all_rewards_copy)
-                    # prev_latent_state = policy.policy.vae_net.reparameterize(prev_mu, prev_sigma)
-                    prev_latent_state = prev_mu
-                    latent_state_space = policy.policy.transition_net(cf_all_actions.unsqueeze(0), prev_latent_state.unsqueeze(0))
-                    latent_state = latent_state_space[0].squeeze(0)
-                    all_cf_rewards = latent_state[3]
+                    if enable_multi_step:
+                        all_cf_rewards = []
+                        for _ in range(16):
+                            if prev_mu == None:
+                                prev_mu, prev_sigma = policy.policy.vae_net.encode(all_last_obs_copy, cf_all_actions, all_rewards_copy)
+                            # prev_latent_state = policy.policy.vae_net.reparameterize(prev_mu, prev_sigma)
+                                prev_latent_state = prev_mu
+                            else:
+                                prev_latent_state = latent_state
+                            latent_state_space = policy.policy.transition_net(cf_all_actions.unsqueeze(0), prev_latent_state.unsqueeze(0))
+                            latent_state = latent_state_space[0].squeeze(0).squeeze(1)
+                            all_cf_rewards.append(latent_state_space[3])
+                    else:
+                        prev_mu, prev_sigma = policy.policy.vae_net.encode(all_last_obs_copy, cf_all_actions, all_rewards_copy)
+                        # prev_latent_state = policy.policy.vae_net.reparameterize(prev_mu, prev_sigma)
+                        prev_latent_state = prev_mu
+                        latent_state_space = policy.policy.transition_net(cf_all_actions.unsqueeze(0), prev_latent_state.unsqueeze(0))
+                        latent_state = latent_state_space[0].squeeze(0)
+                        all_cf_rewards = latent_state[3]
                     # latent_state = latent_state.reshape(latent_state.shape[0],-1)
                     # latent_state_action = th.cat((latent_state,all_actions_one_hot_flatten),dim=-1)
                     # all_cf_rewards = policy.policy.reward_net(latent_state_action)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
-
+                if enable_multi_step:
+                    all_cf_rewards = th.stack(all_cf_rewards)
+                    all_cf_rewards = th.mean(all_cf_rewards,dim=0)
                 all_cf_rewards = th.mean(all_cf_rewards,dim=1) #SPEED? Not sure in here
                 total_cf_rewards.append(all_cf_rewards)
         total_cf_rewards = th.stack(total_cf_rewards,dim=0)
