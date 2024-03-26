@@ -21,12 +21,13 @@ class CNN_Encoder(nn.Module):
         num_frames=6,
         fcnet_hiddens=[1024, 128],
         num_agents=5,
+        env_name='harvest',
         enable_action_reward=False,
     ):
         super(CNN_Encoder, self).__init__()
         # We assume CxHxW images (channels first)
         # Re-ordering will be done by pre-preprocessing or wrapper
-
+        self.action_dim = action_dim if env_name == 'harvest' else 5*9
         flat_out = num_frames * num_agents * 3 * (view_len * 2 - 3) ** 2
         self.conv_1 = nn.Conv2d(
             in_channels=num_frames * 3 * num_agents,  # Input: (3 * 4) x 15 x 15
@@ -43,7 +44,7 @@ class CNN_Encoder(nn.Module):
             padding="valid",
         )
         self.reward_layer = nn.Linear(in_features=num_agents, out_features=features_dim)
-        self.action_layer = nn.Linear(in_features=action_dim, out_features=features_dim)
+        self.action_layer = nn.Linear(in_features=self.action_dim, out_features=features_dim)
         self.fc = nn.Linear(in_features=flat_out, out_features=fcnet_hiddens[0])
 
         self.mu_header = nn.Linear(in_features=fcnet_hiddens[0] + features_dim*2, out_features=fcnet_hiddens[1])
@@ -87,7 +88,7 @@ class CNN_Decoder(nn.Module):
         super(CNN_Decoder, self).__init__()
         # We assume CxHxW images (channels first)
         # Re-ordering will be done by pre-preprocessing or wrapper
-
+    
         flat_out = num_frames * num_agents * 3 * (view_len * 2 - 3) ** 2
         self.view_len = view_len
         self.num_frames = num_frames
@@ -129,9 +130,10 @@ class VAE(nn.Module):
         num_frames=6,
         fcnet_hiddens=[1024, 128],
         num_agents=5,
+        env_name='harvest',
         enable_action_reward=False,):
         super(VAE, self).__init__()
-        self.encoder = CNN_Encoder(observation_space, reward_dim, action_dim, features_dim, view_len, num_frames, fcnet_hiddens, num_agents, enable_action_reward)
+        self.encoder = CNN_Encoder(observation_space, reward_dim, action_dim, features_dim, view_len, num_frames, fcnet_hiddens, num_agents, env_name,enable_action_reward)
         self.decoder = CNN_Decoder(observation_space, features_dim, view_len, num_frames, fcnet_hiddens, num_agents, enable_action_reward)
     
     def forward(self, obs, action, reward):

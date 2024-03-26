@@ -1012,6 +1012,7 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
         num_agents: int = 3,
+        env_name: str = 'harvest',
     ):
         super().__init__(
             observation_space,
@@ -1034,6 +1035,7 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
         )
         self.num_agents = num_agents
         self.previous_latent_state = None
+        self.env_name = env_name
         self._build(lr_schedule)
 
     def _build_mlp_extractor(self) -> None:
@@ -1079,7 +1081,7 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
         self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf, 1)
         # self.reward_net = CausalModel(self.mlp_extractor.latent_dim_vf+self.action_space.n,self.num_agents) # use individual training
         self.reward_net = CausalModel((self.mlp_extractor.latent_dim_vf + self.action_space.n)*self.num_agents , self.num_agents) # use global training
-        self.vae_net = VAE(self.observation_space, num_agents=self.num_agents)
+        self.vae_net = VAE(self.observation_space, num_agents=self.num_agents, env_name=self.env_name)
         self.transition_net = MDRNN(self.mlp_extractor.latent_dim_vf, self.action_space.n * self.num_agents, self.mlp_extractor.latent_dim_vf, self.num_agents) 
         # Init weights: use orthogonal initialization
         # with small initial weight for the output

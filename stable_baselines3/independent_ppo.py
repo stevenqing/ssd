@@ -891,7 +891,7 @@ class IndependentPPO(OnPolicyAlgorithm):
     #     all_actions_one_hot = F.one_hot(all_actions, num_classes=self.action_space.n).repeat(1,1,(self.num_agents-1) * self.action_space.n,1)
 
 
-    def compute_transition_cf_rewards(self,policy,all_last_obs,all_rewards,all_actions,polid,all_distributions,hidden_enable,sample_number=10):
+    def compute_transition_cf_rewards(self,policy,all_last_obs,all_rewards,all_actions,polid,all_distributions,sample_number=10):
         all_cf_rewards = []
 
         all_last_obs = obs_as_tensor(np.array(all_last_obs), policy.device)

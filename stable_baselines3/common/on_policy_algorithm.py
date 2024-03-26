@@ -126,6 +126,7 @@ class OnPolicyAlgorithm(BaseAlgorithm):
             self.action_space,
             self.lr_schedule,
             use_sde=self.use_sde,
+            env_name=self.env_name,
             # add_spawn_prob=self.add_spawn_prob,
             **self.policy_kwargs  # pytype:disable=not-instantiable
         )
