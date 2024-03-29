@@ -969,6 +969,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                                 prev_latent_state = latent_state
                             latent_state_space = policy.policy.transition_net(cf_all_actions.unsqueeze(0), prev_latent_state.unsqueeze(0))
                             latent_state = latent_state_space[0].squeeze(0).squeeze(1)
+                            latent_state = th.mean(latent_state,dim=1)
                             all_cf_rewards.append(latent_state_space[3])
                     else:
                         prev_mu, prev_sigma = policy.policy.vae_net.encode(all_last_obs_copy, cf_all_actions, all_rewards_copy)

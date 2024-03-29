@@ -1082,7 +1082,7 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
         # self.reward_net = CausalModel(self.mlp_extractor.latent_dim_vf+self.action_space.n,self.num_agents) # use individual training
         self.reward_net = CausalModel((self.mlp_extractor.latent_dim_vf + self.action_space.n)*self.num_agents , self.num_agents) # use global training
         self.vae_net = VAE(self.observation_space, num_agents=self.num_agents, env_name=self.env_name)
-        self.transition_net = MDRNN(self.mlp_extractor.latent_dim_vf, self.action_space.n * self.num_agents, self.mlp_extractor.latent_dim_vf, 1) 
+        self.transition_net = MDRNN(self.mlp_extractor.latent_dim_vf, self.action_space.n * self.num_agents, self.mlp_extractor.latent_dim_vf, self.num_agents) 
         # Init weights: use orthogonal initialization
         # with small initial weight for the output
         if self.ortho_init:
