@@ -64,7 +64,7 @@ class MDRNN(_MDRNNBase):
     def __init__(self, latents, actions, hiddens, gaussians):
         super().__init__(latents, actions, hiddens, gaussians)
         self.rnn = nn.LSTM(latents + actions, hiddens)
-
+        self.hidden = None
     def forward(self, actions, latents): # pylint: disable=arguments-differ
         """ MULTI STEPS forward.
 
@@ -104,6 +104,52 @@ class MDRNN(_MDRNNBase):
         ds = gmm_outs[:, :, -1]
 
         return mus, sigmas, logpi, rs, ds
+
+    def predict(self, actions, latents): # pylint: disable=arguments-differ
+        """ One STEPS forward.
+
+        :args actions: (SEQ_LEN, BSIZE, ASIZE) torch tensor
+        :args latents: (SEQ_LEN, BSIZE, LSIZE) torch tensor
+
+        :returns: mu_nlat, sig_nlat, pi_nlat, rs, ds, parameters of the GMM
+        prediction for the next latent, gaussian prediction of the reward and
+        logit prediction of terminality.
+            - mu_nlat: (SEQ_LEN, BSIZE, N_GAUSS, LSIZE) torch tensor
+            - sigma_nlat: (SEQ_LEN, BSIZE, N_GAUSS, LSIZE) torch tensor
+            - logpi_nlat: (SEQ_LEN, BSIZE, N_GAUSS) torch tensor
+            - rs: (SEQ_LEN, BSIZE) torch tensor
+            - ds: (SEQ_LEN, BSIZE) torch tensor
+        """
+        seq_len, bs = actions.size(0), actions.size(1)
+
+        ins = torch.cat([actions, latents], dim=-1)
+        if self.hidden == None:
+            outs, hidden = self.rnn(ins)
+        else:
+            outs, hidden = self.rnn(ins, self.hidden)
+        self.hidden = hidden
+        gmm_outs = self.gmm_linear(outs)
+
+        stride = self.gaussians * self.latents
+
+        mus = gmm_outs[:, :, :stride]
+        mus = mus.view(seq_len, bs, self.gaussians, self.latents)
+
+        sigmas = gmm_outs[:, :, stride:2 * stride]
+        sigmas = sigmas.view(seq_len, bs, self.gaussians, self.latents)
+        sigmas = torch.exp(sigmas)
+
+        pi = gmm_outs[:, :, 2 * stride: 2 * stride + self.gaussians]
+        pi = pi.view(seq_len, bs, self.gaussians)
+        logpi = f.log_softmax(pi, dim=-1)
+
+        rs = gmm_outs[:, :, -self.num_agents-2:-2]
+
+        ds = gmm_outs[:, :, -1]
+
+        return mus, sigmas, logpi, rs, ds
+
+
 
 
     def gmm_loss(self, batch, mus, sigmas, logpi, reduce=True): # pylint: disable=too-many-arguments

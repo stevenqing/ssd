@@ -967,7 +967,8 @@ class IndependentPPO(OnPolicyAlgorithm):
                                 prev_latent_state = prev_mu
                             else:
                                 prev_latent_state = latent_state
-                            latent_state_space = policy.policy.transition_net(cf_all_actions.unsqueeze(0), prev_latent_state.unsqueeze(0))
+                            decode_obs = policy.policy.vae_net.decoder(prev_mu)
+                            latent_state_space = policy.policy.transition_net.predict(cf_all_actions.unsqueeze(0), prev_latent_state.unsqueeze(0))
                             latent_state = latent_state_space[0].squeeze(0).squeeze(1)
                             latent_state = th.mean(latent_state,dim=1)
                             all_cf_rewards.append(latent_state_space[3])
