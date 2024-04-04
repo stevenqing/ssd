@@ -93,7 +93,7 @@ def parse_args():
     parser.add_argument(
         "--alpha",
         type=float,
-        default=0.55,
+        default=1,
         help="Advantageous inequity aversion factor",
     )
     parser.add_argument(
