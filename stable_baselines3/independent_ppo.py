@@ -890,6 +890,20 @@ class IndependentPPO(OnPolicyAlgorithm):
     #     index = 0
     #     all_actions_one_hot = F.one_hot(all_actions, num_classes=self.action_space.n).repeat(1,1,(self.num_agents-1) * self.action_space.n,1)
 
+    # def generate_cf_actions(self,all_distributions,sample_number,polid,all_actions=None,all_obs=None):
+    #     if all_actions != None:
+    #         cf_all_actions = copy.deepcopy(all_actions).squeeze(-1)
+    #         cf_all_actions = cf_all_actions.unsqueeze(1).repeat(1,sample_number, 1) #.permute(1, 0, 2)
+    #     else:
+    #         for i in range(self.num_agents):
+
+    #     for i in range(self.num_agents):
+    #         if i != polid:
+    #             cf_action_i = self.generate_samples(all_distributions[i],sample_number).permute(1, 0)
+    #             cf_all_actions_copy = cf_all_actions.clone()
+    #             # cf_all_actions[:, :, i] = cf_action_i
+    #             cf_all_actions_copy[:, :, i] = cf_action_i
+    #             total_actions[i] = cf_all_actions_copy
 
     def compute_transition_cf_rewards(self,policy,all_last_obs,all_rewards,all_actions,polid,all_distributions,enable_multi_step=False,sample_number=10):
         all_cf_rewards = []
@@ -942,20 +956,6 @@ class IndependentPPO(OnPolicyAlgorithm):
                 all_last_obs_copy = all_last_obs.clone().permute(1,2,3,0,4)
                 all_last_obs_copy = all_last_obs_copy.reshape(all_last_obs_copy.shape[0],all_last_obs_copy.shape[1],all_last_obs_copy.shape[2],-1) # stack on the channel dimension
 
-
-                # all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0]
-                
-                # # argmax
-                # all_cf_rewards_class_index = th.argmax(all_cf_rewards,dim=-1).cpu().numpy()
-
-                # # Set reward not in the dict to be default excluded reward
-                # reverse_reward_mapping_func = np.frompyfunc(lambda key: REWARD_ENV_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][1]), 1, 1) #SPEED, Can the function be jit?
-                # all_cf_rewards_values = reverse_reward_mapping_func(all_cf_rewards_class_index)
-
-                # # average along sample dimension
-                # all_cf_rewards = np.mean(all_cf_rewards_values,axis=1)
-                # total_cf_rewards.append(all_cf_rewards)
-                # prev_latent_state = policy.policy.vae_net.encoder(self.prev_latent_state.to(all_obs_actions_features.device), all_obs_actions_features, all_rewards_copy).rsample()
                 prev_mu = None
                 with th.no_grad():
                     if enable_multi_step:
@@ -968,13 +968,14 @@ class IndependentPPO(OnPolicyAlgorithm):
                             else:
                                 prev_latent_state = latent_state
                             decode_obs = policy.policy.vae_net.decoder(prev_mu)
+                            distribution = policy.policy(decode_obs[:,polid*18:(polid+1)*18,:,:].permute(0,2,3,1))[3]
                             latent_state_space = policy.policy.transition_net.predict(cf_all_actions.unsqueeze(0), prev_latent_state.unsqueeze(0))
                             latent_state = latent_state_space[0].squeeze(0).squeeze(1)
                             latent_state = th.mean(latent_state,dim=1)
                             all_cf_rewards.append(latent_state_space[3])
                     else:
                         prev_mu, prev_sigma = policy.policy.vae_net.encode(all_last_obs_copy, cf_all_actions, all_rewards_copy)
-                        # prev_latent_state = policy.policy.vae_net.reparameterize(prev_mu, prev_sigma)
+                        prev_latent_state = policy.policy.vae_net.reparameterize(prev_mu, prev_sigma)
                         prev_latent_state = prev_mu
                         latent_state_space = policy.policy.transition_net(cf_all_actions.unsqueeze(0), prev_latent_state.unsqueeze(0))
                         latent_state = latent_state_space[0].squeeze(0)
