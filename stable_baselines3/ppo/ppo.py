@@ -800,9 +800,9 @@ class PPO(OnPolicyAlgorithm):
                 if self.polid != None:
                     wandb.log({f"{self.polid}/all_predicted_reward": predicted_reward.sum()}, step=self.num_timesteps)
                     wandb.log({f"{self.polid}/all_rewards": all_rewards.sum()}, step=self.num_timesteps)
-                    for polid in range(self.num_agents):
-                        wandb.log({f"{self.polid}/predicted_reward/{polid}": predicted_reward[:,:,polid].sum()}, step=self.num_timesteps)
-                        wandb.log({f"{self.polid}/all_rewards/{polid}": all_rewards[:,:,polid].sum()}, step=self.num_timesteps)
+                    # for polid in range(self.num_agents):
+                    #     wandb.log({f"{self.polid}/predicted_reward/{polid}": predicted_reward[:,:,polid].sum()}, step=self.num_timesteps)
+                    #     wandb.log({f"{self.polid}/all_rewards/{polid}": all_rewards[:,:,polid].sum()}, step=self.num_timesteps)
             if not reweighted_reward_losses == None:
                 if reweighted_reward_losses != 0:
                     wandb.log({f"train/reweighted_reward_loss": reweighted_reward_losses.item()}, step=self.num_timesteps)
