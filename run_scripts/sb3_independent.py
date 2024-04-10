@@ -294,7 +294,7 @@ def main(args):
                             project="SSD_pytorch",
                             entity=args.user_name, 
                             notes=socket.gethostname(),
-                            name=str(env_name) + "_" + str(extractor) + "_" + str(model) ,
+                            name=str(env_name) + "_" + str(extractor) + "_" + str(model)+ "_" + "test" ,
                             group=str(env_name) +"_hard_cf_modified_discrete_" + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha) + "_add_spawn_prob_" + str(add_spawn_prob),
                             dir="./",
                             job_type="training",

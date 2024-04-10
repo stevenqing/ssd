@@ -525,7 +525,7 @@ class RolloutBuffer(BaseBuffer):
             else:
             # using cf
                 # delta = self.rewards[step] + alpha * np.sum(self.cf_rewards[step],axis=-1) + self.gamma * next_values * next_non_terminal - self.values[step]   
-                delta = self.rewards[step] + alpha * np.sum(self.cf_rewards[step:step+16],axis=-1) + self.gamma * next_values * next_non_terminal - self.values[step]   
+                delta = self.rewards[step] + alpha * np.sum(np.sum(self.cf_rewards[step:step+16],axis=-1),axis=0) + self.gamma * next_values * next_non_terminal - self.values[step]   
 
             last_gae_lam = delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam
             self.advantages[step] = last_gae_lam
