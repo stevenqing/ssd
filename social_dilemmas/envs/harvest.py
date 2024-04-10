@@ -118,7 +118,7 @@ class HarvestEnv(MapEnv):
                     spawn_prob = INTERVAL_SPAWN_PROB[1]
                 elif num_apples > 62 and num_apples <= 93:
                     spawn_prob = INTERVAL_SPAWN_PROB[2]
-                elif num_apples > 31 and num_apples <= 62:
+                elif num_apples > 6 and num_apples <= 62:
                     spawn_prob = INTERVAL_SPAWN_PROB[3]
                 else:
                     spawn_prob = INTERVAL_SPAWN_PROB[4]
