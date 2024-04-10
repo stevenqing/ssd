@@ -61,7 +61,7 @@
                 "--env",
                 "harvest",
                 "--model",
-                "vae",
+                "causal",
                 "--num-agents",
                 "5",
                 "--rollout-len",
