@@ -424,7 +424,7 @@ class Coin4Agent(Agent):
             elif self.agent_id == agent3:
                 self.penalty_2 -= 2
             elif self.agent_id == agent4:
-                self.penalty_1 -= 2
+                self.penalty_2 -= 2
             return b" "
         elif char == b"C":
             self.reward_this_turn += 1
@@ -433,7 +433,7 @@ class Coin4Agent(Agent):
             elif self.agent_id == agent2:
                 self.penalty_3 -= 2
             elif self.agent_id == agent4:
-                self.penalty_1 -= 2
+                self.penalty_3 -= 2
             return b" "
         else:
             return char
