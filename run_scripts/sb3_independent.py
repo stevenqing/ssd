@@ -38,7 +38,7 @@ def parse_args():
         "--env-name",
         type=str,
         default="harvest",
-        choices=["harvest", "cleanup", "coin3", "lbf10"],
+        choices=["harvest", "cleanup", "coin3", "coin4", "coin5", "lbf10"],
         help="The SSD environment to use",
     )
     parser.add_argument(
