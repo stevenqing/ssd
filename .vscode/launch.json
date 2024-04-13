@@ -59,11 +59,11 @@
             "justMyCode": false,
             "args": [
                 "--env",
-                "coin4",
+                "coin5",
                 "--model",
                 "baseline",
                 "--num-agents",
-                "4",
+                "5",
                 "--rollout-len",
                 "1000",
                 "--user_name",

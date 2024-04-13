@@ -4,6 +4,7 @@ from social_dilemmas.envs.switch import SwitchEnv
 from social_dilemmas.envs.coin import CoinEnv
 from social_dilemmas.envs.coin3 import Coin3Env
 from social_dilemmas.envs.coin4 import Coin4Env
+from social_dilemmas.envs.coin5 import Coin5Env
 from social_dilemmas.envs.lbf10 import LBF10Env
 def get_env_creator(
     env,
@@ -63,6 +64,18 @@ def get_env_creator(
                 alpha=alpha,
                 beta=beta,
                 env_name='COIN4'
+            )
+    elif env == "coin5":
+        def env_creator(_):
+            return Coin5Env(
+                num_agents=num_agents,
+                return_agent_actions=True,
+                use_collective_reward=use_collective_reward,
+                inequity_averse_reward=inequity_averse_reward,
+                use_reward_model=use_reward_model,
+                alpha=alpha,
+                beta=beta,
+                env_name='COIN5'
             )
     elif env == "lbf10":
         def env_creator(_):

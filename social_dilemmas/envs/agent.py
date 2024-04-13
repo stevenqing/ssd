@@ -439,7 +439,79 @@ class Coin4Agent(Agent):
             return char
 
 
+class Coin5Agent(Agent):
+    def __init__(self, agent_id, start_pos, start_orientation, full_map, view_len):
+        self.view_len = view_len
+        super().__init__(agent_id, start_pos, start_orientation, full_map, view_len, view_len)
+        self.update_agent_pos(start_pos)
+        self.full_map = full_map
 
+    # Ugh, this is gross, this leads to the actions basically being
+    # defined in two places
+    def action_map(self, action_number):
+        """Maps action_number to a desired action in the map"""
+        return COIN_ACTIONS[action_number]
+
+    def get_done(self):
+        apple_pos,apple_type = self.count_apples()
+        if apple_pos == [[0,0],[0,0],[0,0]]:
+            return True
+        return False
+
+    def count_apples(self):
+        # Return apples pos and type
+        apple_pos = [[0,0],[0,0],[0,0]]
+        apple_type = [0,0,0]
+        for row in range(1,np.shape(self.full_map)[0]):
+           for col in range(1,np.shape(self.full_map)[1]):
+               char = self.full_map[row, col]
+               if char == b'A':
+                   apple_pos[0] = [int(row),int(col)]
+                   apple_type[0] = 1
+               elif char == b'B':
+                   apple_pos[1] = [int(row),int(col)]
+                   apple_type[1] = 2
+               elif char == b'C':
+                   apple_pos[2] = [int(row),int(col)]
+                   apple_type[2] = 3
+        return apple_pos, apple_type
+
+    def consume(self, char, pos=[0,0]):
+        """Defines how an agent interacts with the char it is standing on"""
+        agent1 = "agent-" + str(0)
+        agent2 = "agent-" + str(1)
+        agent3 = "agent-" + str(2)
+        agent4 = "agent-" + str(3)
+        agent5 = "agent-" + str(4)
+        if char == b"A":
+            self.reward_this_turn += 1
+            if self.agent_id == agent2:
+                self.penalty_1 -= 2
+            elif self.agent_id == agent3:
+                self.penalty_1 -= 2
+            elif self.agent_id == agent4 or self.agent_id == agent5:
+                self.penalty_1 -= 2
+            return b" "
+        elif char == b"B":
+            self.reward_this_turn += 1
+            if self.agent_id == agent1:
+                self.penalty_2 -= 2
+            elif self.agent_id == agent3:
+                self.penalty_2 -= 2
+            elif self.agent_id == agent4 or self.agent_id == agent5:
+                self.penalty_2 -= 2
+            return b" "
+        elif char == b"C":
+            self.reward_this_turn += 1
+            if self.agent_id == agent1:
+                self.penalty_3 -= 2
+            elif self.agent_id == agent2:
+                self.penalty_3 -= 2
+            elif self.agent_id == agent4 or self.agent_id == agent5:
+                self.penalty_3 -= 2
+            return b" "
+        else:
+            return char
 
 
 

@@ -100,7 +100,7 @@ class PPO(OnPolicyAlgorithm):
         device: Union[th.device, str] = "auto",
         _init_setup_model: bool = True,
         model: str = 'baseline',
-        num_agents: int = 4,
+        num_agents: int = 5,
         enable_trajs_learning: bool = False,
         polid: Optional[int] = None,
         enable_reward_model_learning: int = 2000000,

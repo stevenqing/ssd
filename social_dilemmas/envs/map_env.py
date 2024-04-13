@@ -360,7 +360,7 @@ class MapEnv(MultiAgentEnv):
         apple_type = None
         if self.env_name == 'LBF10':
             apple_pos, apple_type, apple_pos_list, apple_type_list = self.count_apples()
-        elif self.env_name == 'COIN3' or self.env_name == 'COIN4':
+        elif self.env_name == 'COIN3' or self.env_name == 'COIN4' or self.env_name == 'COIN5':
             apple_pos, apple_type = self.count_apples()
         elif self.env_name == 'CLEANUP':
             apple_pos, waste_pos = self.count_apples_waste()
