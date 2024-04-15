@@ -518,7 +518,8 @@ class RolloutBuffer(BaseBuffer):
                 next_values = last_values
             else:
                 next_non_terminal = 1.0 - self.episode_starts[step + 1]
-                next_values = self.values[step + 1]
+                # next_values = self.values[step + 1]
+                next_values = self.values[min(999,step+17)]
             if use_team_reward:
             # naivly using sw
                 delta = self.rewards[step] + alpha * np.sum(self.all_rewards[step],axis=-1) + self.gamma * next_values * next_non_terminal - self.values[step]
