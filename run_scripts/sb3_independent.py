@@ -80,14 +80,14 @@ def parse_args():
     )
     parser.add_argument(
         "--use-collective-reward",
-        type=bool,
-        default=False,
+        # type=bool,
+        action="store_false",
         help="Give each agent the collective reward across all agents",
     )
     parser.add_argument(
         "--inequity-averse-reward",
-        type=bool,
-        default=False,
+        # type=bool,
+        action="store_false",
         help="Use inequity averse rewards from 'Inequity aversion \
             improves cooperation in intertemporal social dilemmas'",
     )
