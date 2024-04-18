@@ -831,7 +831,8 @@ class IndependentPPO(OnPolicyAlgorithm):
                 all_cf_rewards = th.mean(all_cf_rewards,dim=1) #SPEED? Not sure in here
                 total_cf_rewards.append(all_cf_rewards)
         total_cf_rewards = th.stack(total_cf_rewards,dim=0)
-        total_cf_rewards = th.mean(total_cf_rewards,dim=0).cpu().detach().numpy()        
+        total_cf_rewards = th.mean(total_cf_rewards,dim=0).cpu().detach().numpy()
+        total_cf_rewards = np.delete(total_cf_rewards,polid,axis=1)        
         return total_cf_rewards
 
     def generate_samples(self,distribution,sample_number):

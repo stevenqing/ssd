@@ -405,7 +405,7 @@ class RolloutBuffer(BaseBuffer):
         self.all_actions = np.zeros((self.buffer_size, self.n_envs, self.agent_number, self.action_dim), dtype=np.float32)
         self.all_rewards = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
         self.all_dones = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
-        self.cf_rewards = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
+        self.cf_rewards = np.zeros((self.buffer_size, self.n_envs, self.agent_number-1), dtype=np.float32)
         self.inequity_rewards = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
 
         self.all_last_obs_traj = []
@@ -529,7 +529,7 @@ class RolloutBuffer(BaseBuffer):
                 delta = self.rewards[step] + alpha * np.sum(self.all_rewards[step],axis=-1) + self.gamma * next_values * next_non_terminal - self.values[step]
             else:
             # using cf
-                delta = self.rewards[step] + alpha * np.sum(self.cf_rewards[step],axis=-1) + self.gamma * next_values * next_non_terminal - self.values[step]   
+                delta = self.rewards[step] + alpha * np.sum(self.cf_rewards[step],axis=-1)/(self.agent_number - 1) + self.gamma * next_values * next_non_terminal - self.values[step]   
             last_gae_lam = delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam
             self.advantages[step] = last_gae_lam
         # TD(lambda) estimator, see Github PR #375 or "Telescoping in TD(lambda)"
