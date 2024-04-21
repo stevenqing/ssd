@@ -55,6 +55,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         env_name: str = 'harvest',
         use_collective_reward: bool = False,
         inequity_averse_reward: bool = False,
+        svo: bool = False,
     ):
         self.env = env
         self.env_name = env_name
@@ -73,6 +74,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         self.enable_trajs_learning = enable_trajs_learning
         self.use_collective_reward = use_collective_reward
         self.inequity_averse_reward = inequity_averse_reward
+        self.svo = svo
         env_fn = lambda: DummyGymEnv(self.observation_space, self.action_space)
         dummy_env = DummyVecEnv([env_fn] * self.num_envs)
         self.policies = [
@@ -620,6 +622,20 @@ class IndependentPPO(OnPolicyAlgorithm):
                             all_rewards,
                             inequity_reward,
                         )
+                    elif self.svo:
+                        svo_reward = self.compute_svo_rewards(all_rewards,polid) #SPEED
+                        policy.rollout_buffer.add_svo_sw(
+                            all_last_obs[polid],
+                            all_actions[polid],
+                            all_rewards[polid],
+                            all_last_episode_starts[polid],
+                            all_values[polid],
+                            all_log_probs[polid],
+                            all_last_obs,
+                            rollout_all_actions,
+                            all_rewards,
+                            svo_reward,
+                        )
                     else:
                         policy.rollout_buffer.add(
                             all_last_obs[polid],
@@ -684,6 +700,10 @@ class IndependentPPO(OnPolicyAlgorithm):
                         policy.rollout_buffer.compute_inequity_returns_and_advantage(
                         last_values=value, dones=all_dones[polid], polid=polid
                     )
+                    elif self.svo:
+                        policy.rollout_buffer.compute_svo_returns_and_advantage(
+                        last_values=value, dones=all_dones[polid], polid=polid
+                    )
                     else:
                         policy.rollout_buffer.compute_returns_and_advantage(
                         last_values=value, dones=all_dones[polid]
@@ -705,6 +725,19 @@ class IndependentPPO(OnPolicyAlgorithm):
             policy._last_episode_starts = all_last_episode_starts[polid]
 
         return obs
+
+    def compute_svo_rewards(self,all_rewards,polid):
+        sum_r = sum(all_rewards)
+        SVO_reward = [None] * self.num_envs
+        for i in range(len(all_rewards[polid])):
+            if all_rewards[polid][i] == 0:
+                SVO_reward[i] = 0
+            else:
+                tanh = ((sum_r[i] - all_rewards[polid][i])/(self.num_agents-1)) / all_rewards[polid][i]
+                theta = np.arctan(tanh)
+                target_theta = np.ones_like(theta)
+                SVO_reward[i] = np.abs(target_theta - theta)
+        return SVO_reward
 
     def compute_inequity_averse_rewards(self,individual_reward,all_rewards):
         diff = np.array([individual_reward - reward for reward in all_rewards])

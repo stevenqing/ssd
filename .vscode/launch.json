@@ -61,7 +61,7 @@
                 "--env",
                 "coin3",
                 "--model",
-                "causal",
+                "baseline",
                 "--num-agents",
                 "3",
                 "--rollout-len",
@@ -70,6 +70,8 @@
                 "1160677229",
                 "--num-envs",
                 "4",
+                "--svo",
+                "True",
                 "--extractor",
                 "cbam"
             ],

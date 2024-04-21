@@ -91,6 +91,13 @@ def parse_args():
             improves cooperation in intertemporal social dilemmas'",
     )
     parser.add_argument(
+        "--svo",
+        type=bool,
+        default=False,
+        help="Use inequity averse rewards from 'Inequity aversion \
+            improves cooperation in intertemporal social dilemmas'",
+    )
+    parser.add_argument(
         "--alpha",
         type=float,
         default=1,
@@ -231,6 +238,7 @@ def main(args):
     total_timesteps = args.total_timesteps
     use_collective_reward = args.use_collective_reward
     inequity_averse_reward = args.inequity_averse_reward
+    svo = args.svo
     add_apple_growth_rate = args.add_apple_growth_rate
     alpha = args.alpha
     beta = args.beta
@@ -273,47 +281,71 @@ def main(args):
         env, num_vec_envs=num_envs, num_cpus=num_cpus, base_class="stable_baselines3"
     )
     env = VecMonitor(env)
-    if enable_trajs_learning:
-        run = wandb.init(config=args,
-                            project="SSD_pytorch",
-                            entity=args.user_name, 
-                            notes=socket.gethostname(),
-                            name=str(env_name) + "_" + str(extractor) + "_" + str(model),
-                            group=str(env_name) +"_trajs_motive_" + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
-                            dir="./",
-                            job_type="training",
-                            reinit=True)
-    else:
-        if env_name == 'lbf10':
-            run = wandb.init(config=args,
-                            project="SSD_pytorch",
-                            entity=args.user_name, 
-                            notes=socket.gethostname(),
-                            name=str(env_name) +"_" + str(extractor) + "_112_" + str(model),
-                            group=str(env_name) + "_cf_lbf_modified_146" + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha) + "_inequity_averse_" + str(args.inequity_averse_reward) + "_collective_" + str(args.use_collective_reward),
-                            dir="./",
-                            job_type="training",
-                            reinit=True)
-        if env_name == 'coin3':
-            run = wandb.init(config=args,
-                            project="Neurips2024",
-                            entity=args.user_name, 
-                            notes=socket.gethostname(),
-                            name=str(env_name) +"_" + str(extractor) + str(model),
-                            group=str(env_name) + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha) + "_inequity_averse_" + str(args.inequity_averse_reward) + "_collective_" + str(args.use_collective_reward),
-                            dir="./",
-                            job_type="training",
-                            reinit=True)
+
+
+    if model == 'baseline':
+        if inequity_averse_reward:
+            model_name = "inequity_aversion"
+        elif use_collective_reward:
+            model_name = "collective"
+        elif svo:
+            model_name = "svo"
         else:
-            run = wandb.init(config=args,
-                            project="SSD_pytorch",
-                            entity=args.user_name, 
-                            notes=socket.gethostname(),
-                            name=str(env_name) +"_" + str(extractor) + "_" + str(model),
-                            group=str(env_name) + "_cf_modified_" + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha)  + "_inequity_averse_" + str(args.inequity_averse_reward) + "_collective_" + str(args.use_collective_reward),
-                            dir="./",
-                            job_type="training",
-                            reinit=True)
+            model_name = "baseline"
+    else:
+        model_name = model
+
+    run = wandb.init(config=args,
+                     project="Neurips2024",
+                    entity=args.user_name, 
+                    notes=socket.gethostname(),
+                    name=str(env_name) +"_" + str(extractor) + str(model_name),
+                    group=str(env_name) + str(model_name)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
+                    dir="./",
+                    job_type="training",
+                    reinit=True)
+
+    # if enable_trajs_learning:
+    #     run = wandb.init(config=args,
+    #                         project="SSD_pytorch",
+    #                         entity=args.user_name, 
+    #                         notes=socket.gethostname(),
+    #                         name=str(env_name) + "_" + str(extractor) + "_" + str(model),
+    #                         group=str(env_name) +"_trajs_motive_" + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
+    #                         dir="./",
+    #                         job_type="training",
+    #                         reinit=True)
+    # else:
+    #     if env_name == 'lbf10':
+    #         run = wandb.init(config=args,
+    #                         project="SSD_pytorch",
+    #                         entity=args.user_name, 
+    #                         notes=socket.gethostname(),
+    #                         name=str(env_name) +"_" + str(extractor) + "_112_" + str(model),
+    #                         group=str(env_name) + "_cf_lbf_modified_146" + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha) + "_inequity_averse_" + str(args.inequity_averse_reward) + "_collective_" + str(args.use_collective_reward),
+    #                         dir="./",
+    #                         job_type="training",
+    #                         reinit=True)
+    #     if env_name == 'coin3':
+    #         run = wandb.init(config=args,
+    #                         project="Neurips2024",
+    #                         entity=args.user_name, 
+    #                         notes=socket.gethostname(),
+    #                         name=str(env_name) +"_" + str(extractor) + str(model),
+    #                         group=str(env_name) + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha) + "_inequity_averse_" + str(args.inequity_averse_reward) + "_collective_" + str(args.use_collective_reward),
+    #                         dir="./",
+    #                         job_type="training",
+    #                         reinit=True)
+    #     else:
+    #         run = wandb.init(config=args,
+    #                         project="SSD_pytorch",
+    #                         entity=args.user_name, 
+    #                         notes=socket.gethostname(),
+    #                         name=str(env_name) +"_" + str(extractor) + "_" + str(model),
+    #                         group=str(env_name) + "_cf_modified_" + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha)  + "_inequity_averse_" + str(args.inequity_averse_reward) + "_collective_" + str(args.use_collective_reward),
+    #                         dir="./",
+    #                         job_type="training",
+    #                         reinit=True)
 
     
     args = wandb.config # for wandb sweep
@@ -363,6 +395,7 @@ def main(args):
             env_name=env_name,
             use_collective_reward=use_collective_reward,
             inequity_averse_reward=inequity_averse_reward,
+            svo=svo,
         )
     elif model == 'causal' or model == 'team':
         model = IndependentPPO(
