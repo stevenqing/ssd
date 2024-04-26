@@ -271,15 +271,27 @@ def main(args):
     )
     env = VecMonitor(env)
 
+    if model == 'baseline':
+        if inequity_averse_reward:
+            model_name = "inequity_aversion"
+        elif use_collective_reward:
+            model_name = "collective"
+        # elif svo:
+        #     model_name = "svo"
+        else:
+            model_name = "baseline"
+    else:
+        model_name = model
+
     run = wandb.init(config=args,
-                         project="SSD_pytorch",
-                         entity=args.user_name, 
-                         notes=socket.gethostname(),
-                         name=str(env_name) +"_"+ str(model),
-                         group=str(env_name) +"_causal_image_"+ "_inequity_averse_" + str(args.inequity_averse_reward) + "_collective_" + str(args.use_collective_reward) + "_" + str(model) + "_" + str(args.seed) + "_"+ str(args.alpha),
-                         dir="./",
-                         job_type="training",
-                         reinit=True)
+                     project="Neurips2024",
+                    entity=args.user_name, 
+                    notes=socket.gethostname(),
+                    name=str(env_name) +"_" + str(extractor) + str(model_name) + "_centralized",
+                    group=str(env_name) + str(model_name)+ "_centralized_" + str(args.seed)+ "_" + str(args.alpha),
+                    dir="./",
+                    job_type="training",
+                    reinit=True)
     
     args = wandb.config # for wandb sweep
 

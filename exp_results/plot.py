@@ -6,7 +6,7 @@ import pandas as pd
 root_dir = f"./data/"
 print(os.path.exists(root_dir))
 
-METHODs = ['Selfish', 'Ours', 'Ours_oldcf_cont', 'Ours-oldcf_discrete', 'team', 'Inequity']
+METHODs = ['Selfish', 'CF', 'Ours_oldcf_cont', 'Ours-oldcf_discrete', 'SVO', 'Inequity']
 SCENARIOs = ['Coin', 'LBF', 'Cleanup', "Harvest"]
 # for each env
 COLORs = ['r', 'hotpink', 'c', 'b', 'dodgerblue', 'mediumpurple',
@@ -52,7 +52,7 @@ for scenario_tag in SCENARIOs:
                     continue
                 rewards = raw_data[row_key]
             if scenario_tag == 'Coin':
-                data_dict[scenario_tag][method_name][seed] = rewards[: 200]
+                data_dict[scenario_tag][method_name][seed] = rewards
             elif scenario_tag == 'Cleanup':
                 data_dict[scenario_tag][method_name][seed] = rewards[60 : 157]
             elif scenario_tag == 'LBF':
@@ -117,7 +117,7 @@ def draw_each(env_name, data_dict, i, color_list, map_method_to_name):
         # plt.set_yticklabels(plt.get_yticks(), fontsize=20)
         # plt.set_xticklabels(plt.get_xticks(), fontsize=20)
         # timestep = (timestep / 10000).i
-        plt.plot(timestep * 100, exponential_moving_average(r_mean, 0.1), color=color,
+        plt.plot(timestep * 100, exponential_moving_average(r_mean, 1), color=color,
                  label=map_method_to_name[method],  # +'-' + str(seed_num),
                  linewidth=lw, linestyle='solid',
                  )
@@ -125,7 +125,7 @@ def draw_each(env_name, data_dict, i, color_list, map_method_to_name):
         # plt.xticks(np.arange(0, 80000, 10000))
         # print(method, r_mean)
         # r_std = r_std * 0.7
-        plt.fill_between(timestep * 100, exponential_moving_average(r_mean - r_std, 0.1), exponential_moving_average(r_mean + r_std, 0.1), alpha=0.1,
+        plt.fill_between(timestep * 100, exponential_moving_average(r_mean - r_std, 1), exponential_moving_average(r_mean + r_std, 0.1), alpha=0.1,
                          color=color)
         # if 'causal' in config["method"]:
     # plt.legend(loc="best", bbox_to_anchor=(1.0, 0.0), borderaxespad=0.1, borderpad=0.2, fontsize=7)
