@@ -800,9 +800,17 @@ class PPO(OnPolicyAlgorithm):
                 if self.polid != None:
                     wandb.log({f"{self.polid}/all_predicted_reward": predicted_reward.sum()}, step=self.num_timesteps)
                     wandb.log({f"{self.polid}/all_rewards": all_rewards.sum()}, step=self.num_timesteps)
-                    # for polid in range(self.num_agents):
-                    #     wandb.log({f"{self.polid}/predicted_reward/{polid}": predicted_reward[:,:,polid].sum()}, step=self.num_timesteps)
-                    #     wandb.log({f"{self.polid}/all_rewards/{polid}": all_rewards[:,:,polid].sum()}, step=self.num_timesteps)
+                    
+                    mask = (all_rewards == -1).any(dim=1)
+                    selected_row_indices = mask.nonzero(as_tuple=False).squeeze()
+                    cf_agents_rewards = th.cat((all_rewards[:, :self.polid], all_rewards[:, self.polid+1:]), dim=1)
+                    selfish_agent = th.where(cf_agents_rewards[selected_row_indices] == 1)[0]
+                    incentivate_reward = th.mean(rollout_data.cf_rewards[selected_row_indices, selfish_agent])
+
+                    wandb.log({f"{self.polid}/incentivate_reward": incentivate_reward}, step=self.num_timesteps)
+                    
+
+
             if not reweighted_reward_losses == None:
                 if reweighted_reward_losses != 0:
                     wandb.log({f"train/reweighted_reward_loss": reweighted_reward_losses.item()}, step=self.num_timesteps)
