@@ -278,37 +278,62 @@ def main(args):
         env, num_vec_envs=num_envs, num_cpus=num_cpus, base_class="stable_baselines3"
     )
     env = VecMonitor(env)
-    if enable_trajs_learning:
-        run = wandb.init(config=args,
-                            project="SSD_pytorch",
-                            entity=args.user_name, 
-                            notes=socket.gethostname(),
-                            name=str(env_name) + "_" + str(extractor) + "_" + str(model),
-                            group=str(env_name) +"_trajs_motive_" + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
-                            dir="./",
-                            job_type="training",
-                            reinit=True)
-    else:
-        if env_name == 'harvest':
-            run = wandb.init(config=args,
-                            project="SSD_pytorch",
-                            entity=args.user_name, 
-                            notes=socket.gethostname(),
-                            name=str(env_name) + "_" + str(extractor) + "_" + str(model)+ "_" + "test" ,
-                            group=str(env_name) +"_hard_cf_modified_discrete_" + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha) + "_add_spawn_prob_" + str(add_spawn_prob),
-                            dir="./",
-                            job_type="training",
-                            reinit=True)
+
+    if model == 'baseline':
+        if inequity_averse_reward:
+            model_name = "inequity_aversion"
+        elif use_collective_reward:
+            model_name = "collective"
+        # elif svo:
+        #     model_name = "svo"
         else:
-            run = wandb.init(config=args,
-                                project="SSD_pytorch",
-                                entity=args.user_name, 
-                                notes=socket.gethostname(),
-                                name=str(env_name) +"_" + str(extractor) + "_" + str(model),
-                                group=str(env_name) + "_cf_modified_discrete_" + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
-                                dir="./",
-                                job_type="training",
-                                reinit=True)
+            model_name = "baseline"
+    else:
+        model_name = model
+
+    run = wandb.init(config=args,
+                     project="Neurips2024",
+                    entity=args.user_name, 
+                    notes=socket.gethostname(),
+                    name=str(env_name) +"_" + str(extractor) + str(model_name),
+                    group=str(env_name) + str(model_name)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
+                    dir="./",
+                    job_type="training",
+                    reinit=True)
+
+
+
+    # if enable_trajs_learning:
+    #     run = wandb.init(config=args,
+    #                         project="SSD_pytorch",
+    #                         entity=args.user_name, 
+    #                         notes=socket.gethostname(),
+    #                         name=str(env_name) + "_" + str(extractor) + "_" + str(model),
+    #                         group=str(env_name) +"_trajs_motive_" + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
+    #                         dir="./",
+    #                         job_type="training",
+    #                         reinit=True)
+    # else:
+    #     if env_name == 'harvest':
+    #         run = wandb.init(config=args,
+    #                         project="SSD_pytorch",
+    #                         entity=args.user_name, 
+    #                         notes=socket.gethostname(),
+    #                         name=str(env_name) + "_" + str(extractor) + "_" + str(model)+ "_" + "test" ,
+    #                         group=str(env_name) +"_hard_cf_modified_discrete_" + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha) + "_add_spawn_prob_" + str(add_spawn_prob),
+    #                         dir="./",
+    #                         job_type="training",
+    #                         reinit=True)
+    #     else:
+    #         run = wandb.init(config=args,
+    #                             project="SSD_pytorch",
+    #                             entity=args.user_name, 
+    #                             notes=socket.gethostname(),
+    #                             name=str(env_name) +"_" + str(extractor) + "_" + str(model),
+    #                             group=str(env_name) + "_cf_modified_discrete_" + str(model)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
+    #                             dir="./",
+    #                             job_type="training",
+    #                             reinit=True)
     
     args = wandb.config # for wandb sweep
     if extractor == 'cbam':
