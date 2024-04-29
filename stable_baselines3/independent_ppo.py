@@ -1136,6 +1136,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                 total_cf_rewards.append(all_cf_rewards)
         total_cf_rewards = np.stack(total_cf_rewards,axis=0)
         total_cf_rewards = np.mean(total_cf_rewards,axis=0)
+        total_cf_rewards = np.delete(total_cf_rewards,polid,axis=1)
         return total_cf_rewards
 
     def generate_samples(self,distribution,sample_number):
