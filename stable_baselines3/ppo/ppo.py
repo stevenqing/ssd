@@ -807,7 +807,7 @@ class PPO(OnPolicyAlgorithm):
                     selfish_agent = th.where(cf_agents_rewards[selected_row_indices] == 1)[0]
                     incentivate_reward = th.mean(rollout_data.cf_rewards[selected_row_indices, selfish_agent])
 
-                    wandb.log({f"{self.polid}/incentivate_reward": incentivate_reward}, step=self.num_timesteps)
+                    wandb.log({f"{self.polid}/selfish_incentivate_reward": incentivate_reward}, step=self.num_timesteps)
                     
 
 
