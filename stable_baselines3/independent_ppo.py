@@ -56,6 +56,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         enable_trajs_learning: bool = False,
         env_name: str = 'harvest',
         add_spawn_prob: bool = False,
+        svo: bool = False,
     ):
         self.env = env
         self.env_name = env_name
@@ -72,6 +73,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         self.using_reward_timestep = using_reward_timestep
         self.enable_trajs_learning = enable_trajs_learning
         self.add_spawn_prob = add_spawn_prob
+        self.svo = svo
         self.hidden_enable = True
         env_fn = lambda: DummyGymEnv(self.observation_space, self.action_space)
         dummy_env = DummyVecEnv([env_fn] * self.num_envs)
@@ -533,14 +535,30 @@ class IndependentPPO(OnPolicyAlgorithm):
                 cf_rewards = self.compute_transition_cf_rewards(policy,all_last_obs,all_rewards,all_actions,polid,all_distributions,enable_multi_step=True) #SPEED
             for polid, policy in enumerate(self.policies):
                 if self.model == 'baseline':
-                    policy.rollout_buffer.add(
-                        all_last_obs[polid],
-                        all_actions[polid],
-                        all_rewards[polid],
-                        all_last_episode_starts[polid],
-                        all_values[polid],
-                        all_log_probs[polid],
-                    )
+                    if self.svo:
+                        svo_reward = self.compute_svo_rewards(all_rewards,polid) #SPEED
+                        policy.rollout_buffer.add_svo_sw(
+                            all_last_obs[polid],
+                            all_actions[polid],
+                            all_rewards[polid],
+                            all_last_episode_starts[polid],
+                            all_values[polid],
+                            all_log_probs[polid],
+                            all_last_obs,
+                            rollout_all_actions,
+                            all_rewards,
+                            svo_reward,
+                        )
+                    else:
+                        policy.rollout_buffer.add(
+                            all_last_obs[polid],
+                            all_actions[polid],
+                            all_rewards[polid],
+                            all_last_episode_starts[polid],
+                            all_values[polid],
+                            all_log_probs[polid],
+                        )
+
                 else:
                     if self.model == 'team':
                         policy.rollout_buffer.add_sw(
@@ -872,20 +890,18 @@ class IndependentPPO(OnPolicyAlgorithm):
 
         return obs
 
-    # def compute_predicted_rewards(self,policy,all_last_obs,all_actions,polid,all_distributions):
-    #     all_cf_rewards = []
-
-    #     all_last_obs = obs_as_tensor(np.array(all_last_obs), policy.device)
-    #     all_actions = obs_as_tensor(np.transpose(np.array(all_actions),(1,0,2)), policy.device)
-        
-    #     # extract obs features
-    #     all_obs_features = []
-    #     for i in range(self.num_agents):
-    #         all_obs_features.append(policy.policy.extract_features(all_last_obs[i]))
-    #     all_obs_features = th.stack(all_obs_features,dim=0).permute(1,0,2)
-    #     all_obs_features = all_obs_features.reshape(all_obs_features.shape[0],-1)
-    #     index = 0
-    #     all_actions_one_hot = F.one_hot(all_actions, num_classes=self.action_space.n).repeat(1,1,(self.num_agents-1) * self.action_space.n,1)
+    def compute_svo_rewards(self,all_rewards,polid):
+        sum_r = sum(all_rewards)
+        SVO_reward = [None] * self.num_envs
+        for i in range(len(all_rewards[polid])):
+            if all_rewards[polid][i] == 0:
+                SVO_reward[i] = 0
+            else:
+                tanh = ((sum_r[i] - all_rewards[polid][i])/(self.num_agents-1)) / all_rewards[polid][i]
+                theta = np.arctan(tanh)
+                target_theta = np.ones_like(theta)
+                SVO_reward[i] = np.abs(target_theta - theta)
+        return SVO_reward
 
     def generate_cf_actions(self,all_distributions,sample_number,polid,all_actions=None,all_obs=None):
         if all_actions != None:

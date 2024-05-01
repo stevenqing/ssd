@@ -240,6 +240,7 @@ def main(args):
     total_timesteps = args.total_timesteps
     use_collective_reward = args.use_collective_reward
     inequity_averse_reward = args.inequity_averse_reward
+    svo = args.svo
     add_spawn_prob = args.add_spawn_prob
     alpha = args.alpha
     beta = args.beta
@@ -291,8 +292,8 @@ def main(args):
             model_name = "inequity_aversion"
         elif use_collective_reward:
             model_name = "collective"
-        # elif svo:
-        #     model_name = "svo"
+        elif svo:
+            model_name = "svo"
         else:
             model_name = "baseline"
     else:
@@ -388,7 +389,8 @@ def main(args):
             using_reward_timestep=using_reward_timestep,
             enable_trajs_learning=enable_trajs_learning,
             env_name=env_name,
-            add_spawn_prob=add_spawn_prob
+            add_spawn_prob=add_spawn_prob,
+            svo=svo
         )
     elif model == 'causal' or model == 'team':
         model = IndependentPPO(

@@ -66,6 +66,8 @@
                 "5",
                 "--rollout-len",
                 "1000",
+                "--svo",
+                "True",
                 "--user_name",
                 "1160677229",
                 "--num-envs",
