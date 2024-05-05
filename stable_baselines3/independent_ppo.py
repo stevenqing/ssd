@@ -900,7 +900,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                 tanh = ((sum_r[i] - all_rewards[polid][i])/(self.num_agents-1)) / all_rewards[polid][i]
                 theta = np.arctan(tanh)
                 target_theta = np.ones_like(theta)
-                SVO_reward[i] = np.abs(target_theta - theta)
+                SVO_reward[i] = all_rewards[polid][i] - 0.1 * np.abs(target_theta - theta)
         return SVO_reward
 
     def generate_cf_actions(self,all_distributions,sample_number,polid,all_actions=None,all_obs=None):
