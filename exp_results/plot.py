@@ -6,7 +6,7 @@ import pandas as pd
 root_dir = f"./data/"
 print(os.path.exists(root_dir))
 
-METHODs = ['Selfish', 'CF', 'Ours_oldcf_cont', 'Ours-oldcf_discrete', 'SVO', 'Inequity']
+METHODs = ['Selfish', 'CF', 'SVO', 'Inequity']
 SCENARIOs = ['Coin', 'LBF', 'Cleanup', "Harvest"]
 # for each env
 COLORs = ['r', 'hotpink', 'c', 'b', 'dodgerblue', 'mediumpurple',

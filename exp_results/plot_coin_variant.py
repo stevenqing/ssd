@@ -6,8 +6,8 @@ import pandas as pd
 root_dir = f"./data/"
 print(os.path.exists(root_dir))
 
-METHODs = ['Incentives_1','Incentives_2','Ground_Truth']
-SCENARIOs = ["Coin","Coin4","Coin5"]
+METHODs = ['Selfish', 'CF', 'CF_2', 'SVO', 'Inequity']
+SCENARIOs = ['Coin4', 'Coin5']
 # for each env
 COLORs = ['r', 'hotpink', 'c', 'b', 'dodgerblue', 'mediumpurple',
           'cadetblue', 'steelblue', 'mediumslateblue', 'hotpink', 'mediumturquoise']
@@ -17,9 +17,8 @@ COLORs = reversed(COLORs[:len(METHODs)])
 color_dict = {k: v for k, v in zip(METHODs, COLORs)}
 LINE_STYPLEs = ['solid' for i in range(20)]
 pos_dict = {
-    'Coin': 141,
-    'Coin4':142,
-    'Coin5':143,
+    'Coin4': 141,
+    'Coin5': 142,
 }
 
 # To Configure
@@ -50,17 +49,14 @@ for scenario_tag in SCENARIOs:
                 if row_key == "Step" or 'MIN' in row_key or 'MAX' in row_key:
                     continue
                 rewards = raw_data[row_key]
-                if method_name == 'Ground_Truth':
-                    rewards = raw_data[row_key]
-                    rewards[:] = 1
-            if scenario_tag == 'Coin' or scenario_tag == 'Coin4' or scenario_tag == 'Coin5':
-                data_dict[scenario_tag][method_name][seed] = rewards[: 158]
+            if scenario_tag == 'Coin':
+                data_dict[scenario_tag][method_name][seed] = rewards[:158]
             elif scenario_tag == 'Cleanup':
-                data_dict[scenario_tag][method_name][seed] = rewards[60 : 158]
+                data_dict[scenario_tag][method_name][seed] = rewards[30:158]
             elif scenario_tag == 'LBF':
-                data_dict[scenario_tag][method_name][seed] = rewards[: 158]
+                data_dict[scenario_tag][method_name][seed] = rewards[:158]
             else:
-                data_dict[scenario_tag][method_name][seed] = rewards[: 200]
+                data_dict[scenario_tag][method_name][seed] = rewards[: 158]
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -119,7 +115,7 @@ def draw_each(env_name, data_dict, i, color_list, map_method_to_name):
         # plt.set_yticklabels(plt.get_yticks(), fontsize=20)
         # plt.set_xticklabels(plt.get_xticks(), fontsize=20)
         # timestep = (timestep / 10000).i
-        plt.plot(timestep * 100, exponential_moving_average(r_mean, 0.1), color=color,
+        plt.plot(timestep * 100, exponential_moving_average(r_mean, 1), color=color,
                  label=map_method_to_name[method],  # +'-' + str(seed_num),
                  linewidth=lw, linestyle='solid',
                  )
@@ -127,7 +123,7 @@ def draw_each(env_name, data_dict, i, color_list, map_method_to_name):
         # plt.xticks(np.arange(0, 80000, 10000))
         # print(method, r_mean)
         # r_std = r_std * 0.7
-        plt.fill_between(timestep * 100, exponential_moving_average(r_mean - r_std, 0.1), exponential_moving_average(r_mean + r_std, 0.1), alpha=0.1,
+        plt.fill_between(timestep * 100, exponential_moving_average(r_mean - r_std, 1), exponential_moving_average(r_mean + r_std, 0.1), alpha=0.1,
                          color=color)
         # if 'causal' in config["method"]:
     # plt.legend(loc="best", bbox_to_anchor=(1.0, 0.0), borderaxespad=0.1, borderpad=0.2, fontsize=7)
@@ -165,7 +161,7 @@ print(len(handles), len(labels))
 print(labels)
 # labels = [s.split('---5')[0] for s in labels]
 # labels = METHODs
-fig.text(0.085, 0.5, "Incentives",
+fig.text(0.085, 0.5, "Social Good",
          va='center', rotation='vertical', fontsize=32)
 # fig.text(0.5, 0.0, "Number of frames $(×10^4)$", ha='center', va='center', fontsize=32)
 
@@ -177,5 +173,5 @@ for line in legend.get_lines():
 plt.subplots_adjust(hspace=0.45)
 
 
-plt.savefig("Incentives.pdf", bbox_inches='tight')
+plt.savefig("coin_variant.pdf", bbox_inches='tight')
 plt.show()
