@@ -294,8 +294,18 @@ def main(args):
             model_name = "baseline"
     else:
         model_name = model
-
-    run = wandb.init(config=args,
+    if env_name == 'lbf10':
+        run = wandb.init(config=args,
+                     project="Neurips2024",
+                    entity=args.user_name, 
+                    notes=socket.gethostname(),
+                    name=str(env_name) + "111" + "_" + str(extractor) + str(model_name),
+                    group=str(env_name) + str(model_name)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
+                    dir="./",
+                    job_type="training",
+                    reinit=True)
+    else:
+        run = wandb.init(config=args,
                      project="Neurips2024",
                     entity=args.user_name, 
                     notes=socket.gethostname(),
