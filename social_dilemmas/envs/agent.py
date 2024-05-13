@@ -225,7 +225,7 @@ class LBF10Agent(Agent):
         self.update_agent_pos(start_pos)
         # self.agent_level = self.init_level(max_level=3)
         # self.agent_level = int(agent_id[-1]) if int(agent_id[-1]) > 0 else 1
-        # self.agent_level = 1 if int(agent_id[-1]) != 2 else int(agent_id[-1]) # 1,1,2
+        self.agent_level = 1 if int(agent_id[-1]) == 1 else 1 # 1,2,2
         self.agent_level = 1 # 1,1,1
         self.level_consumed = 0
         self.surroundings_chars = []
