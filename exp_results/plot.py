@@ -7,7 +7,7 @@ root_dir = f"./data/"
 print(os.path.exists(root_dir))
 
 METHODs = ['Selfish', 'CF', 'SVO', 'Inequity']
-SCENARIOs = ['Coin', 'LBF', 'Cleanup', "Harvest"]
+SCENARIOs = ['Coin', 'LBF', 'Cleanup', "Common_Harvest"]
 # for each env
 COLORs = ['r', 'hotpink', 'c', 'b', 'dodgerblue', 'mediumpurple',
           'cadetblue', 'steelblue', 'mediumslateblue', 'hotpink', 'mediumturquoise']
@@ -20,7 +20,7 @@ pos_dict = {
     'Coin': 141,
     'LBF': 142,
     'Cleanup': 143,
-    'Harvest': 144,
+    'Common_Harvest': 144,
 }
 
 # To Configure
