@@ -464,7 +464,6 @@ class MapEnv(MultiAgentEnv):
         for agent in self.agents.values():
             agent.full_map = map_with_agents
             if self.env_name != 'LBF10':
-
                 rgb_arr = self.color_view(agent)
             else:
                 colored_map_with_agents = self.full_map_to_colors(map_with_agents).astype(np.uint8)
