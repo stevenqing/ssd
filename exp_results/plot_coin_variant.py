@@ -6,19 +6,23 @@ import pandas as pd
 root_dir = f"./data/"
 print(os.path.exists(root_dir))
 
-METHODs = ['Selfish', 'CF', 'CF_2', 'SVO', 'Inequity']
-SCENARIOs = ['Coin4', 'Coin5']
+METHODs = ['Selfish', 'CF_2', 'SVO', 'Inequity','CF_001', 'CF_01', 'CF_1', 'CF_2','CF_10']
+METHODs_2 = ['CF_001', 'CF_01', 'CF_1', 'CF_2','CF_10']
+SCENARIOs = ['Coin4', 'Coin5', 'Coin4_Ablation', 'Coin5_Ablation']
 # for each env
 COLORs = ['r', 'hotpink', 'c', 'b', 'dodgerblue', 'mediumpurple',
           'cadetblue', 'steelblue', 'mediumslateblue', 'hotpink', 'mediumturquoise']
 
 COLORs = reversed(COLORs[:len(METHODs)])
-
+COLORs_2 = ["Red", "Dark Red", "Firebrick", "Indian Red", "Light Coral"]
 color_dict = {k: v for k, v in zip(METHODs, COLORs)}
+color_dict_2 = {k: v for k, v in zip(METHODs_2, COLORs_2)}
 LINE_STYPLEs = ['solid' for i in range(20)]
 pos_dict = {
     'Coin4': 141,
     'Coin5': 142,
+    'Coin4_Ablation': 143,
+    'Coin5_Ablation': 144,
 }
 
 # To Configure
@@ -63,7 +67,7 @@ import numpy as np
 from plot_utils import *
 # plt.style.use('fivethirtyeight')
 sorted_methods_list = METHODs
-
+second_methods_list = METHODs_2
 
 def draw_each(env_name, data_dict, i, color_list, map_method_to_name):
     plt.subplot(i)
@@ -116,15 +120,15 @@ def draw_each(env_name, data_dict, i, color_list, map_method_to_name):
         # plt.set_xticklabels(plt.get_xticks(), fontsize=20)
         # timestep = (timestep / 10000).i
         plt.plot(timestep * 100, exponential_moving_average(r_mean, 1), color=color,
-                 label=map_method_to_name[method],  # +'-' + str(seed_num),
-                 linewidth=lw, linestyle='solid',
-                 )
+                label=map_method_to_name[method],  # +'-' + str(seed_num),
+                linewidth=lw, linestyle='solid',
+                )
         # set yticks
         # plt.xticks(np.arange(0, 80000, 10000))
         # print(method, r_mean)
         # r_std = r_std * 0.7
         plt.fill_between(timestep * 100, exponential_moving_average(r_mean - r_std, 1), exponential_moving_average(r_mean + r_std, 0.1), alpha=0.1,
-                         color=color)
+                        color=color)
         # if 'causal' in config["method"]:
     # plt.legend(loc="best", bbox_to_anchor=(1.0, 0.0), borderaxespad=0.1, borderpad=0.2, fontsize=7)
     # plt.ylabel('Reward', fontsize=32)
