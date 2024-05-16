@@ -303,7 +303,7 @@ def main(args):
                 project="Neurips2024",
                 entity=args.user_name, 
                 notes=socket.gethostname(),
-                name=str(env_name) +"_0.8_0.6_0.4_" + str(extractor) + str(model_name),
+                name=str(env_name) +"_0.4_0.0_0.85_0.02_" + str(extractor) + str(model_name),
                 group=str(env_name) + str(model_name)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
                 dir="./",
                 job_type="training",
