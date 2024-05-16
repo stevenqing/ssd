@@ -23,8 +23,8 @@ CLEANUP_VIEW_SIZE = 7
 
 thresholdDepletion = 0.4 # 0.4
 thresholdRestoration = 0.0 # 0.0
-wasteSpawnProbability = 0.95 # 0.5
-appleRespawnProbability = 0.05 # 0.05
+wasteSpawnProbability = 0.85 # 0.5
+appleRespawnProbability = 0.015 # 0.05
 
 
 class CleanupEnv(MapEnv):
