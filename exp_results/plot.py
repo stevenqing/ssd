@@ -7,7 +7,7 @@ from plot_utils import exponential_moving_average
 root_dir = f"./data/"
 print(os.path.exists(root_dir))
 
-METHODs = ['Selfish', 'CF', 'SVO', 'Inequity']
+METHODs = ['Selfish', 'Inequity', 'SVO', 'CF']
 SCENARIOs = ['Coin', 'Level-Based Foraging', 'Cleanup', "Common_Harvest"]
 COLORs = ['r', 'hotpink', 'c', 'b', 'dodgerblue', 'mediumpurple',
           'cadetblue', 'steelblue', 'mediumslateblue', 'hotpink', 'mediumturquoise']
@@ -53,7 +53,7 @@ for scenario_tag in SCENARIOs:
             elif scenario_tag == 'Level-Based Foraging':
                 data_dict[scenario_tag][method_name][seed] = rewards[:158]
             else:
-                data_dict[scenario_tag][method_name][seed] = rewards[39:158]
+                data_dict[scenario_tag][method_name][seed] = rewards[25:158]
 
 sorted_methods_list = METHODs
 
@@ -106,7 +106,7 @@ def draw_each(env_name, data_dict, i, color_list, map_method_to_name):
     axes = plt.gca()
     axes.set_title(env_name, fontsize=32, y=1.07)
 
-    plt.xlabel('Number of Timesteps (×1e8)', fontsize=25, loc='center')
+    plt.xlabel('Number of Timesteps (×1e7)', fontsize=25, loc='center')
     plt.grid()
 
     # Setting the x-axis scale to match 10^8
@@ -132,7 +132,7 @@ ax = fig.get_axes()[0]
 handles, labels = ax.get_legend_handles_labels()
 print(len(handles), len(labels))
 print(labels)
-fig.text(0.085, 0.5, "Episodic Collective Reward",
+fig.text(0.085, 0.5, "Collective Reward",
          va='center', rotation='vertical', fontsize=32)
 
 legend = fig.legend(handles, labels, loc='lower center', ncol=7, fontsize=32,
@@ -140,6 +140,8 @@ legend = fig.legend(handles, labels, loc='lower center', ncol=7, fontsize=32,
 
 for line in legend.get_lines():
     line.set_linewidth(5)
+
+
 plt.subplots_adjust(hspace=0.45)
 
 plt.savefig("main_results.pdf", bbox_inches='tight')

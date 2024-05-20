@@ -6,7 +6,7 @@ import pandas as pd
 root_dir = f"./data/"
 print(os.path.exists(root_dir))
 
-METHODs = ['Incentives_1','Incentives_2','Incentives_001','Incentives_01','Incentives_10','Ground_Truth']
+METHODs = ['Incentives_001','Incentives_01','Incentives_1','Incentives_2','Incentives_10','Ground_Truth']
 SCENARIOs = ["Coin","Coin4","Coin5"]
 # for each env
 COLORs = ['r', 'hotpink', 'c', 'b', 'dodgerblue', 'mediumpurple',
@@ -169,8 +169,8 @@ fig.text(0.085, 0.5, "Incentives",
          va='center', rotation='vertical', fontsize=32)
 # fig.text(0.5, 0.0, "Number of frames $(×10^4)$", ha='center', va='center', fontsize=32)
 
-legend = fig.legend(handles, labels, loc='lower center', ncol=7, fontsize=32,
-                    bbox_to_anchor=(0.5, -0.3), bbox_transform=fig.transFigure)
+legend = fig.legend(handles, labels, loc='lower center', ncol=1, fontsize=32,
+                    bbox_to_anchor=(0.8, 0.1), bbox_transform=fig.transFigure)
 
 for line in legend.get_lines():
     line.set_linewidth(5)
