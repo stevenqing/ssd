@@ -565,7 +565,8 @@ class RolloutBuffer(BaseBuffer):
                 next_values = self.values[step + 1]
             if use_team_reward:
             # naivly using sw
-                delta = self.rewards[step] + alpha * np.sum(self.all_rewards[step],axis=-1) + self.gamma * next_values * next_non_terminal - self.values[step]
+                # delta = self.rewards[step] + alpha * np.sum(self.all_rewards[step],axis=-1) + self.gamma * next_values * next_non_terminal - self.values[step]
+                delta = np.sum(self.all_rewards[step],axis=-1) + self.gamma * next_values * next_non_terminal - self.values[step]
             else:
             # using cf
                 delta = self.rewards[step] + alpha * np.sum(self.cf_rewards[step],axis=-1)/(self.agent_number - 1) + self.gamma * next_values * next_non_terminal - self.values[step]   

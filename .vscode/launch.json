@@ -111,7 +111,7 @@
             "name": "Python: main",
             "type": "python",
             "request": "launch",
-            "program": "exp_results/plot_incentives.py",
+            "program": "exp_results/plot_coin_variant.py",
             "console": "integratedTerminal",
             "python": "/home/shuqingshi/miniconda3/envs/ssd/bin/python",
             "justMyCode": false,

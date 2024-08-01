@@ -58,7 +58,7 @@ for scenario_tag in SCENARIOs:
 sorted_methods_list = METHODs
 
 
-def draw_each(env_name, data_dict, i, color_list, map_method_to_name):
+def draw_each(env_name, data_dict, i, color_list, map_method_to_name, label):
     plt.subplot(i)
 
     for method in sorted_methods_list:
@@ -104,7 +104,7 @@ def draw_each(env_name, data_dict, i, color_list, map_method_to_name):
                          color=color)
 
     axes = plt.gca()
-    axes.set_title(env_name, fontsize=32, y=1.07)
+    axes.set_title(f"{label} {env_name}", fontsize=32, y=1.07)
 
     plt.xlabel('Number of Timesteps (×1e7)', fontsize=25, loc='center')
     plt.grid()
@@ -116,7 +116,8 @@ def draw_each(env_name, data_dict, i, color_list, map_method_to_name):
 
 
 plt.figure(figsize=(32, 6))
-for scenario_tag, data_for_each_env in data_dict.items():
+labels = ['(a)', '(b)', '(c)', '(d)']
+for idx, (scenario_tag, data_for_each_env) in enumerate(data_dict.items()):
     if scenario_tag in pos_dict:
         i = pos_dict[scenario_tag]
     else:
@@ -125,7 +126,7 @@ for scenario_tag, data_for_each_env in data_dict.items():
         continue
 
     draw_each(map_scenario_to_name[scenario_tag],
-              data_for_each_env, i, color_list=color_dict, map_method_to_name=map_method_to_name)
+              data_for_each_env, i, color_list=color_dict, map_method_to_name=map_method_to_name, label=labels[idx])
 
 fig = plt.gcf()
 ax = fig.get_axes()[0]

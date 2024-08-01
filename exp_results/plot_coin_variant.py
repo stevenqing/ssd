@@ -8,21 +8,21 @@ root_dir = f"./data/"
 print(os.path.exists(root_dir))
 
 METHODs = ['Selfish', 'Inequity', 'SVO', 'CF_2']
-METHOD_2 = ['CF_001', 'CF_01', 'CF_1', 'CF_10', 'CF_2']
+METHOD_2 = ['CF_001', 'CF_01', 'CF_1', 'CF_10']
 TOTAL_METHODS = ['Selfish', 'Inequity', 'SVO', 'CF_001', 'CF_01', 'CF_1', 'CF_2', 'CF_10']
-SCENARIOs = ['Coin4', 'Coin5', 'Coin4_Ablation', 'Coin5_Ablation']
+SCENARIOs = ['Coin_4_Agents', 'Coin_5_Agents', 'Coin4_Ablation', 'Coin5_Ablation']
 COLORs = ['r', 'hotpink', 'c', 'b']
 COLORs = list(reversed(COLORs[:len(METHODs)]))
 color_dict = {k: v for k, v in zip(METHODs, COLORs)}
 
-COLOR_2 = ['r', "indianred", "darkred", "salmon", "lightcoral"]
+COLOR_2 = ['r', "indianred", "darkred", "salmon"]
 COLOR_2 = list(reversed(COLOR_2[:len(METHOD_2)]))
 color_dict_2 = {k: v for k, v in zip(METHOD_2, COLOR_2)}
 
 LINE_STYPLEs = ['solid' for i in range(20)]
 pos_dict = {
-    'Coin4': 141,
-    'Coin5': 142,
+    'Coin_4_Agents': 141,
+    'Coin_5_Agents': 142,
     'Coin4_Ablation': 143,
     'Coin5_Ablation': 144,
 }
@@ -60,11 +60,10 @@ for scenario_tag in SCENARIOs:
             else:
                 data_dict[scenario_tag][method_name][seed] = rewards[:158]
 
-
 sorted_methods_list = METHODs
 sorted_methods_list_2 = METHOD_2
 
-def draw_each(env_name, data_dict, i, color_list, color_list_2, map_method_to_name, map_method_to_name_2):
+def draw_each(env_name, data_dict, i, color_list, color_list_2, map_method_to_name, map_method_to_name_2, label):
     plt.subplot(i)
 
     if i in [141, 142]:
@@ -127,7 +126,7 @@ def draw_each(env_name, data_dict, i, color_list, color_list_2, map_method_to_na
             plt.plot([], [], color=color_list[method], label=map_method_to_name[method])
 
     axes = plt.gca()
-    axes.set_title(env_name, fontsize=32, y=1.07)
+    axes.set_title(f"{label} {env_name}", fontsize=32, y=1.07)
 
     plt.xlabel('Number of Timesteps (×1e7)', fontsize=25, loc='center')
     plt.grid()
@@ -137,25 +136,31 @@ def draw_each(env_name, data_dict, i, color_list, color_list_2, map_method_to_na
     plt.xticks(ticks=x_ticks, labels=x_ticks_labels)
 
 plt.figure(figsize=(32, 6))
-for scenario_tag, data_for_each_env in data_dict.items():
+labels = ['(a)', '(b)', '(c)', '(d)']
+for idx, (scenario_tag, data_for_each_env) in enumerate(data_dict.items()):
     if scenario_tag in pos_dict:
         i = pos_dict[scenario_tag]
     else:
-        print(
-            f"Skipping environment {scenario_tag} because it is not in the pos_dict dictionary.")
+        print(f"Skipping environment {scenario_tag} because it is not in the pos_dict dictionary.")
         continue
 
     draw_each(map_scenario_to_name[scenario_tag],
-              data_for_each_env, i, color_list=color_dict, color_list_2=color_dict_2, map_method_to_name=map_method_to_name, map_method_to_name_2=map_method_to_name_2)
+              data_for_each_env, i, color_list=color_dict, color_list_2=color_dict_2, map_method_to_name=map_method_to_name, map_method_to_name_2=map_method_to_name_2, label=labels[idx])
 
 fig = plt.gcf()
 ax = fig.get_axes()[0]
 handles, labels = ax.get_legend_handles_labels()
+
+# Exclude CF_2 from the second legend
+filtered_handles = [h for h, l in zip(handles, labels) if l != 'CF_2']
+filtered_labels = [l for l in labels if l != 'CF_2']
+
 print(len(handles), len(labels))  # 打印图例条目的数量和标签
 print(labels)
 fig.text(0.085, 0.5, "Collective Reward",
          va='center', rotation='vertical', fontsize=32)
 
+# First legend with CF_2
 legend = fig.legend(handles, labels, loc='lower center', ncol=7, fontsize=32,
                     bbox_to_anchor=(0.5, -0.3), bbox_transform=fig.transFigure)
 
@@ -164,15 +169,16 @@ for line in legend.get_lines():
 
 ax = fig.get_axes()[2]
 handles, labels = ax.get_legend_handles_labels()
+
 print(len(handles), len(labels))
 print(labels)
 
-legend = fig.legend(handles, labels, loc='lower center', ncol=7, fontsize=32,
+# Second legend without CF_2
+legend = fig.legend(filtered_handles, filtered_labels, loc='lower center', ncol=7, fontsize=32,
                     bbox_to_anchor=(0.5, -0.5), bbox_transform=fig.transFigure)
 
 for line in legend.get_lines():
     line.set_linewidth(5)
-
 
 plt.subplots_adjust(hspace=0.45)
 

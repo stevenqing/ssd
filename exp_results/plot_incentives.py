@@ -1,25 +1,26 @@
-# plot from downloaded data
 import os
 import pandas as pd
-
+import matplotlib.pyplot as plt
+import numpy as np
+from plot_utils import exponential_moving_average
 
 root_dir = f"./data/"
 print(os.path.exists(root_dir))
 
-METHODs = ['Incentives_001','Incentives_01','Incentives_1','Incentives_2','Incentives_10','Ground_Truth']
-SCENARIOs = ["Coin","Coin4","Coin5"]
+METHODs = ['Incentives_001', 'Incentives_01', 'Incentives_1', 'Incentives_2', 'Incentives_10', 'Ground_Truth']
+SCENARIOs = ["Coin", "Coin_4_Agents", "Coin_5_Agents"]
 # for each env
 COLORs = ['r', 'hotpink', 'c', 'b', 'dodgerblue', 'mediumpurple',
           'cadetblue', 'steelblue', 'mediumslateblue', 'hotpink', 'mediumturquoise']
 
-COLORs = reversed(COLORs[:len(METHODs)])
+COLORs = list(reversed(COLORs[:len(METHODs)]))
 
 color_dict = {k: v for k, v in zip(METHODs, COLORs)}
 LINE_STYPLEs = ['solid' for i in range(20)]
 pos_dict = {
     'Coin': 141,
-    'Coin4':142,
-    'Coin5':143,
+    'Coin_4_Agents': 142,
+    'Coin_5_Agents': 143,
 }
 
 # To Configure
@@ -54,22 +55,19 @@ for scenario_tag in SCENARIOs:
                     rewards = raw_data[row_key]
                     rewards[:] = 1
             if scenario_tag == 'Coin' or scenario_tag == 'Coin4' or scenario_tag == 'Coin5':
-                data_dict[scenario_tag][method_name][seed] = rewards[: 158]
+                data_dict[scenario_tag][method_name][seed] = rewards[:158]
             elif scenario_tag == 'Cleanup':
-                data_dict[scenario_tag][method_name][seed] = rewards[60 : 158]
+                data_dict[scenario_tag][method_name][seed] = rewards[60:158]
             elif scenario_tag == 'LBF':
-                data_dict[scenario_tag][method_name][seed] = rewards[: 158]
+                data_dict[scenario_tag][method_name][seed] = rewards[:158]
             else:
-                data_dict[scenario_tag][method_name][seed] = rewards[: 200]
+                data_dict[scenario_tag][method_name][seed] = rewards[:158]
 
-import matplotlib.pyplot as plt
-import numpy as np
-from plot_utils import *
-# plt.style.use('fivethirtyeight')
 sorted_methods_list = METHODs
 
+subtitles = ['(a)', '(b)', '(c)', '(d)']
 
-def draw_each(env_name, data_dict, i, color_list, map_method_to_name):
+def draw_each(env_name, data_dict, i, color_list, map_method_to_name, label):
     plt.subplot(i)
 
     for method in sorted_methods_list:
@@ -119,7 +117,7 @@ def draw_each(env_name, data_dict, i, color_list, map_method_to_name):
         # plt.set_yticklabels(plt.get_yticks(), fontsize=20)
         # plt.set_xticklabels(plt.get_xticks(), fontsize=20)
         # timestep = (timestep / 10000).i
-        plt.plot(timestep * 100, exponential_moving_average(r_mean, 0.1), color=color,
+        plt.plot(timestep / 1e8, exponential_moving_average(r_mean, 0.1), color=color,
                  label=map_method_to_name[method],  # +'-' + str(seed_num),
                  linewidth=lw, linestyle='solid',
                  )
@@ -127,24 +125,27 @@ def draw_each(env_name, data_dict, i, color_list, map_method_to_name):
         # plt.xticks(np.arange(0, 80000, 10000))
         # print(method, r_mean)
         # r_std = r_std * 0.7
-        plt.fill_between(timestep * 100, exponential_moving_average(r_mean - r_std, 0.1), exponential_moving_average(r_mean + r_std, 0.1), alpha=0.1,
+        plt.fill_between(timestep / 1e8, exponential_moving_average(r_mean - r_std, 0.1), exponential_moving_average(r_mean + r_std, 0.1), alpha=0.1,
                          color=color)
         # if 'causal' in config["method"]:
     # plt.legend(loc="best", bbox_to_anchor=(1.0, 0.0), borderaxespad=0.1, borderpad=0.2, fontsize=7)
     # plt.ylabel('Reward', fontsize=32)
 
     axes = plt.gca()
-    axes.set_title(env_name, fontsize=32, y=1.07)
+    axes.set_title(f"{label} {env_name}", fontsize=32, y=1.07)
 
-    plt.xlabel('Number of Timesteps', fontsize=25, loc='center')  # $(×10^4)
+    plt.xlabel('Number of Timesteps (×1e7)', fontsize=25, loc='center')
     plt.grid()
+
+    x_ticks = np.linspace(0, max(timestep) / 1e8, num=6)
+    x_ticks_labels = ['0', '0.2', '0.4', '0.6', '0.8', '1.0']
+    plt.xticks(ticks=x_ticks, labels=x_ticks_labels)
 
 # plot each scenario as a subplot, and each method as a line
 
 plt.figure(figsize=(32, 6))
-# print([k for k, v in DATA.items()])
-# plt.text(0.06, 0.5, "y_label", va='center', rotation='vertical', fontsize=32)
-for scenario_tag, data_for_each_env in data_dict.items():
+labels = ['(a)', '(b)', '(c)', '(d)']
+for idx, (scenario_tag, data_for_each_env) in enumerate(data_dict.items()):
     # print(env_name)
     if scenario_tag in pos_dict:
         i = pos_dict[scenario_tag]
@@ -154,8 +155,7 @@ for scenario_tag, data_for_each_env in data_dict.items():
         continue
 
     draw_each(map_scenario_to_name[scenario_tag],
-              data_for_each_env, i, color_list=color_dict, map_method_to_name=map_method_to_name)
-
+              data_for_each_env, i, color_list=color_dict, map_method_to_name=map_method_to_name, label=labels[idx])
 
 fig = plt.gcf()
 ax = fig.get_axes()[0]
