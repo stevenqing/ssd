@@ -111,6 +111,7 @@ def parse_args():
     )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--user_name", type=str, default="k23048755")
+    parser.add_argument("--project_name", type=str, default="ICLR2025_Causal_SSD")
     parser.add_argument("--model", type=str, default='baseline')
     parser.add_argument("--using_reward_timestep", type=int, default=2000000)
     parser.add_argument("--extractor", type=str, default='cnn')
@@ -231,6 +232,7 @@ def main(args):
     # Config
     set_seed(args.seed)
     model=args.model
+    project_name = args.project_name
     extractor = args.extractor
     env_name = args.env_name
     num_agents = args.num_agents
@@ -296,7 +298,7 @@ def main(args):
         model_name = model
     if env_name == 'lbf10':
         run = wandb.init(config=args,
-                     project="Neurips2024",
+                     project=project_name,
                     entity=args.user_name, 
                     notes=socket.gethostname(),
                     name=str(env_name) + "_" + str(extractor) + str(model_name),
@@ -306,7 +308,7 @@ def main(args):
                     reinit=True)
     elif env_name == 'cleanup':
         run = wandb.init(config=args,
-                     project="Neurips2024",
+                     project=project_name,
                     entity=args.user_name, 
                     notes=socket.gethostname(),
                     name=str(env_name) + "_0.4_0.0_0.85_0.01" + "_" + str(extractor) + str(model_name),
@@ -316,7 +318,7 @@ def main(args):
                     reinit=True)
     else:
         run = wandb.init(config=args,
-                     project="Neurips2024",
+                     project=project_name,
                     entity=args.user_name, 
                     notes=socket.gethostname(),
                     name=str(env_name) +"_" + str(extractor) + str(model_name),
