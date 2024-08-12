@@ -110,7 +110,7 @@ def parse_args():
         help="Disadvantageous inequity aversion factor",
     )
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--user_name", type=str, default="k23048755")
+    parser.add_argument("--user_name", type=str, default="1160677229")
     parser.add_argument("--project_name", type=str, default="ICLR2025_Causal_SSD")
     parser.add_argument("--model", type=str, default='baseline')
     parser.add_argument("--using_reward_timestep", type=int, default=2000000)
