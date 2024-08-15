@@ -851,7 +851,7 @@ class IndependentPPO(OnPolicyAlgorithm):
 
         
         actions_one_hot_copy = all_actions_one_hot_list.clone()
-        
+
         # generate action samples from the distribution
         # cf_action_i = self.generate_samples(all_distributions[i],sample_number)
         # cf_action_i = cf_action_i.permute(1,0,2,3).squeeze(0)
@@ -893,8 +893,6 @@ class IndependentPPO(OnPolicyAlgorithm):
         all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
         all_regret = all_reward_pred - all_cf_rewards
         total_cf_rewards = th.mean(all_regret,dim=1).cpu().detach().numpy()
-
-        
    
         return total_cf_rewards
 
