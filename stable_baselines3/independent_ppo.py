@@ -825,40 +825,77 @@ class IndependentPPO(OnPolicyAlgorithm):
         all_obs_features = th.stack(all_obs_features,dim=0).permute(1,0,2)
         all_obs_features = all_obs_features.reshape(all_obs_features.shape[0],-1)
 
+        # generate all the actions
+        all_actions_eye = th.eye(self.action_space.n,device=all_actions.device)
+        all_actions_pred = all_actions_eye[all_actions]
+        all_actions_pred = all_actions_pred.reshape(all_actions_pred.shape[0],-1)
+        all_reward_pred = policy.policy.reward_net(th.cat((all_obs_features,all_actions_pred),dim=-1),self.num_agents)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
+        all_reward_pred = all_reward_pred.repeat(1,self.action_space.n,1)
+
+
         all_actions_one_hot = all_actions[:,polid,:]
         eye_matrix = th.eye(self.action_space.n,device=all_actions_one_hot.device)
         all_actions_one_hot = eye_matrix[all_actions_one_hot]
         all_actions_one_hot = all_actions_one_hot.unsqueeze(1)
-        all_actions_one_hot = all_actions_one_hot.repeat(1,1,sample_number,1)
+
+        # generate action samples from the distribution
+        # all_actions_one_hot = all_actions_one_hot.repeat(1,1,sample_number,1)
+
+        # generate all the actions
+        all_actions_one_hot = all_actions_one_hot.repeat(1,1,self.action_space.n,1)
+
         all_actions_one_hot = all_actions_one_hot.repeat(1,self.num_agents,1,1)
         all_actions_one_hot_list = all_actions_one_hot.permute(1,0,2,3)
 
         total_actions = [None] * self.num_agents
 
+        
         actions_one_hot_copy = all_actions_one_hot_list.clone()
-        cf_action_i = self.generate_samples(all_distributions[i],sample_number)
+        
+        # generate action samples from the distribution
+        # cf_action_i = self.generate_samples(all_distributions[i],sample_number)
+        # cf_action_i = cf_action_i.permute(1,0,2,3).squeeze(0)
+        # actions_one_hot_copy[polid,:,:,:] = cf_action_i
+        
+        # total_actions = [actions_one_hot_copy] * self.num_agents
+        # total_cf_rewards = []
+        # for all_actions_one_hot in total_actions:
+        #     if all_actions_one_hot is not None:
+        #         all_actions_one_hot = all_actions_one_hot.permute(1,2,0,3)
+
+        #         all_actions_one_hot = all_actions_one_hot.reshape(all_actions_one_hot.shape[0],all_actions_one_hot.shape[1],-1).permute(1,0,2)
+        #         all_obs_features_copy = all_obs_features.clone().repeat(all_actions_one_hot.shape[0],1,1)
+                
+        #         all_obs_actions_features = th.cat((all_obs_features_copy,all_actions_one_hot),dim=-1).permute(1,0,2)
+        #         all_obs_actions_features = all_obs_actions_features.reshape(-1,all_obs_actions_features.shape[-1])
+                
+        #         all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
+
+        #         all_cf_rewards = th.mean(all_cf_rewards,dim=1) #SPEED? Not sure in here
+        #         total_cf_rewards.append(all_cf_rewards)
+        # total_cf_rewards = th.stack(total_cf_rewards,dim=0)
+        # total_cf_rewards = th.mean(total_cf_rewards,dim=0).cpu().detach().numpy()
+        # total_cf_rewards = np.delete(total_cf_rewards,polid,axis=1)     
+
+        # generate all the actions
+        cf_action_i = self.generate_normal_samples()
         cf_action_i = cf_action_i.permute(1,0,2,3).squeeze(0)
         actions_one_hot_copy[polid,:,:,:] = cf_action_i
 
-        total_actions = [actions_one_hot_copy] * self.num_agents
-        total_cf_rewards = []
-        for all_actions_one_hot in total_actions:
-            if all_actions_one_hot is not None:
-                all_actions_one_hot = all_actions_one_hot.permute(1,2,0,3)
+        actions_one_hot_copy = actions_one_hot_copy.permute(2,1,0,3)
 
-                all_actions_one_hot = all_actions_one_hot.reshape(all_actions_one_hot.shape[0],all_actions_one_hot.shape[1],-1).permute(1,0,2)
-                all_obs_features_copy = all_obs_features.clone().repeat(all_actions_one_hot.shape[0],1,1)
-                
-                all_obs_actions_features = th.cat((all_obs_features_copy,all_actions_one_hot),dim=-1).permute(1,0,2)
-                all_obs_actions_features = all_obs_actions_features.reshape(-1,all_obs_actions_features.shape[-1])
-                
-                all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
+        all_actions_one_hot_copy = actions_one_hot_copy.reshape(actions_one_hot_copy.shape[0],actions_one_hot_copy.shape[1],-1)
+        all_obs_features_copy = all_obs_features.clone().repeat(all_actions_one_hot_copy.shape[0],1,1)
+        
+        all_obs_actions_features = th.cat((all_obs_features_copy,all_actions_one_hot_copy),dim=-1).permute(1,0,2)
+        all_obs_actions_features = all_obs_actions_features.reshape(-1,all_obs_actions_features.shape[-1])
+        
+        all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
+        all_regret = all_reward_pred - all_cf_rewards
+        total_cf_rewards = th.mean(all_regret,dim=1).cpu().detach().numpy()
 
-                all_cf_rewards = th.mean(all_cf_rewards,dim=1) #SPEED? Not sure in here
-                total_cf_rewards.append(all_cf_rewards)
-        total_cf_rewards = th.stack(total_cf_rewards,dim=0)
-        total_cf_rewards = th.mean(total_cf_rewards,dim=0).cpu().detach().numpy()
-        total_cf_rewards = np.delete(total_cf_rewards,polid,axis=1)        
+        
+   
         return total_cf_rewards
 
 
@@ -923,6 +960,12 @@ class IndependentPPO(OnPolicyAlgorithm):
         all_samples = all_samples.unsqueeze(1)
         return all_samples
 
+    def generate_normal_samples(self):
+        all_samples = th.eye(self.action_space.n).unsqueeze(1)
+        all_samples = all_samples.repeat(1,self.num_envs,1)
+        all_samples = all_samples.permute(1,0,2)
+        all_samples = all_samples.unsqueeze(1)
+        return all_samples
 
     # def compute_cf_rewards(self,policy,all_last_obs,all_actions,polid,all_distributions):
     #     all_cf_rewards = []

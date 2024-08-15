@@ -405,7 +405,7 @@ class RolloutBuffer(BaseBuffer):
         self.all_actions = np.zeros((self.buffer_size, self.n_envs, self.agent_number, self.action_dim), dtype=np.float32)
         self.all_rewards = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
         self.all_dones = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
-        self.cf_rewards = np.zeros((self.buffer_size, self.n_envs, self.agent_number-1), dtype=np.float32)
+        self.cf_rewards = np.zeros((self.buffer_size, self.n_envs, self.agent_number), dtype=np.float32)
         self.inequity_rewards = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.svo_rewards = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
 
