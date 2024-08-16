@@ -830,7 +830,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         all_actions_pred = all_actions_eye[all_actions]
         all_actions_pred = all_actions_pred.reshape(all_actions_pred.shape[0],-1)
         all_reward_pred = policy.policy.reward_net(th.cat((all_obs_features,all_actions_pred),dim=-1),self.num_agents)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
-        all_reward_pred = all_reward_pred.repeat(1,self.action_space.n,1)
+        # all_reward_pred = all_reward_pred.repeat(1,self.action_space.n,1)
 
 
         all_actions_one_hot = all_actions[:,polid,:]
@@ -891,9 +891,11 @@ class IndependentPPO(OnPolicyAlgorithm):
         all_obs_actions_features = all_obs_actions_features.reshape(-1,all_obs_actions_features.shape[-1])
         
         all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
-        all_regret = all_reward_pred - all_cf_rewards
-        total_cf_rewards = th.mean(all_regret,dim=1).cpu().detach().numpy()
-   
+        all_max_cf_rewards = th.max(all_cf_rewards,dim=1).values
+        # all_regret = all_reward_pred - all_cf_rewards
+        all_regret = all_reward_pred.squeeze(1) - all_max_cf_rewards
+        # total_cf_rewards = th.mean(all_regret,dim=1).cpu().detach().numpy()
+        total_cf_rewards = all_regret.cpu().detach().numpy()
         return total_cf_rewards
 
 
