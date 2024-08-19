@@ -263,7 +263,7 @@ def main(args):
     lr = 0.0001
     n_epochs = 30
     gae_lambda = 1.0
-    gamma = 0.99
+    gamma = 1
     grad_clip = 40
     verbose = 3
 
