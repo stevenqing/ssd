@@ -994,6 +994,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                 all_cf_rewards = th.mean(all_cf_rewards,dim=1) 
                 total_cf_rewards.append(all_cf_rewards)
         total_cf_rewards = th.stack(total_cf_rewards,dim=0).squeeze(0).cpu().detach().numpy()
+        total_cf_rewards = np.delete(total_cf_rewards, polid, axis=1)
         # total_cf_rewards = th.sum(total_cf_rewards,dim=0).cpu().detach().numpy()  
         # total_cf_rewards = th.mean(total_cf_rewards,dim=0).cpu().detach().numpy()        
         return total_cf_rewards
