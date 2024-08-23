@@ -675,7 +675,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                             cf_rewards,
                         )
                     else:
-                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions) #SPEED
+                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions,all_rewards) #SPEED
                         policy.rollout_buffer.add_sw(
                             all_last_obs[polid],
                             all_actions[polid],
@@ -812,11 +812,12 @@ class IndependentPPO(OnPolicyAlgorithm):
         self.prev_latent_state = prev_latent_state
         return total_cf_rewards
     
-    def compute_cf_rewards(self,policy,all_last_obs,all_actions,polid,all_distributions,sample_number=10):
+    def compute_cf_rewards(self,policy,all_last_obs,all_actions,polid,all_distributions,all_reward,sample_number=10):
         all_cf_rewards = []
 
         all_last_obs = obs_as_tensor(np.array(all_last_obs), policy.device)
         all_actions = obs_as_tensor(np.transpose(np.array(all_actions),(1,0,2)), policy.device)
+        all_rewards = obs_as_tensor(np.transpose(np.array(all_reward),(1,0)), policy.device)
         
         # extract obs features
         all_obs_features = []
@@ -891,12 +892,19 @@ class IndependentPPO(OnPolicyAlgorithm):
         all_obs_actions_features = all_obs_actions_features.reshape(-1,all_obs_actions_features.shape[-1])
         
         all_cf_rewards = policy.policy.reward_net(all_obs_actions_features,self.num_agents)[0].squeeze().reshape(self.num_envs,-1,self.num_agents)
+        all_cf_rewards[:,:,polid] = th.zeros_like(all_cf_rewards[:,:,polid])
+        all_cf_rewards = th.sum(all_cf_rewards,dim=2).unsqueeze(2)
         all_max_cf_rewards = th.max(all_cf_rewards,dim=1).values
-        # all_regret = all_reward_pred - all_cf_rewards
+        
+        all_reward_pred[:,:,polid] = th.zeros_like(all_reward_pred[:,:,polid])
+        all_reward_pred = th.sum(all_reward_pred,dim=2).unsqueeze(2)
+
+        all_rewards[:,polid] = th.zeros_like(all_rewards[:,polid])
+        all_rewards = th.sum(all_rewards,dim=1).unsqueeze(1)
         all_regret = all_reward_pred.squeeze(1) - all_max_cf_rewards
         # total_cf_rewards = th.mean(all_regret,dim=1).cpu().detach().numpy()
         total_cf_rewards = all_regret.cpu().detach().numpy()
-        total_cf_rewards = np.delete(total_cf_rewards,polid,axis=1) 
+        # total_cf_rewards = np.delete(total_cf_rewards,polid,axis=1) 
         return total_cf_rewards
 
 
