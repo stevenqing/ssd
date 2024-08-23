@@ -587,7 +587,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                             cf_rewards,
                     )
                     else:
-                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions) #SPEED, Can the cf rewards be computed in ppo?
+                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions,all_rewards) #SPEED, Can the cf rewards be computed in ppo?
                         reward_mapping_func = np.frompyfunc(lambda key: ENV_REWARD_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][0]), 1, 1) #SPEED, Can the function be jit?
                         all_discrete_rewards = reward_mapping_func(all_rewards)
                         detected_OOD = np.array(all_rewards)[all_discrete_rewards == OOD_INDEX[self.env_name][0]]
@@ -1090,7 +1090,7 @@ class IndependentPPO(OnPolicyAlgorithm):
     #     return total_cf_rewards
 
     
-    def compute_cf_rewards(self,policy,all_last_obs,all_actions,polid,all_distributions,sample_number=10):
+    def compute_cf_rewards(self,policy,all_last_obs,all_actions,polid,all_distributions,all_rewards,sample_number=10):
         all_cf_rewards = []
         if self.add_spawn_prob:
             all_last_obs_list = []
@@ -1102,7 +1102,7 @@ class IndependentPPO(OnPolicyAlgorithm):
 
         # batch_size, num_agents, 1
         all_actions = obs_as_tensor(np.transpose(np.array(all_actions),(1,0,2)), policy.device)
-        
+        all_rewards = obs_as_tensor(np.transpose(np.array(all_rewards),(1,0)), policy.device).cpu().numpy()
         # extract obs features
         all_obs_features = []
         if self.add_spawn_prob:
@@ -1154,11 +1154,19 @@ class IndependentPPO(OnPolicyAlgorithm):
         # Set reward not in the dict to be default excluded reward
         reverse_reward_mapping_func = np.frompyfunc(lambda key: REWARD_ENV_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][1]), 1, 1) #SPEED, Can the function be jit?
         all_cf_rewards_values = reverse_reward_mapping_func(all_cf_rewards_class_index)
-        all_max_cf_rewards = np.max(all_cf_rewards_values,axis=1)
+        # all_max_cf_rewards = np.max(all_cf_rewards_values,axis=1)
+        all_cf_rewards_values[:,:,polid] = np.zeros_like(all_cf_rewards_values[:,:,polid])
+        all_cf_rewards_values = np.sum(all_cf_rewards_values,axis=2)
+        all_max_cf_rewards = np.max(all_cf_rewards_values,axis=1)[:,np.newaxis]
 
-        all_regret = all_pred_rewards_values - all_max_cf_rewards
+        all_rewards[:polid] = np.zeros_like(all_rewards[:polid])
+        all_rewards = np.sum(all_rewards,axis=1)[:,np.newaxis]
+
+
+
+        all_regret = all_rewards - all_max_cf_rewards
         total_cf_rewards = all_regret   
-        total_cf_rewards = np.delete(total_cf_rewards,polid,axis=1)
+        # total_cf_rewards = np.delete(total_cf_rewards,polid,axis=1)
 
         # old
         # total_actions = [None] * self.num_agents
