@@ -901,7 +901,7 @@ class IndependentPPO(OnPolicyAlgorithm):
 
         all_rewards[:,polid] = th.zeros_like(all_rewards[:,polid])
         all_rewards = th.sum(all_rewards,dim=1).unsqueeze(1)
-        all_regret = all_reward_pred.squeeze(1) - all_max_cf_rewards
+        all_regret = all_rewards - all_max_cf_rewards
         # total_cf_rewards = th.mean(all_regret,dim=1).cpu().detach().numpy()
         total_cf_rewards = all_regret.cpu().detach().numpy()
         # total_cf_rewards = np.delete(total_cf_rewards,polid,axis=1) 
