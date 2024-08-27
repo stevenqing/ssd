@@ -412,7 +412,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                     )
                     else:
                         policy.rollout_buffer.compute_sw_returns_and_advantage(
-                        last_values=value, dones=all_dones[polid], alpha=self.alpha
+                        last_values=value, dones=all_dones[polid], alpha=self.alpha, polid=polid
                     )
 
         for callback in callbacks:
@@ -619,11 +619,11 @@ class IndependentPPO(OnPolicyAlgorithm):
                 else:
                     if self.model == 'team':
                         policy.rollout_buffer.compute_sw_returns_and_advantage(
-                        last_values=value, dones=all_dones[polid], alpha=self.alpha, use_team_reward=True
+                        last_values=value, dones=all_dones[polid], alpha=self.alpha, polid=polid, use_team_reward=True
                     )
                     else:
                         policy.rollout_buffer.compute_sw_returns_and_advantage(
-                        last_values=value, dones=all_dones[polid], alpha=self.alpha
+                        last_values=value, dones=all_dones[polid], alpha=self.alpha, polid=polid
                     )
 
         for callback in callbacks:

@@ -371,6 +371,7 @@ class RolloutBuffer(BaseBuffer):
         n_envs: int = 1,
         num_agents: int=3,
         model: str='baseline',
+        polid: int=99
     ):
 
         super().__init__(buffer_size, observation_space, action_space, device, n_envs=n_envs)
@@ -385,6 +386,7 @@ class RolloutBuffer(BaseBuffer):
         self.generator_ready = False
         self.model = model
         self.env_id = 0
+        self.polid = polid
         self.reset()
 
     def reset(self) -> None:
@@ -526,7 +528,7 @@ class RolloutBuffer(BaseBuffer):
         # in David Silver Lecture 4: https://www.youtube.com/watch?v=PnHCvfgC_ZA
         self.returns = self.advantages + self.values
 
-    def compute_sw_returns_and_advantage(self, last_values: th.Tensor, dones: np.ndarray, alpha: np.int32, use_team_reward=False) -> None:
+    def compute_sw_returns_and_advantage(self, last_values: th.Tensor, dones: np.ndarray, alpha: np.int32, polid: np.int32, use_team_reward=False) -> None:
         """
         Post-processing step: compute the lambda-return (TD(lambda) estimate)
         and GAE(lambda) advantage.
@@ -563,8 +565,10 @@ class RolloutBuffer(BaseBuffer):
             else:
             # using cf
                 # delta = self.rewards[step] + alpha * np.sum(self.cf_rewards[step],axis=-1) + self.gamma * next_values * next_non_terminal - self.values[step]   
-                delta = self.rewards[step] + alpha * np.sum(self.cf_rewards[step],axis=-1)/(self.agent_number - 1) + self.gamma * next_values * next_non_terminal - self.values[step]   
-
+                if polid == 0:
+                    delta = self.rewards[step] + alpha * np.sum(self.cf_rewards[step],axis=-1)/(self.agent_number - 1) + self.gamma * next_values * next_non_terminal - self.values[step]   
+                else:
+                    delta = self.rewards[step] + self.gamma * next_values * next_non_terminal - self.values[step]   
             last_gae_lam = delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam
             self.advantages[step] = last_gae_lam
         # TD(lambda) estimator, see Github PR #375 or "Telescoping in TD(lambda)"
