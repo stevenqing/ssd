@@ -565,7 +565,7 @@ class RolloutBuffer(BaseBuffer):
             else:
             # using cf
                 # delta = self.rewards[step] + alpha * np.sum(self.cf_rewards[step],axis=-1) + self.gamma * next_values * next_non_terminal - self.values[step]   
-                if polid == 0:
+                if polid == 0 or polid == 1:
                     delta = self.rewards[step] + alpha * np.sum(self.cf_rewards[step],axis=-1)/(self.agent_number - 1) + self.gamma * next_values * next_non_terminal - self.values[step]   
                 else:
                     delta = self.rewards[step] + self.gamma * next_values * next_non_terminal - self.values[step]   
