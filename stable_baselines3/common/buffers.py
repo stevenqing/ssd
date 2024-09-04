@@ -557,18 +557,36 @@ class RolloutBuffer(BaseBuffer):
                 next_values = last_values
             else:
                 next_non_terminal = 1.0 - self.episode_starts[step + 1]
-                # next_values = self.values[step + 1]
-                next_values = self.values[min(999,step+17)]
+                next_values = self.values[step + 1]
+                # next_values = self.values[min(999,step+17)]
             if use_team_reward:
             # naivly using sw
                 delta = self.rewards[step] + alpha * np.sum(self.all_rewards[step],axis=-1) + self.gamma * next_values * next_non_terminal - self.values[step]
             else:
             # using cf
-                # delta = self.rewards[step] + alpha * np.sum(self.cf_rewards[step],axis=-1) + self.gamma * next_values * next_non_terminal - self.values[step]   
-                if polid == 0 or polid == 1:
-                    delta = self.rewards[step] + alpha * np.sum(self.cf_rewards[step],axis=-1)/(self.agent_number - 1) + self.gamma * next_values * next_non_terminal - self.values[step]   
+                #1. n-step
+                n = 10
+                n_step_return = 0
+                for i in range(n):
+                    if step + i < self.buffer_size - 1:
+                        n_step_return += (self.gamma ** i) * (self.rewards[step + i] + alpha * np.sum(self.cf_rewards[step + i], axis=-1))
+                    else:
+                        break
+                if step + n < self.buffer_size - 1:
+                    next_non_terminal = 1.0 - dones
+                    next_value = self.values[step + n] * next_non_terminal
                 else:
-                    delta = self.rewards[step] + self.gamma * next_values * next_non_terminal - self.values[step]   
+                    next_value = 0
+                delta = n_step_return + (self.gamma ** n) * next_value - self.values[step]
+
+                #2. original one-step
+                # delta = self.rewards[step] + alpha * np.sum(self.cf_rewards[step],axis=-1) + self.gamma * next_values * next_non_terminal - self.values[step]   
+
+                #3. population-based
+                # if polid == 0 or polid == 1:
+                #     delta = self.rewards[step] + alpha * np.sum(self.cf_rewards[step],axis=-1)/(self.agent_number - 1) + self.gamma * next_values * next_non_terminal - self.values[step]   
+                # else:
+                # delta = self.rewards[step] + self.gamma * next_values * next_non_terminal - self.values[step]   
             last_gae_lam = delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam
             self.advantages[step] = last_gae_lam
         # TD(lambda) estimator, see Github PR #375 or "Telescoping in TD(lambda)"
