@@ -146,6 +146,76 @@ def create_mlp(
     return modules
 
 
+class RnnExtractor(nn.Module):
+    def __init__(
+        self,
+        feature_dim: int,
+        net_arch: Union[Dict[str, List[int]], List[Union[int, Dict[str, List[int]]]]],
+        activation_fn: Type[nn.Module],
+        device: Union[th.device, str] = "auto",
+    ) -> None:
+        super().__init__()
+        device = th.device(device if device != "auto" else ("cuda" if th.cuda.is_available() else "cpu"))
+        
+        shared_net: List[nn.Module] = []
+        policy_net: List[nn.Module] = []
+        value_net: List[nn.Module] = []
+        policy_only_layers: List[int] = []
+        value_only_layers: List[int] = []
+        last_layer_dim_shared = feature_dim
+
+        # check net_arch type
+        if isinstance(net_arch, dict):
+            policy_only_layers = net_arch["pi"]
+            value_only_layers = net_arch["vf"]
+        else:
+            for layer in net_arch:
+                if isinstance(layer, int):
+                    # add shared rnn layer
+                    shared_net.append(nn.LSTM(input_size=last_layer_dim_shared, hidden_size=layer, batch_first=True))
+                    last_layer_dim_shared = layer
+                else:
+                    if "pi" in layer:
+                        policy_only_layers = layer["pi"]
+                    if "vf" in layer:
+                        value_only_layers = layer["vf"]
+                    break
+
+        last_layer_dim_pi = last_layer_dim_shared
+        last_layer_dim_vf = last_layer_dim_shared
+
+        # construct policy and value network
+        for pi_layer_size, vf_layer_size in zip_longest(policy_only_layers, value_only_layers):
+            if pi_layer_size is not None:
+                policy_net.append(nn.LSTM(input_size=last_layer_dim_pi, hidden_size=pi_layer_size, batch_first=True))
+                last_layer_dim_pi = pi_layer_size
+            if vf_layer_size is not None:
+                value_net.append(nn.LSTM(input_size=last_layer_dim_vf, hidden_size=vf_layer_size, batch_first=True))
+                last_layer_dim_vf = vf_layer_size
+
+        self.latent_dim_pi = last_layer_dim_pi
+        self.latent_dim_vf = last_layer_dim_vf
+
+        self.shared_net = nn.Sequential(*shared_net).to(device)
+        self.policy_net = nn.Sequential(*policy_net).to(device)
+        self.value_net = nn.Sequential(*value_net).to(device)
+
+    def forward(self, features: th.Tensor) -> Tuple[th.Tensor, th.Tensor]:
+        shared_latent, _ = self.shared_net(features)
+        policy_latent, _ = self.policy_net(shared_latent)
+        value_latent, _ = self.value_net(shared_latent)
+        return policy_latent[:, -1, :], value_latent[:, -1, :]
+
+    def forward_actor(self, features: th.Tensor) -> th.Tensor:
+        shared_latent, _ = self.shared_net(features)
+        policy_latent, _ = self.policy_net(shared_latent)
+        return policy_latent[:, -1, :]
+
+    def forward_critic(self, features: th.Tensor) -> th.Tensor:
+        shared_latent, _ = self.shared_net(features)
+        value_latent, _ = self.value_net(shared_latent)
+        return value_latent[:, -1, :]
+
 
 
 class MlpExtractor(nn.Module):

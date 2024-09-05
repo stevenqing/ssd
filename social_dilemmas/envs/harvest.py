@@ -12,7 +12,7 @@ APPLE_RADIUS = 2
 _HARVEST_ACTIONS = {"FIRE": 5}  # length of firing range
 
 # SPAWN_PROB = [0, 0.005, 0.02, 0.05]
-INTERVAL_SPAWN_PROB = [0, 0.005, 0.02, 0.05, 0]
+INTERVAL_SPAWN_PROB = [0, 0.005, 0.05, 0.02, 0]
 HARVEST_VIEW_SIZE = 7
 
 
@@ -118,7 +118,7 @@ class HarvestEnv(MapEnv):
                     spawn_prob = INTERVAL_SPAWN_PROB[1]
                 elif num_apples > 62 and num_apples <= 93:
                     spawn_prob = INTERVAL_SPAWN_PROB[2]
-                elif num_apples > 6 and num_apples <= 62:
+                elif num_apples > 10 and num_apples <= 62:
                     spawn_prob = INTERVAL_SPAWN_PROB[3]
                 else:
                     spawn_prob = INTERVAL_SPAWN_PROB[4]
