@@ -30,6 +30,7 @@ from stable_baselines3.common.torch_layers import (
     CombinedExtractor,
     FlattenExtractor,
     MlpExtractor,
+    RnnExtractor,
     NatureCNN,
     create_mlp,
 )
