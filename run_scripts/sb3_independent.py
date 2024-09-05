@@ -311,7 +311,18 @@ def main(args):
                 job_type="training",
                 reinit=True)
     else:
-        run = wandb.init(config=args,
+        if env_name == 'harvest':
+            run = wandb.init(config=args,
+                        project=project_name,
+                        entity=args.user_name, 
+                        notes=socket.gethostname(),
+                        name=str(env_name) +"_10_apples_" + str(extractor) + "_" + str(model_name),
+                        group=str(env_name) + str(model_name)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
+                        dir="./",
+                        job_type="training",
+                        reinit=True)
+        else:
+            run = wandb.init(config=args,
                         project=project_name,
                         entity=args.user_name, 
                         notes=socket.gethostname(),
