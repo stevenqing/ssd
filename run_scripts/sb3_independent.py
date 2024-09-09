@@ -177,7 +177,8 @@ class CBAM(BaseFeaturesExtractor):
         self.fc2 = nn.Linear(in_features=fcnet_hiddens[0], out_features=fcnet_hiddens[1])
 
     def forward(self, x):
-        x = x.permute(0, 3, 1, 2)
+        if x.dim() == 4:
+            x = x.permute(0, 3, 1, 2)
         x = self.ca(x)
         x = self.sa(x)
 
@@ -415,7 +416,7 @@ def main(args):
             add_spawn_prob=add_spawn_prob,
             svo=svo
         )
-    elif model == 'causal' or model == 'team':
+    elif model == 'causal' or model == 'team' or model=='causalmask':
         model = IndependentPPO(
             "RewardPolicy",
             num_agents=num_agents,

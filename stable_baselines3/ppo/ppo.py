@@ -12,6 +12,8 @@ from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedul
 from stable_baselines3.common.utils import explained_variance, get_schedule_fn
 from stable_baselines3.common.utils import (configure_logger, obs_as_tensor,
                                             safe_mean)
+from stable_baselines3.drssmutil import DRSSMUtils
+from stable_baselines3.MINE import MINE
 SelfPPO = TypeVar("SelfPPO", bound="PPO")
 
 from social_dilemmas.envs.agent import ENV_REWARD_SPACE, OOD_INDEX
@@ -176,6 +178,25 @@ class PPO(OnPolicyAlgorithm):
         self.env_name = env_name
         self.add_spawn_prob = add_spawn_prob
         self.timestep = 0
+
+        self.stoch_size_s1 = 160
+        self.stoch_size_s2 = 160
+        self.stoch_size_s3 = 160
+        self.stoch_size_s4 = 160
+        self.stoch_size = self.stoch_size_s1 + self.stoch_size_s2 + self.stoch_size_s3 + self.stoch_size_s4
+        self.MineReward1 = MINE(x_dim=self.stoch_size_s1 + self.stoch_size_s2 + self.stoch_size_s1 + self.stoch_size_s2 + self.num_agents,
+                                y_dim=self.num_agents).to(self.device)
+        self.MineAction1 = MINE(x_dim=self.stoch_size_s1 + self.stoch_size_s3 + self.stoch_size, y_dim=self.num_agents).to(
+            self.device)
+        self.MineReward2 = MINE(x_dim=self.stoch_size_s3 + self.stoch_size_s4 + self.stoch_size_s1 + self.stoch_size_s2 + self.num_agents,
+                                    y_dim=self.num_agents).to(self.device)
+            
+        self.MineAction2 = MINE(x_dim=self.stoch_size_s2 + self.stoch_size_s4 + self.stoch_size, y_dim=self.num_agents).to(
+                self.device)
+        self.aux_reward_1_loss_scale = 0.1
+        self.aux_reward_2_loss_scale = 0.1
+        self.aux_action_1_loss_scale = 0.1
+        self.aux_action_2_loss_scale = 0.1
         if _init_setup_model:
             self._setup_model()
 
@@ -468,6 +489,125 @@ class PPO(OnPolicyAlgorithm):
                         # Clip grad norm
                         th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
                         self.policy.optimizer.step()
+            elif self.model == 'causalmask':
+                for rollout_data in self.rollout_buffer.get_sw_traj(self.batch_size):
+                    all_last_obs = rollout_data.all_last_obs
+                    all_rewards = rollout_data.all_rewards
+                    actions = rollout_data.actions
+
+                    all_obs_traj = rollout_data.all_obs_traj
+                    all_actions_traj = rollout_data.all_action_traj
+                    all_rewards_traj = rollout_data.all_rewards_traj
+
+                    obs_trajs_features = []
+                    for i in range(self.num_agents):
+                        obs_trajs_features.append(self.policy.extract_features(all_obs_traj[:,i,:]))
+                    obs_trajs_features = th.stack(obs_trajs_features,dim=0)
+                    obs_trajs_features = obs_trajs_features.permute(1,0,2)
+                    obs_trajs_features = obs_trajs_features.reshape(obs_trajs_features.shape[0],-1)
+
+                    mine_reward_1_input, mine_reward_2_input, mine_action_1_input, mine_action_2_input = DRSSMUtils.get_aux_state(self,obs_trajs_features, all_actions_traj, all_rewards_traj)
+
+                    mine_inner_loss1 = self.MineReward1(mine_reward_1_input[0].detach(), mine_reward_1_input[1].detach())
+                    mine_inner_loss3 = self.MineAction1(mine_action_1_input[0].detach(), mine_action_1_input[1].detach())
+                    mine_inner_loss2 = self.MineReward2(mine_reward_2_input[0].detach(), mine_reward_2_input[1].detach())
+                    mine_inner_loss4 = self.MineAction2(mine_action_2_input[0].detach(), mine_action_2_input[1].detach())
+
+                    mine_outer_loss_reward = -(mine_inner_loss1 - mine_inner_loss2)
+                    mine_outer_loss_action = -(mine_inner_loss3 - mine_inner_loss4)
+                    # mine_outer_loss_reward = - (self.aux_reward_1_loss_scale * th.clamp(self.MineReward1(mine_reward_1_input[0], mine_reward_1_input[1]), min=0) - self.aux_reward_2_loss_scale * th.clamp(self.MineReward2(mine_reward_2_input[0],mine_reward_2_input[1]), min=0))
+                    # mine_outer_loss_action = - (self.aux_action_1_loss_scale * th.clamp(self.MineAction1(mine_action_1_input[0], mine_action_1_input[1]), min=0) - self.aux_action_2_loss_scale * th.clamp(self.MineAction2(mine_action_2_input[0], mine_action_2_input[1]), min=0))
+                    
+                    if isinstance(self.action_space, spaces.Discrete):
+                        # Convert discrete action from float to long
+                        actions = rollout_data.actions.long().flatten()
+                        all_actions = rollout_data.all_actions.long()
+                    # Re-sample the noise matrix because the log_std has changed
+                    if self.use_sde:
+                        self.policy.reset_noise(self.batch_size)
+                    # values_seq, log_prob_seq, entropy_seq, predicted_reward_seq = self.policy.evaluate_actions(rollout_data.observations, actions, all_obs_traj, all_actions_traj)
+                    values, log_prob, entropy, predicted_reward = self.policy.evaluate_actions(rollout_data.observations, actions, all_last_obs, all_actions)
+                    values = values.flatten()
+                    # Normalize advantage
+                    advantages = rollout_data.advantages
+                    # Normalization does not make sense if mini batchsize == 1, see GH issue #325
+                    if self.normalize_advantage and len(advantages) > 1:
+                        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+
+                    # ratio between old and new policy, should be one at the first iteration
+                    ratio = th.exp(log_prob - rollout_data.old_log_prob)
+
+                    # clipped surrogate loss
+                    policy_loss_1 = advantages * ratio
+                    policy_loss_2 = advantages * th.clamp(ratio, 1 - clip_range, 1 + clip_range)
+                    policy_loss = -th.min(policy_loss_1, policy_loss_2).mean()
+
+                    # Logging
+                    pg_losses.append(policy_loss.item())
+                    clip_fraction = th.mean((th.abs(ratio - 1) > clip_range).float()).item()
+                    clip_fractions.append(clip_fraction)
+
+                    if self.clip_range_vf is None:
+                        # No clipping
+                        values_pred = values
+                    else:
+                        # Clip the difference between old and new value
+                        # NOTE: this depends on the reward scaling
+                        values_pred = rollout_data.old_values + th.clamp(
+                            values - rollout_data.old_values, -clip_range_vf, clip_range_vf
+                        )
+                    # Value loss using the TD(gae_lambda) target
+                    value_loss = F.mse_loss(rollout_data.returns, values_pred)
+                    value_losses.append(value_loss.item())
+
+                    # Entropy loss favor exploration
+                    if entropy is None:
+                        # Approximate entropy when no analytical form
+                        entropy_loss = -th.mean(-log_prob)
+                    else:
+                        entropy_loss = -th.mean(entropy)
+
+                    entropy_losses.append(entropy_loss.item())
+
+
+
+                    # use discrete loss
+                    all_rewards = all_rewards.long()
+                    predicted_reward = th.permute(predicted_reward,(0,2,1))
+                    # TODO use logits here, make sure flatten first
+                    # TODO check the data flatten in a right way
+                    # predicted_reward =  predicted_reward.reshape(-1, predicted_reward.shape[-1])
+                    # all_rewards = all_rewards.reshape(-1)
+                    reward_losses = F.cross_entropy(predicted_reward, all_rewards)
+                    reward_acc = th.mean((th.argmax(predicted_reward, dim=1) == all_rewards).float()).cpu().numpy()
+                    
+                    # acc 
+                    reward_ood_rate = th.mean((all_rewards == OOD_INDEX[self.env_name][0]).float()).cpu().numpy()
+                    # reward_losses = F.mse_loss(all_rewards, predicted_reward)
+
+                    loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + reward_losses + mine_outer_loss_reward + mine_outer_loss_action
+
+                    # Calculate approximate form of reverse KL Divergence for early stopping
+                    # see issue #417: https://github.com/DLR-RM/stable-baselines3/issues/417
+                    # and discussion in PR #419: https://github.com/DLR-RM/stable-baselines3/pull/419
+                    # and Schulman blog: http://joschu.net/blog/kl-approx.html
+                    with th.no_grad():
+                        log_ratio = log_prob - rollout_data.old_log_prob
+                        approx_kl_div = th.mean((th.exp(log_ratio) - 1) - log_ratio).cpu().numpy()
+                        approx_kl_divs.append(approx_kl_div)
+
+                    if self.target_kl is not None and approx_kl_div > 1.5 * self.target_kl:
+                        continue_training = False
+                        if self.verbose >= 1:
+                            print(f"Early stopping at step {epoch} due to reaching max kl: {approx_kl_div:.2f}")
+                        break
+
+                    # Optimization step
+                    self.policy.optimizer.zero_grad()
+                    loss.backward()
+                    # Clip grad norm
+                    th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
+                    self.policy.optimizer.step()
             elif self.model == 'vae':
                 for rollout_data in self.rollout_buffer.get_sw(self.batch_size, enable_trajs=True):
                     self.timestep += 1

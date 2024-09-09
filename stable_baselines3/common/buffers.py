@@ -5,6 +5,7 @@ from typing import Any, Dict, Generator, List, Optional, Union, Tuple
 import numpy as np
 import torch as th
 from gym import spaces
+import random
 
 from stable_baselines3.common.preprocessing import get_action_dim, get_obs_shape
 from stable_baselines3.common.type_aliases import (
@@ -971,22 +972,23 @@ class RolloutBuffer(BaseBuffer):
             start_idx += batch_size
 
     def _get_sw_traj_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> RolloutBufferSamples:
-        index = np.arange(1000)   #TODO: the index should be renewed, now it samples the first batch_size of samples everytime
+        start = random.randint(0, self.n_envs-1)
+        index = np.arange(start, start+1000)   #TODO: the index should be renewed, now it samples the first batch_size of samples everytime
         # traj_length = self.all_last_obs_traj.shape[0]
         traj_length = []
-        if isinstance(self.all_last_obs_traj, list) or isinstance(self.all_last_obs_traj, np.ndarray):
-            for i in range(len(self.all_last_obs_traj)):
-                traj_length.append(self.all_last_obs_traj[i].shape[0])
-                pad_length = 1000 - self.all_last_obs_traj[i].shape[0]
-                pad_width_obs = ((0, pad_length), (0, 0), (0, 0), (0, 0), (0, 0))
-                pad_width_action  = ((0, pad_length), (0, 0))
+        # if isinstance(self.all_last_obs_traj, list) or isinstance(self.all_last_obs_traj, np.ndarray):
+            # for i in range(len(self.all_last_obs_traj)):
+            #     traj_length.append(self.all_last_obs_traj[i].shape[0])
+            #     pad_length = 1000 - self.all_last_obs_traj[i].shape[0]
+            #     pad_width_obs = ((0, pad_length), (0, 0), (0, 0), (0, 0), (0, 0))
+            #     pad_width_action  = ((0, pad_length), (0, 0))
 
-                self.all_last_obs_traj[i] = np.pad(self.all_last_obs_traj[i], pad_width_obs, 'constant', constant_values=0)
-                self.all_actions_traj[i] = np.pad(self.all_actions_traj[i], pad_width_action, 'constant', constant_values=0)
-                self.all_rewards_traj[i] = np.pad(self.all_rewards_traj[i], pad_width_action, 'constant', constant_values=0)
-            self.all_last_obs_traj = np.stack(self.all_last_obs_traj)
-            self.all_actions_traj = np.stack(self.all_actions_traj)
-            self.all_rewards_traj = np.stack(self.all_rewards_traj)
+            #     self.all_last_obs_traj[i] = np.pad(self.all_last_obs_traj[i], pad_width_obs, 'constant', constant_values=0)
+            #     self.all_actions_traj[i] = np.pad(self.all_actions_traj[i], pad_width_action, 'constant', constant_values=0)
+            #     self.all_rewards_traj[i] = np.pad(self.all_rewards_traj[i], pad_width_action, 'constant', constant_values=0)
+            # self.all_last_obs_traj = np.stack(self.all_last_obs_traj)
+            # self.all_actions_traj = np.stack(self.all_actions_traj)
+            # self.all_rewards_traj = np.stack(self.all_rewards_traj)
         data = (
             self.observations[batch_inds],
             self.actions[batch_inds],
@@ -998,10 +1000,10 @@ class RolloutBuffer(BaseBuffer):
             self.all_actions[batch_inds],
             self.all_rewards[batch_inds],
             self.cf_rewards[batch_inds],
-            self.all_last_obs_traj,
-            self.all_actions_traj,
-            self.all_rewards_traj,
-            self.all_dones[index],
+            self.all_last_obs_traj[:,start,:],
+            self.all_actions_traj[:,start,:],
+            self.all_rewards_traj[:,start,:],
+            self.all_dones,
             traj_length,
         )
         return RewardTrajsRolloutBufferSamples(*tuple(map(self.to_torch, data)))

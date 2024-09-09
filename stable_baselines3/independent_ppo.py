@@ -170,7 +170,7 @@ class IndependentPPO(OnPolicyAlgorithm):
             policy._last_episode_starts = np.ones((self.num_envs,), dtype=bool)
 
         while num_timesteps < total_timesteps:
-            if self.enable_trajs_learning:
+            if self.enable_trajs_learning or self.model == 'causalmask':
                 last_obs = self.collect_trajs_rollouts(last_obs, callbacks,num_timesteps)
             else:
                 if self.add_spawn_prob:
@@ -820,10 +820,15 @@ class IndependentPPO(OnPolicyAlgorithm):
                             cf_rewards=None,
                         )
                     else:
-                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid) 
+                        cf_rewards = self.compute_cf_rewards(policy,all_last_obs,all_actions,polid,all_distributions,all_rewards) #SPEED, Can the cf rewards be computed in ppo?
+                        reward_mapping_func = np.frompyfunc(lambda key: ENV_REWARD_SPACE[self.env_name].get(key, OOD_INDEX[self.env_name][0]), 1, 1) #SPEED, Can the function be jit?
+                        all_discrete_rewards = reward_mapping_func(all_rewards)
+                        detected_OOD = np.array(all_rewards)[all_discrete_rewards == OOD_INDEX[self.env_name][0]]
+                        if len(detected_OOD) != 0:
+                            print('OOD reward detected! mean reward:',detected_OOD)
                         if num_timesteps <= self.using_reward_timestep:
                             cf_rewards = np.zeros_like(cf_rewards)
-                        if self.enable_trajs_learning:
+                        if self.enable_trajs_learning or self.model == 'causalmask':
                             policy.rollout_buffer.add_sw_traj( # add_sw
                                 all_last_obs[polid],
                                 all_actions[polid],
@@ -833,11 +838,12 @@ class IndependentPPO(OnPolicyAlgorithm):
                                 all_log_probs[polid],
                                 all_last_obs,
                                 rollout_all_actions,
-                                all_rewards,
+                                all_discrete_rewards,
                                 cf_rewards,
                                 all_obs_trajs,
                                 all_actions_trajs,
                                 all_rewards_trajs,
+                                all_dones,
                                 # self.previous_all_last_obs_traj,
                                 # self.previous_all_actions_traj,
                                 # self.previous_all_rewards_traj,
@@ -879,7 +885,7 @@ class IndependentPPO(OnPolicyAlgorithm):
                     )
                     else:
                         policy.rollout_buffer.compute_sw_returns_and_advantage(
-                        last_values=value, dones=all_dones[polid], alpha=self.alpha
+                        last_values=value, dones=all_dones[polid], alpha=self.alpha, polid=polid
                     )
 
         for callback in callbacks:
