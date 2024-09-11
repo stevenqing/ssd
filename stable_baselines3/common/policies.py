@@ -1227,7 +1227,278 @@ class TransitionActorCriticPolicy(ActorCriticPolicy):
 
 
 
+class LIOActorCriticPolicy(ActorCriticPolicy):
+    """
+    Policy class for reward prediction.
 
+    :param observation_space: Observation space
+    :param action_space: Action space
+    :param lr_schedule: Learning rate schedule (could be constant)
+    :param net_arch: The specification of the policy and value networks.
+    :param activation_fn: Activation function
+    :param ortho_init: Whether to use or not orthogonal initialization
+    :param use_sde: Whether to use State Dependent Exploration or not
+    :param log_std_init: Initial value for the log standard deviation
+    :param full_std: Whether to use (n_features x n_actions) parameters
+        for the std instead of only (n_features,) when using gSDE
+    :param use_expln: Use ``expln()`` function instead of ``exp()`` to ensure
+        a positive standard deviation (cf paper). It allows to keep variance
+        above zero and prevent it from growing too fast. In practice, ``exp()`` is usually enough.
+    :param squash_output: Whether to squash the output using a tanh function,
+        this allows to ensure boundaries when using gSDE.
+    :param features_extractor_class: Features extractor to use.
+    :param features_extractor_kwargs: Keyword arguments
+        to pass to the features extractor.
+    :param share_features_extractor: If True, the features extractor is shared between the policy and value networks.
+    :param normalize_images: Whether to normalize images or not,
+         dividing by 255.0 (True by default)
+    :param optimizer_class: The optimizer to use,
+        ``th.optim.Adam`` by default
+    :param optimizer_kwargs: Additional keyword arguments,
+        excluding the learning rate, to pass to the optimizer
+    """
+
+    def __init__(
+        self,
+        observation_space: spaces.Space,
+        action_space: spaces.Space,
+        lr_schedule: Schedule,
+        net_arch: Union[List[int], Dict[str, List[int]], List[Dict[str, List[int]]], None] = None,
+        activation_fn: Type[nn.Module] = nn.Tanh,
+        ortho_init: bool = True,
+        use_sde: bool = False,
+        log_std_init: float = 0.0,
+        full_std: bool = True,
+        use_expln: bool = False,
+        squash_output: bool = False,
+        features_extractor_class: Type[BaseFeaturesExtractor] = NatureCNN,
+        features_extractor_kwargs: Optional[Dict[str, Any]] = None,
+        share_features_extractor: bool = True,
+        normalize_images: bool = True,
+        optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
+        optimizer_kwargs: Optional[Dict[str, Any]] = None,
+        num_agents: int = 3,
+        env_name: str = 'harvest',
+        add_spawn_prob: bool = False,
+    ):
+        super().__init__(
+            observation_space,
+            action_space,
+            lr_schedule,
+            net_arch,
+            activation_fn,
+            ortho_init,
+            use_sde,
+            log_std_init,
+            full_std,
+            use_expln,
+            squash_output,
+            features_extractor_class,
+            features_extractor_kwargs,
+            share_features_extractor,
+            normalize_images,
+            optimizer_class,
+            optimizer_kwargs,
+        )
+        self.num_agents = num_agents
+        self.env_name = env_name
+        self.add_spawn_prob = add_spawn_prob
+        self._build(lr_schedule)
+
+    def _build_mlp_extractor(self) -> None:
+        """
+        Create the policy and value networks.
+        Part of the layers can be shared.
+        """
+        # Note: If net_arch is None and some features extractor is used,
+        #       net_arch here is an empty list and mlp_extractor does not
+        #       really contain any layers (acts like an identity module).
+        self.mlp_extractor = MlpExtractor(
+            self.features_dim,
+            net_arch=self.net_arch,
+            activation_fn=self.activation_fn,
+            device=self.device,
+        )
+
+
+    def _build(self, lr_schedule: Schedule) -> None:
+        """
+        Create the networks and the optimizer.
+
+        :param lr_schedule: Learning rate schedule
+            lr_schedule(1) is the initial learning rate
+        """
+        self._build_mlp_extractor()
+
+        latent_dim_pi = self.mlp_extractor.latent_dim_pi
+
+        if isinstance(self.action_dist, DiagGaussianDistribution):
+            self.action_net, self.log_std = self.action_dist.proba_distribution_net(
+                latent_dim=latent_dim_pi, log_std_init=self.log_std_init
+            )
+            self.opp_net, self.opp_log_std = self.action_dist.proba_distribution_net(
+                latent_dim=latent_dim_pi, log_std_init=self.log_std_init
+            )
+        elif isinstance(self.action_dist, StateDependentNoiseDistribution):
+            self.action_net, self.log_std = self.action_dist.proba_distribution_net(
+                latent_dim=latent_dim_pi, latent_sde_dim=latent_dim_pi, log_std_init=self.log_std_init
+            )
+            self.opp_net, self.opp_log_std = self.action_dist.proba_distribution_net(
+                latent_dim=latent_dim_pi, log_std_init=self.log_std_init
+            )
+        elif isinstance(self.action_dist, (CategoricalDistribution, MultiCategoricalDistribution, BernoulliDistribution)):
+            self.action_net = self.action_dist.proba_distribution_net(latent_dim=latent_dim_pi)
+            self.opp_net = self.action_dist.proba_distribution_net(latent_dim=latent_dim_pi)
+        else:
+            raise NotImplementedError(f"Unsupported distribution '{self.action_dist}'.")
+        if self.add_spawn_prob:
+            self.apple_growth_rate_net = nn.Linear(1, 32)
+            self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf + 32, 1)
+        else:
+            self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf, 1)
+        # self.reward_net = CausalModel(self.mlp_extractor.latent_dim_vf+self.action_space.n,self.num_agents) # use individual training
+        self.reward_net = CausalModel((self.mlp_extractor.latent_dim_vf+self.action_space.n) * self.num_agents,self.num_agents,env_name=self.env_name) # calculate the giving reward
+        # Init weights: use orthogonal initialization
+        # with small initial weight for the output
+        if self.ortho_init:
+            # TODO: check for features_extractor
+            # Values from stable-baselines.
+            # features_extractor/mlp values are
+            # originally from openai/baselines (default gains/init_scales).
+            module_gains = {
+                self.features_extractor: np.sqrt(2),
+                self.mlp_extractor: np.sqrt(2),
+                self.action_net: 0.01,
+                self.opp_net: 0.01,
+                self.value_net: 1,
+                self.reward_net: 1,
+            }
+            if not self.share_features_extractor:
+                # Note(antonin): this is to keep SB3 results
+                # consistent, see GH#1148
+                del module_gains[self.features_extractor]
+                module_gains[self.pi_features_extractor] = np.sqrt(2)
+                module_gains[self.vf_features_extractor] = np.sqrt(2)
+
+            for module, gain in module_gains.items():
+                module.apply(partial(self.init_weights, gain=gain))
+
+        # Setup optimizer with initial learning rate
+        self.optimizer = self.optimizer_class(self.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)
+
+    def extract_dict_features(self, key: str, obs: th.Tensor) -> th.Tensor:
+        """
+        Preprocess the observation if needed and extract features.
+
+         :param obs: The observation
+         :param features_extractor: The features extractor to use. If it is set to None,
+            the features extractor of the policy is used.
+         :return: The features
+        """
+        features_extractor = self.features_extractor
+        if features_extractor is None:
+            warnings.warn(
+                (
+                    "When calling extract_features(), you should explicitely pass a features_extractor as parameter. "
+                    "This will be mandatory in Stable-Baselines v1.8.0"
+                ),
+                DeprecationWarning,
+            )
+
+
+        assert features_extractor is not None, "No features extractor was set"
+        preprocessed_obs = preprocess_obs(obs, self.observation_space[key], normalize_images=self.normalize_images)
+        return features_extractor(preprocessed_obs)
+
+    def forward(self, obs: th.Tensor, deterministic: bool = False) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
+        """
+        Forward pass in all the networks (actor and critic)
+
+        :param obs: Observation
+        :param deterministic: Whether to sample or use deterministic actions
+        :return: action, value and log probability of the action
+        """
+        # Preprocess the observation if needed
+        if self.add_spawn_prob:
+            features = self.extract_dict_features('curr_obs', obs['curr_obs'])
+        else:
+            features = self.extract_features(obs)
+        if self.share_features_extractor:
+            latent_pi, latent_vf = self.mlp_extractor(features)
+        else:
+            pi_features, vf_features = features
+            latent_pi = self.mlp_extractor.forward_actor(pi_features)
+            latent_vf = self.mlp_extractor.forward_critic(vf_features)
+        # Evaluate the values for the given observations
+        if self.add_spawn_prob:
+            values = self.value_net(th.cat((latent_vf, self.apple_growth_rate_net(th.mean(obs['vector_state'].float(),-1).unsqueeze(-1))), dim=-1))
+        else:
+            values = self.value_net(latent_vf)
+        distribution = self._get_action_dist_from_latent(latent_pi)
+        actions = distribution.get_actions(deterministic=deterministic)
+        log_prob = distribution.log_prob(actions)
+        actions = actions.reshape((-1,) + self.action_space.shape)
+        return actions, values, log_prob, distribution
+
+    def evaluate_actions(self, obs: th.Tensor, actions: th.Tensor, all_last_obs: th.Tensor, all_actions: th.Tensor, use_all_obs=True) -> Tuple[th.Tensor, th.Tensor, Optional[th.Tensor]]:
+        """
+        Evaluate actions according to the current policy,
+        given the observations.
+
+        :param obs: Observation
+        :param actions: Actions
+        :return: estimated value, log likelihood of taking those actions
+            and entropy of the action distribution.
+
+        Haven't check out the use_all_obs yet, aims to use the observations iteratively.
+        """
+        # Preprocess the observation if needed
+        features,all_actions_one_hot, predicted_reward = [],[],[]
+        if self.add_spawn_prob:
+            obs_features = self.extract_dict_features('curr_obs', obs['curr_obs'])
+            spawn_features = self.apple_growth_rate_net(th.mean(obs['vector_state'],-1).unsqueeze(-1))
+        else:
+            obs_features = self.extract_features(obs)
+        for i in range(self.num_agents):
+            if self.add_spawn_prob:
+                features.append(self.extract_dict_features('curr_obs', all_last_obs[i]['curr_obs']))
+            else:
+                features.append(self.extract_features(all_last_obs[:,i,:]))
+            all_actions_one_hot.append(F.one_hot(all_actions[:,i,:], num_classes=self.action_space.n)) #SPEED, Not sure if here could be faster
+        features = th.stack(features,dim=0)
+        all_actions_one_hot = th.stack(all_actions_one_hot,dim=0)
+        all_actions_one_hot = th.squeeze(all_actions_one_hot)
+        if use_all_obs:
+            all_actions_one_hot = all_actions_one_hot.permute(1,0,2)
+            all_actions_one_hot = all_actions_one_hot.reshape(all_actions_one_hot.shape[0], -1)
+            features = features.permute(1,0,2)
+            features = features.reshape(features.shape[0], -1)
+            obs_action = th.cat((features,all_actions_one_hot),dim=-1)
+
+            # batch_size, num_agents, num_reward_class
+            predicted_reward = self.reward_net(obs_action)[0]
+            # predicted_reward = th.squeeze(predicted_reward)
+        else:
+            raise NotImplementedError("Not implemented yet")
+            obs_action = th.cat((features,all_actions_one_hot),dim=-1)
+            for i in range(self.num_agents):
+                predicted_reward.append(th.squeeze(self.reward_net(obs_action[i])[0]))
+            predicted_reward = th.stack(predicted_reward,dim=0)
+
+        if self.share_features_extractor:
+            latent_pi, latent_vf = self.mlp_extractor(obs_features)
+        else:
+            pi_features, vf_features = obs_features
+            latent_pi = self.mlp_extractor.forward_actor(pi_features)
+            latent_vf = self.mlp_extractor.forward_critic(vf_features)
+        distribution = self._get_action_dist_from_latent(latent_pi)
+        log_prob = distribution.log_prob(actions)
+        if self.add_spawn_prob:
+            values = self.value_net(th.cat((latent_vf, spawn_features), dim=-1))
+        else:
+            values = self.value_net(latent_vf)
+        entropy = distribution.entropy()
+        return values, log_prob, entropy, predicted_reward
 
 
 class RewardActorCriticPolicy(ActorCriticPolicy):
