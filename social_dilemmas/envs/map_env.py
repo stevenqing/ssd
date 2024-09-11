@@ -401,7 +401,7 @@ class MapEnv(MultiAgentEnv):
                         total_reward = apple_type_list[i]
                     for agent in self.agents.values():
                         if agent.agent_id in agent_id:
-                            agent.reward += total_reward / total_agent_level
+                            agent.reward += total_reward * agent.agent_level / total_agent_level
         else:
             for agent in self.agents.values():
                 pos = agent.pos
