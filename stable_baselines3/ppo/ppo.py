@@ -179,10 +179,10 @@ class PPO(OnPolicyAlgorithm):
         self.add_spawn_prob = add_spawn_prob
         self.timestep = 0
 
-        self.stoch_size_s1 = 140
-        self.stoch_size_s2 = 140
-        self.stoch_size_s3 = 140
-        self.stoch_size_s4 = 220
+        self.stoch_size_s1 = 160
+        self.stoch_size_s2 = 160
+        self.stoch_size_s3 = 160
+        self.stoch_size_s4 = 160
         self.stoch_size = self.stoch_size_s1 + self.stoch_size_s2 + self.stoch_size_s3 + self.stoch_size_s4
         self.MineReward1 = MINE(x_dim=self.stoch_size_s1 + self.stoch_size_s2 + self.stoch_size_s1 + self.stoch_size_s2 + self.num_agents,
                                 y_dim=self.num_agents).to(self.device)
