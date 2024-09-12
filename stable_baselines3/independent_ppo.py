@@ -31,7 +31,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         env: GymEnv,
         learning_rate: Union[float, Schedule] = 1e-4,
         n_steps: int = 1000,
-        batch_size: int = 6000,
+        batch_size: int = 24000,
         n_epochs: int = 10,
         gamma: float = 0.99,
         gae_lambda: float = 1.0,
