@@ -396,7 +396,7 @@ class MapEnv(MultiAgentEnv):
                     self.single_update_map(apple[0],apple[1],new_char)
                     # Modify the reward
                     if len(agent_id) > 0:
-                        total_reward = apple_type_list[i] if apple_type_list[i] == 1 else apple_type_list[i] * 4
+                        total_reward = apple_type_list[i] if apple_type_list[i] == 1 else apple_type_list[i] * 10
                     else:
                         total_reward = apple_type_list[i]
                     for agent in self.agents.values():
