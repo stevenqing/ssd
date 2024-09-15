@@ -565,20 +565,20 @@ class MapEnv(MultiAgentEnv):
             rewards = temp_rewards
 
         dones["__all__"] = np.any(list(dones.values()))
-        if self.env_name == 'LBF10':
-            if dones["__all__"] or self.timestep == 1000:
-                apple_1_num = np.count_nonzero(np.array(apple_type_list) == 1)
-                apple_2_num = np.count_nonzero(np.array(apple_type_list) == 2)
-                apple_3_num = np.count_nonzero(np.array(apple_type_list) == 3)
-                file_exists = os.path.isfile(self.file_path) and os.path.getsize(self.file_path) > 0
+        # if self.env_name == 'LBF10':
+        #     if dones["__all__"] or self.timestep == 1000:
+        #         apple_1_num = np.count_nonzero(np.array(apple_type_list) == 1)
+        #         apple_2_num = np.count_nonzero(np.array(apple_type_list) == 2)
+        #         apple_3_num = np.count_nonzero(np.array(apple_type_list) == 3)
+        #         file_exists = os.path.isfile(self.file_path) and os.path.getsize(self.file_path) > 0
 
-                with open(self.file_path, "a") as csv_file:
-                    writer = csv.writer(csv_file)
-                    if not file_exists:
-                        writer.writerow(["episode","apple_1_num","apple_2_num","apple_3_num"])
-                    writer.writerow([self.episode,apple_1_num,apple_2_num,apple_3_num])
-                self.timestep = 0
-                self.episode += 1
+        #         with open(self.file_path, "a") as csv_file:
+        #             writer = csv.writer(csv_file)
+        #             if not file_exists:
+        #                 writer.writerow(["episode","apple_1_num","apple_2_num","apple_3_num"])
+        #             writer.writerow([self.episode,apple_1_num,apple_2_num,apple_3_num])
+        #         self.timestep = 0
+        #         self.episode += 1
         return observations, rewards, dones, infos
     
 
