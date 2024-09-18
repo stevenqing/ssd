@@ -26,7 +26,7 @@ def make_video_from_image_dir(vid_path, img_folder, video_name="trajectory", fps
 
 
 def make_video_from_rgb_imgs(
-    rgb_arrs, vid_path, video_name="trajectory", fps=5, format="mp4v", resize=None
+    rgb_arrs, vid_path, video_name="trajectory", fps=5, format="mkv", resize=None
 ):
     """
     Create a video from a list of rgb arrays
@@ -34,7 +34,7 @@ def make_video_from_rgb_imgs(
     print("Rendering video...")
     if vid_path[-1] != "/":
         vid_path += "/"
-    video_path = vid_path + video_name + ".mp4"
+    video_path = vid_path + video_name + ".mkv"
 
     if resize is not None:
         width, height = resize
@@ -43,7 +43,7 @@ def make_video_from_rgb_imgs(
         height, width, _ = frame.shape
         resize = width, height
 
-    fourcc = cv2.VideoWriter_fourcc(*format)
+    fourcc = cv2.VideoWriter_fourcc(*'MJPG')
     video = cv2.VideoWriter(video_path, fourcc, float(fps), (width, height))
 
     for i, image in enumerate(rgb_arrs):
@@ -52,6 +52,7 @@ def make_video_from_rgb_imgs(
             print("\t...", percent_done, "% of frames rendered")
         # Always resize, without this line the video does not render properly.
         image = cv2.resize(image, resize, interpolation=cv2.INTER_NEAREST)
+        image = image.astype(np.uint8)
         video.write(image)
 
     video.release()

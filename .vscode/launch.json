@@ -42,38 +42,38 @@
 
 
 
-{
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
-    "configurations": [
+// {
+//     // Use IntelliSense to learn about possible attributes.
+//     // Hover to view descriptions of existing attributes.
+//     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+//     "version": "0.2.0",
+//     "configurations": [
 
-        {
-            "name": "Python: main",
-            "type": "python",
-            "request": "launch",
-            "program": "run_scripts/sb3_independent.py",
-            "console": "integratedTerminal",
-            "python": "/home/shuqingshi/miniconda3/envs/ssd/bin/python",
-            "justMyCode": false,
-            "args": [
-                "--env",
-                "coin3",
-                "--model",
-                "causal",
-                "--num-agents",
-                "3",
-                "--rollout-len",
-                "1000",
-                "--user_name",
-                "k23048755",
-                "--num-envs",
-                "2",
-                "--extractor",
-                "cbam"
-            ],
-        },
+//         {
+//             "name": "Python: main",
+//             "type": "python",
+//             "request": "launch",
+//             "program": "run_scripts/sb3_independent.py",
+//             "console": "integratedTerminal",
+//             "python": "/home/shuqingshi/miniconda3/envs/ssd/bin/python",
+//             "justMyCode": false,
+//             "args": [
+//                 "--env",
+//                 "coin3",
+//                 "--model",
+//                 "causal",
+//                 "--num-agents",
+//                 "3",
+//                 "--rollout-len",
+//                 "1000",
+//                 "--user_name",
+//                 "k23048755",
+//                 "--num-envs",
+//                 "2",
+//                 "--extractor",
+//                 "cbam"
+//             ],
+//         },
         // {
         //     "name": "reed: main",
         //     "type": "python",
@@ -98,23 +98,23 @@
         //         "--local"
         //     ],
         // },
-    ]
+    // ]
 
-// {
-//     // Use IntelliSense to learn about possible attributes.
-//     // Hover to view descriptions of existing attributes.
-//     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-//     "version": "0.2.0",
-//     "configurations": [
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
 
-//         {
-//             "name": "Python: main",
-//             "type": "python",
-//             "request": "launch",
-//             "program": "exp_results/plot_coin_variant.py",
-//             "console": "integratedTerminal",
-//             "python": "/home/shuqingshi/miniconda3/envs/ssd/bin/python",
-//             "justMyCode": false,
-//         },
-//     }
+        {
+            "name": "Python: main",
+            "type": "python",
+            "request": "launch",
+            "program": "demonstration.py",
+            "console": "integratedTerminal",
+            "python": "/home/shuqingshi/miniconda3/envs/ssd/bin/python",
+            "justMyCode": false,
+        },
+    }
     
