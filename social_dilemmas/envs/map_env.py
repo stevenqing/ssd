@@ -771,6 +771,8 @@ class MapEnv(MultiAgentEnv):
             else:
                 plt.savefig(filename)
             return None
+        elif mode == "rgb_array":
+            return rgb_arr
         return rgb_arr
 
     def update_moves(self, agent_actions):

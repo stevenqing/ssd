@@ -17,6 +17,7 @@ from torch import nn
 import numpy as np
 import random
 from social_dilemmas.envs.pettingzoo_env import parallel_env
+import cv2
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -365,19 +366,53 @@ def main(args):
     model = IndependentPPO.load(  # noqa: F841
         logdir, "RewardPolicy", num_agents, env, rollout_len, policy_kwargs, tensorboard_log, verbose
     )
-    return model,env
+    test_env = parallel_env(
+        max_cycles=rollout_len,
+        env=env_name,
+        num_agents=num_agents,
+        use_collective_reward=use_collective_reward,
+        inequity_averse_reward=inequity_averse_reward,
+        alpha=alpha,
+        beta=beta,
+    )
+    test_env = ss.observation_lambda_v0(test_env, lambda x, _: x["curr_obs"], lambda s: s["curr_obs"])
+    test_env = ss.frame_stack_v1(test_env, num_frames)
+    return model,test_env
+
+def rgb_arr_to_video(rgb_arrs, output_file, fps=30):
+    # Assuming all frames are the same size
+    height, width, _ = rgb_arrs[0].shape
+    
+    # Define the codec and create VideoWriter object
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Codec for mp4
+    out = cv2.VideoWriter(output_file, fourcc, fps, (width, height))
+    
+    # Write each frame to the video
+    for frame in rgb_arrs:
+        # Ensure frame is in uint8 format
+        frame = np.uint8(frame)
+        out.write(frame)
+
+    # Release everything when done
+    out.release()
+
 
 if __name__ == "__main__":
     args = parse_args()
     agent_number = args.num_agents
     policies,env = main(args)
     policies = policies.policies
-    for step in range(100):
+    rgb_arr = []
+    for step in range(10):
         obs = env.reset()
-        done = False
-        while not done:
+        done = dict((f"agent-{i}", False) for i in range(0,agent_number))
+        while not np.any(list(done.values())):
             actions = dict((f"agent-{i}", None) for i in range(0,agent_number))
             for i in range(agent_number):
-                actions[f"agent-{i}"] = policies[i].predict(obs[i])
+                actions[f"agent-{i}"] = int(policies[i].predict(obs[f"agent-{i}"])[0])
             obs, rewards, done, info = env.step(actions)
-            env.render()
+            rgb_arr.append(env.render(mode='rgb_array'))
+    
+    rgb_arr_to_video(rgb_arr, 'lbf10.mp4', fps=30)
+
+    
