@@ -1351,7 +1351,7 @@ class IndependentPPO(OnPolicyAlgorithm):
         dummy_env = DummyVecEnv([env_fn] * (env.num_envs // num_agents))
         for polid in range(num_agents):
             model.policies[polid] = PPO.load(
-                path=path + f"/policy_{polid + 1}/model", env=dummy_env, **kwargs
+                path=path + f"/policy_{polid + 1}/model.zip", env=dummy_env, **kwargs
             )
         return model
 

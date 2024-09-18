@@ -106,7 +106,7 @@ class MapEnv(MultiAgentEnv):
         alpha=0.0,
         beta=0.0,
         store_trajs=False,
-        coin_env=False,
+        four_actions_env=False,
         sample_number=10,
     ):
         """
@@ -151,7 +151,7 @@ class MapEnv(MultiAgentEnv):
         self.inequity_averse_reward = inequity_averse_reward
         self.alpha = alpha
         self.beta = beta
-        if coin_env:
+        if four_actions_env :
             self.all_actions = COIN_MAP_ENV_ACTIONS.copy()
         else:
             self.all_actions = _MAP_ENV_ACTIONS.copy()    
