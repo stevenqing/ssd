@@ -390,23 +390,40 @@ def rgb_arr_to_video(rgb_arrs, output_file, fps=30):
             rgb_arrs, './', video_name=output_file, resize=(width, height)
         )
 
-
+def exp(epochs, agent_number, use_random_action=False):
+    rgb_arr = []
+    rewards_list = []
+    for step in range(epochs):
+        obs = env.reset()
+        done = dict((f"agent-{i}", False) for i in range(0,agent_number))
+        while not np.any(list(done.values())):
+            actions = dict((f"agent-{i}", None) for i in range(0,agent_number))
+            for i in range(agent_number):
+                if use_random_action:
+                    actions[f"agent-{i}"] = np.random.randint(0, 3)
+                else:
+                    actions[f"agent-{i}"] = int(policies[i].predict(obs[f"agent-{i}"])[0])
+            obs, rewards, done, info = env.step(actions)
+            rewards_list.append(rewards)
+            rgb_arr.append(env.render(mode='rgb_array'))
+    return rgb_arr, rewards_list
 
 if __name__ == "__main__":
     args = parse_args()
     agent_number = args.num_agents
     policies,env = main(args)
     policies = policies.policies
-    rgb_arr = []
-    for step in range(10):
-        obs = env.reset()
-        done = dict((f"agent-{i}", False) for i in range(0,agent_number))
-        while not np.any(list(done.values())):
-            actions = dict((f"agent-{i}", None) for i in range(0,agent_number))
-            for i in range(agent_number):
-                actions[f"agent-{i}"] = int(policies[i].predict(obs[f"agent-{i}"])[0])
-            obs, rewards, done, info = env.step(actions)
-            rgb_arr.append(env.render(mode='rgb_array'))
+    # rgb_arr = []
+    # for step in range(10):
+    #     obs = env.reset()
+    #     done = dict((f"agent-{i}", False) for i in range(0,agent_number))
+    #     while not np.any(list(done.values())):
+    #         actions = dict((f"agent-{i}", None) for i in range(0,agent_number))
+    #         for i in range(agent_number):
+    #             actions[f"agent-{i}"] = int(policies[i].predict(obs[f"agent-{i}"])[0])
+    #         obs, rewards, done, info = env.step(actions)
+    #         rgb_arr.append(env.render(mode='rgb_array'))
+    rgb_arr, rewards_list = exp(10, agent_number)
     rgb_arr_to_video(rgb_arr, 'lbf10')
 
     

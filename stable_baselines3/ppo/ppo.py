@@ -800,7 +800,7 @@ class PPO(OnPolicyAlgorithm):
                 if self.polid != None:
                     wandb.log({f"{self.polid}/all_predicted_reward": predicted_reward.sum()}, step=self.num_timesteps)
                     wandb.log({f"{self.polid}/all_rewards": all_rewards.sum()}, step=self.num_timesteps)
-                    
+                    wandb.log({f"{self.polid}/reward_loss": reward_losses}, step=self.num_timesteps)
                     mask = (all_rewards == -1).any(dim=1)
                     selected_row_indices = mask.nonzero(as_tuple=False).squeeze()
                     cf_agents_rewards = th.cat((all_rewards[:, :self.polid], all_rewards[:, self.polid+1:]), dim=1)
