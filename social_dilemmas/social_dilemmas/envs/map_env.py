@@ -380,7 +380,6 @@ class MapEnv(MultiAgentEnv):
             for i in range(len(apple_pos_list)):
                 apple = apple_pos_list[i]
                 level = apple_type_list[i]
-                original_level = level
                 surroundings = self.round_pos(apple)
                 common_pos = [pos for pos in agents_pos if pos in surroundings]
                 total_agent_level = 0
@@ -396,7 +395,7 @@ class MapEnv(MultiAgentEnv):
                     new_char = b" "
                     self.single_update_map(apple[0],apple[1],new_char)
                     # Modify the reward
-                    if len(agent_id) > 1:
+                    if len(agent_id) > 0:
                         total_reward = apple_type_list[i] if apple_type_list[i] == 1 else apple_type_list[i] * 2
                     else:
                         total_reward = apple_type_list[i]
@@ -410,7 +409,7 @@ class MapEnv(MultiAgentEnv):
                             if agent.agent_id in agent_id:
                                 if agent.agent_level == 1:
                                     agent.reward -= 1
-                                    total_reward += apple_type_list[i]
+                                    total_reward += 1
                         for agent in self.agents.values():
                             if agent.agent_id in agent_id:
                                 if agent.agent_level == 2:
