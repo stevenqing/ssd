@@ -18,6 +18,7 @@ import numpy as np
 import random
 from social_dilemmas.envs.pettingzoo_env import parallel_env
 import cv2
+import utility_funcs
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -39,14 +40,14 @@ def parse_args():
     parser.add_argument(
         "--env-name",
         type=str,
-        default="lbf10",
+        default="harvest",
         choices=["harvest", "cleanup", "coin3", "lbf10"],
         help="The SSD environment to use",
     )
     parser.add_argument(
         "--num-agents",
         type=int,
-        default=3,
+        default=5,
         help="The number of agents",
     )
     parser.add_argument(
@@ -361,7 +362,7 @@ def main(args):
 
 
 
-    logdir = "/home/shuqingshi/Downloads/lbf_results/lbf10_ppo_independent/IndependentPPO_2"
+    logdir = "/home/shuqingshi/Downloads/harvest_results/harvest_ppo_independent/IndependentPPO_3"
 
     model = IndependentPPO.load(  # noqa: F841
         logdir, "RewardPolicy", num_agents, env, rollout_len, policy_kwargs, tensorboard_log, verbose
@@ -382,19 +383,13 @@ def main(args):
 def rgb_arr_to_video(rgb_arrs, output_file, fps=30):
     # Assuming all frames are the same size
     height, width, _ = rgb_arrs[0].shape
+    height *= 20
+    width *= 20
     
-    # Define the codec and create VideoWriter object
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Codec for mp4
-    out = cv2.VideoWriter(output_file, fourcc, fps, (width, height))
-    
-    # Write each frame to the video
-    for frame in rgb_arrs:
-        # Ensure frame is in uint8 format
-        frame = np.uint8(frame)
-        out.write(frame)
+    utility_funcs.make_video_from_rgb_imgs(
+            rgb_arrs, './', video_name=output_file, resize=(width, height)
+        )
 
-    # Release everything when done
-    out.release()
 
 
 if __name__ == "__main__":
@@ -412,7 +407,6 @@ if __name__ == "__main__":
                 actions[f"agent-{i}"] = int(policies[i].predict(obs[f"agent-{i}"])[0])
             obs, rewards, done, info = env.step(actions)
             rgb_arr.append(env.render(mode='rgb_array'))
-    
-    rgb_arr_to_video(rgb_arr, 'lbf10.mp4', fps=30)
+    rgb_arr_to_video(rgb_arr, 'harvest')
 
     
