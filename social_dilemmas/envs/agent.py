@@ -277,7 +277,7 @@ class LBF10Agent(Agent):
 
 
     def get_done(self,timestep, apple_pos_list):
-        if apple_pos_list == [] or timestep == 25:
+        if apple_pos_list == [] or timestep == 35:
             return True
         return False
 

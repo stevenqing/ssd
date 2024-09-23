@@ -362,7 +362,7 @@ def main(args):
 
 
 
-    logdir = "/home/shuqingshi/Downloads/lbf_results/lbf10_ppo_independent/IndependentPPO_2"
+    logdir = "/home/shuqingshi/Downloads/lbf_results/lbf10_ppo_independent/IndependentPPO_18"
 
     model = IndependentPPO.load(  # noqa: F841
         logdir, "RewardPolicy", num_agents, env, rollout_len, policy_kwargs, tensorboard_log, verbose
