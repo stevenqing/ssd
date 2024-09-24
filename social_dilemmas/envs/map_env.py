@@ -554,16 +554,16 @@ class MapEnv(MultiAgentEnv):
 
         dones["__all__"] = np.any(list(dones.values()))
         
-        if self.env_name == 'HARVEST':
-            if self.timestep % 50 == 0:
-                apple_num = self.calculate_apples()
-                file_exists = os.path.isfile(self.file_path) and os.path.getsize(self.file_path) > 0
+        # if self.env_name == 'HARVEST':
+        #     if self.timestep % 50 == 0:
+        #         apple_num = self.calculate_apples()
+        #         file_exists = os.path.isfile(self.file_path) and os.path.getsize(self.file_path) > 0
 
-                with open(self.file_path, "a") as csv_file:
-                    writer = csv.writer(csv_file)
-                    if not file_exists:
-                        writer.writerow(["timestep","apple_num"])
-                    writer.writerow([self.timestep,apple_num])
+        #         with open(self.file_path, "a") as csv_file:
+        #             writer = csv.writer(csv_file)
+        #             if not file_exists:
+        #                 writer.writerow(["timestep","apple_num"])
+        #             writer.writerow([self.timestep,apple_num])
         return observations, rewards, dones, infos
     
     def calculate_apples(self):
