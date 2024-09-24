@@ -461,16 +461,16 @@ class MapEnv(MultiAgentEnv):
 
 
             # generate vector_state
-            if apple_type == None:
-                if self.env_name == 'CLEANUP':
-                    vector_state = positions + apple_pos + waste_pos
-                else:
-                    vector_state = positions + apple_pos
-            else:
-                if self.env_name == 'LBF10':
-                    vector_state = positions + levels + apple_pos + apple_type
-                else:
-                    vector_state = positions + apple_pos + apple_type
+            # if apple_type == None:
+            #     if self.env_name == 'CLEANUP':
+            #         vector_state = positions + apple_pos + waste_pos
+            #     else:
+            #         vector_state = positions + apple_pos
+            # else:
+            #     if self.env_name == 'LBF10':
+            #         vector_state = positions + levels + apple_pos + apple_type
+            #     else:
+            #         vector_state = positions + apple_pos + apple_type
             vector_state = [int(i) for i in vector_state]
             
             agent_type = np.zeros(self.num_agents)
