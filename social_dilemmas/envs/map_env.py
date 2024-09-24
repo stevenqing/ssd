@@ -471,7 +471,7 @@ class MapEnv(MultiAgentEnv):
             #         vector_state = positions + levels + apple_pos + apple_type
             #     else:
             #         vector_state = positions + apple_pos + apple_type
-            vector_state = [int(i) for i in vector_state]
+            # vector_state = [int(i) for i in vector_state]
             
             agent_type = np.zeros(self.num_agents)
             agent_type[int(agent.agent_id[-1])] = 1
@@ -499,7 +499,7 @@ class MapEnv(MultiAgentEnv):
                     "prev_visible_agents": agent.prev_visible_agents,
                     "agent_id_matrix": self.agent_id_matrix,
                     "prev_vector_state": self.prev_vector_state,
-                    "vector_state": vector_state,
+                    "vector_state": INIT_VEC[self.env_name],
                     "prev_rewards": self.prev_rewards,
                 }
                 agent.prev_visible_agents = visible_agents
