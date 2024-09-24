@@ -306,7 +306,7 @@ def main(args):
                 project=project_name,
                 entity=args.user_name, 
                 notes=socket.gethostname(),
-                name=str(env_name) +"_0.3_0.0_0.85_0.015_" + str(extractor) + "_" + str(model_name),
+                name=str(env_name) +"_ori_" + str(extractor) + "_" + str(model_name),
                 group=str(env_name) + str(model_name)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
                 dir="./",
                 job_type="training",
