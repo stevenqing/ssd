@@ -33,7 +33,7 @@ def set_seed(seed: int = 42) -> None:
 
 
 def parse_args():
-    parser = argparse.ArgumentParser("Stable-Baselines3 PPO with Parameter Sharing")
+    parser = argparse.ArgumentParser("MARL-Baselines3 PPO with Independent Learning")
     parser.add_argument(
         "--env-name",
         type=str,
@@ -50,7 +50,7 @@ def parse_args():
     parser.add_argument(
         "--num-cpus",
         type=int,
-        default=4,
+        default=1,
         help="The number of cpus",
     )
     parser.add_argument(
@@ -91,9 +91,16 @@ def parse_args():
             improves cooperation in intertemporal social dilemmas'",
     )
     parser.add_argument(
+        "--svo",
+        type=bool,
+        default=False,
+        help="Use inequity averse rewards from 'Inequity aversion \
+            improves cooperation in intertemporal social dilemmas'",
+    )
+    parser.add_argument(
         "--alpha",
         type=float,
-        default=5,
+        default=0.55,
         help="Advantageous inequity aversion factor",
     )
     parser.add_argument(
@@ -103,10 +110,13 @@ def parse_args():
         help="Disadvantageous inequity aversion factor",
     )
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--user_name", type=str, default="1160677229")
+    parser.add_argument("--user_name", type=str, default="k23048755")
+    parser.add_argument("--project_name", type=str, default="ICLR2025_Causal_SSD")
     parser.add_argument("--model", type=str, default='baseline')
+    parser.add_argument("--using_reward_timestep", type=int, default=2000000)
     parser.add_argument("--extractor", type=str, default='cnn')
     parser.add_argument("--enable_trajs_learning", type=int, default=0,choices=[0, 1])
+    parser.add_argument("--add_spawn_prob", type=bool, default=False)
     args = parser.parse_args()
     return args
 
@@ -219,23 +229,27 @@ class CustomCNN(BaseFeaturesExtractor):
 def main(args):
     # Config
     set_seed(args.seed)
-    model = args.model
+    model=args.model
+    project_name = args.project_name
+    extractor = args.extractor
     env_name = args.env_name
     num_agents = args.num_agents
     rollout_len = args.rollout_len
     total_timesteps = args.total_timesteps
     use_collective_reward = args.use_collective_reward
     inequity_averse_reward = args.inequity_averse_reward
+    svo = args.svo
+    add_spawn_prob = args.add_spawn_prob
     alpha = args.alpha
     beta = args.beta
     num_cpus = args.num_cpus
     num_envs = args.num_envs
-    extractor = args.extractor
-    target_kl = args.kl_threshold
+    using_reward_timestep = args.using_reward_timestep
     if args.enable_trajs_learning == 0:
         enable_trajs_learning = False
     else:
         enable_trajs_learning = True
+    target_kl = args.kl_threshold
     # Training
       # number of cpus
       # number of parallel multi-agent environments
@@ -271,15 +285,46 @@ def main(args):
     )
     env = VecMonitor(env)
 
-    run = wandb.init(config=args,
-                         project="SSD_pytorch",
-                         entity=args.user_name, 
-                         notes=socket.gethostname(),
-                         name=str(env_name) +"_"+ str(model),
-                         group=str(env_name) +"_causal_image_"+ "_inequity_averse_" + str(args.inequity_averse_reward) + "_collective_" + str(args.use_collective_reward) + "_" + str(model) + "_" + str(args.seed) + "_"+ str(args.alpha),
-                         dir="./",
-                         job_type="training",
-                         reinit=True)
+    if model == 'baseline':
+        if inequity_averse_reward:
+            model_name = "inequity_aversion"
+        elif use_collective_reward:
+            model_name = "collective"
+        else:
+            model_name = "baseline"
+    else:
+        model_name = model
+    if env_name == 'cleanup':
+        run = wandb.init(config=args,
+                project=project_name,
+                entity=args.user_name, 
+                notes=socket.gethostname(),
+                name=str(env_name) +"_0.3_0.0_0.85_0.015_" + str(extractor) + "_" + str(model_name),
+                group=str(env_name) + str(model_name)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
+                dir="./",
+                job_type="training",
+                reinit=True)
+    else:
+        if env_name == 'harvest':
+            run = wandb.init(config=args,
+                        project=project_name,
+                        entity=args.user_name, 
+                        notes=socket.gethostname(),
+                        name=str(env_name) +"_original_" + str(extractor) + "_" + str(model_name),
+                        group=str(env_name) + str(model_name)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
+                        dir="./",
+                        job_type="training",
+                        reinit=True)
+        else:
+            run = wandb.init(config=args,
+                        project=project_name,
+                        entity=args.user_name, 
+                        notes=socket.gethostname(),
+                        name=str(env_name) +"_" + str(extractor) + str(model_name),
+                        group=str(env_name) + str(model_name)+ "_independent_" + str(args.seed)+ "_" + str(args.alpha),
+                        dir="./",
+                        job_type="training",
+                        reinit=True)
     
     args = wandb.config # for wandb sweep
 
