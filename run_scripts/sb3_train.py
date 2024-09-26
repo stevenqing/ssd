@@ -103,10 +103,13 @@ def parse_args():
         help="Disadvantageous inequity aversion factor",
     )
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--user_name", type=str, default="1160677229")
+    parser.add_argument("--user_name", type=str, default="k23048755")
+    parser.add_argument("--project_name", type=str, default="ICLR2025_Causal_SSD")
     parser.add_argument("--model", type=str, default='baseline')
+    parser.add_argument("--using_reward_timestep", type=int, default=2000000)
     parser.add_argument("--extractor", type=str, default='cnn')
     parser.add_argument("--enable_trajs_learning", type=int, default=0,choices=[0, 1])
+    parser.add_argument("--add_apple_growth_rate",type=bool, default=False)
     args = parser.parse_args()
     return args
 
@@ -219,23 +222,26 @@ class CustomCNN(BaseFeaturesExtractor):
 def main(args):
     # Config
     set_seed(args.seed)
-    model = args.model
+    model=args.model
+    project_name = args.project_name
+    extractor = args.extractor
     env_name = args.env_name
     num_agents = args.num_agents
     rollout_len = args.rollout_len
     total_timesteps = args.total_timesteps
     use_collective_reward = args.use_collective_reward
     inequity_averse_reward = args.inequity_averse_reward
+    add_apple_growth_rate = args.add_apple_growth_rate
     alpha = args.alpha
     beta = args.beta
     num_cpus = args.num_cpus
     num_envs = args.num_envs
-    extractor = args.extractor
-    target_kl = args.kl_threshold
+    using_reward_timestep = args.using_reward_timestep
     if args.enable_trajs_learning == 0:
         enable_trajs_learning = False
     else:
         enable_trajs_learning = True
+    target_kl = args.kl_threshold
     # Training
       # number of cpus
       # number of parallel multi-agent environments
@@ -276,22 +282,41 @@ def main(args):
             model_name = "inequity_aversion"
         elif use_collective_reward:
             model_name = "collective"
-        # elif svo:
-        #     model_name = "svo"
         else:
             model_name = "baseline"
     else:
         model_name = model
-
-    run = wandb.init(config=args,
-                     project="Neurips2024",
+    if env_name == 'lbf10':
+        run = wandb.init(config=args,
+                     project=project_name,
                     entity=args.user_name, 
                     notes=socket.gethostname(),
-                    name=str(env_name) +"_" + str(extractor) + str(model_name) + "_centralized",
-                    group=str(env_name) + str(model_name)+ "_centralized_" + str(args.seed)+ "_" + str(args.alpha),
+                    name=str(env_name) + "_" + str(extractor) + str(model_name),
+                    group=str(env_name) + str(model_name)+ "_" + str(args.seed)+ "_" + str(args.alpha),
                     dir="./",
                     job_type="training",
                     reinit=True)
+    elif env_name == 'cleanup':
+        run = wandb.init(config=args,
+                     project=project_name,
+                    entity=args.user_name, 
+                    notes=socket.gethostname(),
+                    name=str(env_name) + "_0.4_0.0_0.85_0.01" + "_" + str(extractor) + str(model_name),
+                    group=str(env_name) + str(model_name)+ "_" + str(args.seed)+ "_" + str(args.alpha),
+                    dir="./",
+                    job_type="training",
+                    reinit=True)
+    else:
+        run = wandb.init(config=args,
+                     project=project_name,
+                    entity=args.user_name, 
+                    notes=socket.gethostname(),
+                    name=str(env_name) +"_" + str(extractor) + str(model_name),
+                    group=str(env_name) + str(model_name)+ "_" + str(args.seed)+ "_" + str(args.alpha),
+                    dir="./",
+                    job_type="training",
+                    reinit=True)
+
     
     args = wandb.config # for wandb sweep
 
