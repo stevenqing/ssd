@@ -369,9 +369,10 @@ def main(args):
             num_agents=num_agents,
             enable_trajs_learning=enable_trajs_learning,
         )
-    else:
+    elif model_name == 'causal' or model_name == 'team' or model_name == 'causalmask':
         model = PPO(
             "RewardPolicy",
+            num_agents=num_agents,
             env=env,
             learning_rate=lr,
             n_steps=rollout_len,
@@ -385,9 +386,12 @@ def main(args):
             policy_kwargs=policy_kwargs,
             tensorboard_log=tensorboard_log,
             verbose=verbose,
-            model=model,
-            num_agents=num_agents,
+            alpha=alpha,
+            model=args.model,
+            using_reward_timestep=using_reward_timestep,
             enable_trajs_learning=enable_trajs_learning,
+            env_name=env_name,
+            add_spawn_prob=add_spawn_prob
         )
     model.learn(total_timesteps=total_timesteps)
 
