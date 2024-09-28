@@ -6,6 +6,7 @@ from social_dilemmas.envs.coin3 import Coin3Env
 from social_dilemmas.envs.coin4 import Coin4Env
 from social_dilemmas.envs.coin5 import Coin5Env
 from social_dilemmas.envs.lbf10 import LBF10Env
+from social_dilemmas.envs.lbf15 import LBF15Env
 def get_env_creator(
     env,
     num_agents,
@@ -87,6 +88,17 @@ def get_env_creator(
                 alpha=alpha,
                 beta=beta,
                 env_name='LBF10'
+            )
+    elif env == "lbf15":
+        def env_creator(_):
+            return LBF15Env(
+                num_agents=num_agents,
+                return_agent_actions=True,
+                use_collective_reward=use_collective_reward,
+                inequity_averse_reward=inequity_averse_reward,
+                alpha=alpha,
+                beta=beta,
+                env_name='LBF15'
             )
 
     elif env == "cleanup":

@@ -296,7 +296,83 @@ class LBF10Agent(Agent):
                     self.level_consumed += agent_level
                     self.consumed_list.append([self.surroundings[i],self.surroundings_chars[i]])
         
-                
+class LBF15Agent(Agent):
+    def __init__(self, agent_id, start_pos, start_orientation, full_map, view_len):
+        self.view_len = view_len
+        super().__init__(agent_id, start_pos, start_orientation, full_map, view_len, view_len)
+        self.update_agent_pos(start_pos)
+        # self.agent_level = self.init_level(max_level=3)
+        # self.agent_level = int(agent_id[-1]) if int(agent_id[-1]) > 0 else 1
+        self.agent_level = 1 if int(agent_id[-1]) != 3 else 2 # 1,1,1,2
+        # self.agent_level = 1 # 1,1,1
+        self.level_consumed = 0
+        self.surroundings_chars = []
+        self.surroundings = []
+        self.consumed_list = []
+        self.reward = 0
+        self.full_map = full_map
+
+    # def round_pos(self):
+    #     if np.shape(np.shape(self.pos)[0]) == 1:
+    #         round_pos = []
+    #         [row,col] = self.pos[0]
+    #         round_pos = [[row,col],[row+1,col],[row-1,col],[row,col+1],[row,col-1],[row,col+1]]
+    #     else:
+    #         round_pos = []
+    #         for p in self.pos:
+    #             [row,col] = p[0]
+    #             round_pos_p = np.array([[row,col],[row+1,col],[row-1,col],[row,col+1],[row,col-1],[row,col+1]])
+    #             round_pos = np.concat((round_pos,round_pos_p),axis=0)
+    #     self.surroundings = round_pos
+    
+    def init_level(self,max_level):
+        return random.randint(1,max_level)
+
+    # Ugh, this is gross, this leads to the actions basically being
+    # defined in two places
+    def action_map(self, action_number):
+        """Maps action_number to a desired action in the map"""
+        return COIN_ACTIONS[action_number]
+
+
+    def count_apples(self):
+        # Return apples pos and type
+        apple_pos = [[0,0],[0,0],[0,0]]
+        apple_type = [0,0,0]
+        for row in range(1,np.shape(self.full_map)[0]):
+           for col in range(1,np.shape(self.full_map)[1]):
+               char = self.full_map[row, col]
+               if char == b'A':
+                   apple_pos[0] = [int(row),int(col)]
+                   apple_type[0] = 1
+               elif char == b'B':
+                   apple_pos[1] = [int(row),int(col)]
+                   apple_type[1] = 2
+               elif char == b'C':
+                   apple_pos[2] = [int(row),int(col)]
+                   apple_type[2] = 3
+        return apple_pos, apple_type
+
+
+    def get_done(self,timestep, apple_pos_list):
+        if apple_pos_list == [] or timestep == 35:
+            return True
+        return False
+
+    def compute_reward(self):
+        reward = self.reward * self.agent_level
+        self.reward = 0
+        return reward
+
+
+
+    def consume(self):
+        """Defines how an agent interacts with the char it is standing on"""
+        agent_level = self.agent_level
+        for i in range(len(self.surroundings)):
+                if self.surroundings_chars[i] == b"A" or self.surroundings_chars[i] == b"B" or self.surroundings_chars[i] == b"C":
+                    self.level_consumed += agent_level
+                    self.consumed_list.append([self.surroundings[i],self.surroundings_chars[i]])   
 
 
 class Coin3Agent(Agent):

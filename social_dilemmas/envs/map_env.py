@@ -26,7 +26,7 @@ _MAP_ENV_ACTIONS = {
 }  # Counter clockwise rotation matrix
 # Positive Theta is in the counterclockwise direction
 
-LBF_ID_LEVEL = {'agent-0':b'1','agent-1':b'2','agent-2':b'3'}
+LBF_ID_LEVEL = {'agent-0':b'1','agent-1':b'2','agent-2':b'3','agent-3':b'4'}
 
 COIN_MAP_ENV_ACTIONS = {
     "MOVE_LEFT": [0, -1],  # Move left
@@ -81,6 +81,7 @@ DEFAULT_COLOURS = {
 ENV_TO_VEC = {
     'COIN3': 15,
     'LBF10': 18,
+    'LBF15': 18,
     'CLEANUP': 30,
     'HARVEST': 20,
 }
@@ -88,6 +89,7 @@ ENV_TO_VEC = {
 INIT_VEC = {
     'COIN3': np.array([1, 7, 1, 1, 7, 6, 3, 3, 5, 5, 6, 2, 1, 2, 3]).astype(np.int32),
     'LBF10': np.array([1, 7, 1, 1, 7, 6, 1, 1, 1, 3, 3, 5, 5, 6, 2, 1, 2, 3]).astype(np.int32),
+    'LBF15': np.array([1, 7, 1, 1, 7, 6, 1, 1, 1, 3, 3, 5, 5, 6, 2, 1, 2, 3]).astype(np.int32),
     'CLEANUP': np.array([8, 4, 10, 5, 9, 10, 9, 12, 9, 13, # agent pos
                          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, # apple_pos(initial is zero)
                          1, 2, 1, 6, 1, 8, 1, 9, 1, 11 # waste_pos
@@ -184,7 +186,7 @@ class MapEnv(MultiAgentEnv):
         self.wall_points = []
         for row in range(self.base_map.shape[0]):
             for col in range(self.base_map.shape[1]):
-                if self.base_map[row, col] == b"P" or self.base_map[row, col] == b'1' or self.base_map[row, col] == b'2' or self.base_map[row, col] == b'3':
+                if self.base_map[row, col] == b"P" or self.base_map[row, col] == b'1' or self.base_map[row, col] == b'2' or self.base_map[row, col] == b'3' or self.base_map[row,col] == b'4':
                     self.spawn_points.append([row, col])
                     self.vector_state_shape += 2
                 elif self.base_map[row, col] == b"@":
@@ -358,7 +360,7 @@ class MapEnv(MultiAgentEnv):
 
         # Construct the vector state
         apple_type = None
-        if self.env_name == 'LBF10':
+        if self.env_name == 'LBF10' or self.env_name == 'LBF15':
             apple_pos, apple_type, apple_pos_list, apple_type_list = self.count_apples()
         elif self.env_name == 'COIN3' or self.env_name == 'COIN4' or self.env_name == 'COIN5':
             apple_pos, apple_type = self.count_apples()
@@ -376,7 +378,7 @@ class MapEnv(MultiAgentEnv):
             apple_pos = np.pad(apple_pos,(0,10-len(apple_pos))) if len(apple_pos) < 10 else apple_pos[:10]
 
 
-        if self.env_name == 'LBF10':
+        if self.env_name == 'LBF10' or self.env_name == 'LBF15':
             for i in range(len(apple_pos_list)):
                 apple = apple_pos_list[i]
                 level = apple_type_list[i]
@@ -474,7 +476,7 @@ class MapEnv(MultiAgentEnv):
             rewards[agent.agent_id] = agent.compute_reward()
         
 
-        if self.env_name == 'LBF10':
+        if self.env_name == 'LBF10' or self.env_name == 'LBF15':
             levels = []
             for agent in self.agents.values():
                 levels.append(agent.agent_level)
@@ -482,7 +484,7 @@ class MapEnv(MultiAgentEnv):
 
         for agent in self.agents.values():
             agent.full_map = map_with_agents
-            if self.env_name != 'LBF10':
+            if self.env_name != 'LBF10' or self.env_name != 'LBF15':
                 rgb_arr = self.color_view(agent)
             else:
                 colored_map_with_agents = self.full_map_to_colors(map_with_agents).astype(np.uint8)
@@ -497,7 +499,7 @@ class MapEnv(MultiAgentEnv):
                 else:
                     vector_state = positions + apple_pos
             else:
-                if self.env_name == 'LBF10':
+                if self.env_name == 'LBF10' or self.env_name == 'LBF15':
                     vector_state = positions + levels + apple_pos + apple_type
                 else:
                     vector_state = positions + apple_pos + apple_type
@@ -536,7 +538,7 @@ class MapEnv(MultiAgentEnv):
             else:
                 observations[agent.agent_id] = {"curr_obs": rgb_arr,"vector_state": vector_state}
 
-            if self.env_name == 'LBF10':
+            if self.env_name == 'LBF10' or self.env_name == 'LBF15':
                 dones[agent.agent_id] = agent.get_done(self.timestep,apple_pos_list)
             else:
                 dones[agent.agent_id] = agent.get_done()
@@ -639,7 +641,7 @@ class MapEnv(MultiAgentEnv):
         observations = {}
         for agent in self.agents.values():
             agent.full_map = map_with_agents
-            if self.env_name != 'LBF10':
+            if self.env_name != 'LBF10' or self.env_name != 'LBF15':
                 rgb_arr = self.color_view(agent)
             else:
                 colored_map_with_agents = self.full_map_to_colors(map_with_agents).astype(np.uint8)
@@ -854,7 +856,7 @@ class MapEnv(MultiAgentEnv):
                 new_pos = agent.return_valid_pos(new_pos)
                 # agent_representation = self.base_map[agent.pos[0], agent.pos[1]]
                 # reserved_slots.append((*new_pos, agent_representation, agent_id))
-                if self.env_name == 'LBF10':
+                if self.env_name == 'LBF10' or self.env_name=='LBF15':
                     reserved_slots.append((*new_pos, LBF_ID_LEVEL[agent_id], agent_id))
                 else:
                     reserved_slots.append((*new_pos,b"P", agent_id))
