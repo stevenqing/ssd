@@ -371,6 +371,7 @@ class PPO(OnPolicyAlgorithm):
                 else:
                     for rollout_data in self.rollout_buffer.get_sw(self.batch_size):
                         self.timestep += 1
+                        regret = rollout_data.cf_rewards
                         all_last_obs = rollout_data.all_last_obs
                         all_rewards = rollout_data.all_rewards
                         actions = rollout_data.actions
@@ -800,6 +801,7 @@ class PPO(OnPolicyAlgorithm):
                 if self.polid != None:
                     wandb.log({f"{self.polid}/all_predicted_reward": predicted_reward.sum()}, step=self.num_timesteps)
                     wandb.log({f"{self.polid}/all_rewards": all_rewards.sum()}, step=self.num_timesteps)
+                    wandb.log({f"{self.polid}/regret": regret.sum()}, step=self.num_timesteps)
                     wandb.log({f"{self.polid}/reward_loss": reward_losses}, step=self.num_timesteps)
                     mask = (all_rewards == -1).any(dim=1)
                     selected_row_indices = mask.nonzero(as_tuple=False).squeeze()

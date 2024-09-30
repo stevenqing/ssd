@@ -91,6 +91,13 @@ def parse_args():
             improves cooperation in intertemporal social dilemmas'",
     )
     parser.add_argument(
+        "--svo",
+        type=bool,
+        default=False,
+        help="Use inequity averse rewards from 'Inequity aversion \
+            improves cooperation in intertemporal social dilemmas'",
+    )
+    parser.add_argument(
         "--alpha",
         type=float,
         default=5,
@@ -231,6 +238,7 @@ def main(args):
     total_timesteps = args.total_timesteps
     use_collective_reward = args.use_collective_reward
     inequity_averse_reward = args.inequity_averse_reward
+    svo = args.svo
     add_apple_growth_rate = args.add_apple_growth_rate
     alpha = args.alpha
     beta = args.beta
@@ -282,6 +290,8 @@ def main(args):
             model_name = "inequity_aversion"
         elif use_collective_reward:
             model_name = "collective"
+        elif svo:
+            model_name = "svo"
         else:
             model_name = "baseline"
     else:

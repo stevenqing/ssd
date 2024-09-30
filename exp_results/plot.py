@@ -7,19 +7,36 @@ from plot_utils import exponential_moving_average
 root_dir = f"./data/"
 print(os.path.exists(root_dir))
 
+# METHODs = ['Selfish', 'Inequity', 'SVO', 'CF']
+# SCENARIOs = ['Coin_3_Agents', 'LBF_3_Agents', 'Coin_4_Agents', 'LBF_4_Agents']
+# COLORs = ['r', 'hotpink', 'c', 'b', 'dodgerblue', 'mediumpurple',
+#           'cadetblue', 'steelblue', 'mediumslateblue', 'hotpink', 'mediumturquoise']
+# COLORs = list(reversed(COLORs[:len(METHODs)]))
+# color_dict = {k: v for k, v in zip(METHODs, COLORs)}
+# LINE_STYPLEs = ['solid' for _ in range(20)]
+# pos_dict = {
+#     'Coin_3_Agents': 141,
+#     'LBF_3_Agents': 142,
+#     'Coin_4_Agents': 143,
+#     'LBF_4_Agents': 144,
+# }
+
+
 METHODs = ['Selfish', 'Inequity', 'SVO', 'CF']
-SCENARIOs = ['Coin', 'Level-Based Foraging', 'Cleanup', "Common_Harvest"]
+SCENARIOs = ['Common_Harvest_5', 'Common_Harvest_7', 'Cleanup_5', 'Cleanup_7']
 COLORs = ['r', 'hotpink', 'c', 'b', 'dodgerblue', 'mediumpurple',
           'cadetblue', 'steelblue', 'mediumslateblue', 'hotpink', 'mediumturquoise']
 COLORs = list(reversed(COLORs[:len(METHODs)]))
 color_dict = {k: v for k, v in zip(METHODs, COLORs)}
 LINE_STYPLEs = ['solid' for _ in range(20)]
 pos_dict = {
-    'Coin': 141,
-    'Level-Based Foraging': 142,
-    'Cleanup': 143,
-    'Common_Harvest': 144,
+    'Common_Harvest_5': 141,
+    'Common_Harvest_7': 142,
+    'Cleanup_5': 143,
+    'Cleanup_7': 144,
 }
+
+
 
 # To Configure
 map_scenario_to_name = {k: k for k in SCENARIOs}
@@ -46,14 +63,10 @@ for scenario_tag in SCENARIOs:
                 if row_key == "Step" or 'MIN' in row_key or 'MAX' in row_key:
                     continue
                 rewards = raw_data[row_key]
-            if scenario_tag == 'Coin':
-                data_dict[scenario_tag][method_name][seed] = rewards[:158]
-            elif scenario_tag == 'Cleanup':
-                data_dict[scenario_tag][method_name][seed] = rewards[39:158]
-            elif scenario_tag == 'Level-Based Foraging':
-                data_dict[scenario_tag][method_name][seed] = rewards[:158]
+            if scenario_tag == 'Common_Harvest_5' or scenario_tag == 'Common_Harvest_7' or scenario_tag == 'Cleanup_5' or scenario_tag == 'Cleanup_7':
+                data_dict[scenario_tag][method_name][seed] = rewards[30:]
             else:
-                data_dict[scenario_tag][method_name][seed] = rewards[25:158]
+                data_dict[scenario_tag][method_name][seed] = rewards
 
 sorted_methods_list = METHODs
 
@@ -96,11 +109,11 @@ def draw_each(env_name, data_dict, i, color_list, map_method_to_name, label):
 
         # Select range for "Cleanup" environment
 
-        plt.plot(timestep / 1e8, exponential_moving_average(r_mean, 1), color=color,
+        plt.plot(timestep / 1e8, exponential_moving_average(r_mean, 0.2), color=color,
                  label=map_method_to_name[method],
                  linewidth=lw, linestyle='solid',
                  )
-        plt.fill_between(timestep / 1e8, exponential_moving_average(r_mean - r_std, 1), exponential_moving_average(r_mean + r_std, 0.1), alpha=0.1,
+        plt.fill_between(timestep / 1e8, exponential_moving_average(r_mean - r_std, 0.2), exponential_moving_average(r_mean + r_std, 0.1), alpha=0.1,
                          color=color)
 
     axes = plt.gca()
@@ -111,7 +124,7 @@ def draw_each(env_name, data_dict, i, color_list, map_method_to_name, label):
 
     # Setting the x-axis scale to match 10^8
     x_ticks = np.linspace(0, max(timestep) / 1e8, num=6)
-    x_ticks_labels = ['0', '0.2', '0.4', '0.6', '0.8', '1.0']
+    x_ticks_labels = ['0', '0.4', '0.8', '1.2', '1.6', '2.0']
     plt.xticks(ticks=x_ticks, labels=x_ticks_labels)
 
 
