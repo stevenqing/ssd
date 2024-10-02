@@ -47,7 +47,7 @@ def parse_args():
     parser.add_argument(
         "--num-agents",
         type=int,
-        default=5,
+        default=7,
         help="The number of agents",
     )
     parser.add_argument(
@@ -362,7 +362,7 @@ def main(args):
 
 
 
-    logdir = "/home/shuqingshi/Downloads/harvest_results/harvest_ppo_independent/IndependentPPO_3"
+    logdir = "/home/shuqingshi/Downloads/harvest_results (1)/harvest_ppo_independent/IndependentPPO_27"
 
     model = IndependentPPO.load(  # noqa: F841
         logdir, "RewardPolicy", num_agents, env, rollout_len, policy_kwargs, tensorboard_log, verbose
@@ -407,6 +407,6 @@ if __name__ == "__main__":
                 actions[f"agent-{i}"] = int(policies[i].predict(obs[f"agent-{i}"])[0])
             obs, rewards, done, info = env.step(actions)
             rgb_arr.append(env.render(mode='rgb_array'))
-    rgb_arr_to_video(rgb_arr, 'harvest')
+    rgb_arr_to_video(rgb_arr, 'harvest_7')
 
     
