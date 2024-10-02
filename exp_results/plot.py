@@ -8,7 +8,7 @@ root_dir = f"./data/"
 print(os.path.exists(root_dir))
 
 # METHODs = ['Selfish', 'Inequity', 'SVO', 'CF']
-# SCENARIOs = ['Coin_3_Agents', 'LBF_3_Agents', 'Coin_4_Agents', 'LBF_4_Agents']
+# SCENARIOs = ['Coin_3_Agents', 'Coin_4_Agents','LBF_3_Agents',  'LBF_4_Agents']
 # COLORs = ['r', 'hotpink', 'c', 'b', 'dodgerblue', 'mediumpurple',
 #           'cadetblue', 'steelblue', 'mediumslateblue', 'hotpink', 'mediumturquoise']
 # COLORs = list(reversed(COLORs[:len(METHODs)]))
@@ -16,8 +16,8 @@ print(os.path.exists(root_dir))
 # LINE_STYPLEs = ['solid' for _ in range(20)]
 # pos_dict = {
 #     'Coin_3_Agents': 141,
-#     'LBF_3_Agents': 142,
-#     'Coin_4_Agents': 143,
+#     'Coin_4_Agents': 142,
+#     'LBF_3_Agents': 143,
 #     'LBF_4_Agents': 144,
 # }
 
@@ -40,7 +40,7 @@ pos_dict = {
 
 # To Configure
 map_scenario_to_name = {k: k for k in SCENARIOs}
-map_method_to_name = {k: k for k in METHODs}
+map_method_to_name = {f'Selfish': fr'Selfish', f'Inequity': fr'Inequity', f'SVO': fr'SVO', f'CF': fr'CF(Ours)'}
 
 rewards_list = []
 data_dict = {}
@@ -64,7 +64,7 @@ for scenario_tag in SCENARIOs:
                     continue
                 rewards = raw_data[row_key]
             if scenario_tag == 'Common_Harvest_5' or scenario_tag == 'Common_Harvest_7' or scenario_tag == 'Cleanup_5' or scenario_tag == 'Cleanup_7':
-                data_dict[scenario_tag][method_name][seed] = rewards[30:]
+                data_dict[scenario_tag][method_name][seed] = rewards
             else:
                 data_dict[scenario_tag][method_name][seed] = rewards
 
@@ -99,6 +99,24 @@ def draw_each(env_name, data_dict, i, color_list, map_method_to_name, label):
         reward = np.array(reward_plot)
         r_mean, r_std = np.mean(reward, axis=0), np.std(reward, axis=0, ddof=1)
 
+        # if method == 'CF':
+        #     # 使用移动平均来平滑数据
+        #     window = 50  # 调整窗口大小以获得适当的平滑效果
+        #     r_mean_smooth = np.convolve(r_mean, np.ones(window)/window, mode='valid')
+        #     r_std_smooth = np.convolve(r_std, np.ones(window)/window, mode='valid')
+        #     timestep_smooth = timestep[window-1:]
+
+        #     plt.plot(timestep_smooth / 1e8, r_mean_smooth, color=color,
+        #             label=map_method_to_name[method],
+        #             linewidth=2.5, linestyle='solid')
+            
+        #     # 使用 fill_between 绘制平滑后的偏差带
+        #     plt.fill_between(timestep_smooth / 1e8, 
+        #                     r_mean_smooth - r_std_smooth, 
+        #                     r_mean_smooth + r_std_smooth, 
+        #                     alpha=0.1, color=color)
+
+
         import matplotlib as mpl
         mpl.rcParams['axes.formatter.use_mathtext'] = True
         mpl.rcParams['mathtext.fontset'] = 'stix'
@@ -109,18 +127,30 @@ def draw_each(env_name, data_dict, i, color_list, map_method_to_name, label):
 
         # Select range for "Cleanup" environment
 
-        plt.plot(timestep / 1e8, exponential_moving_average(r_mean, 0.2), color=color,
-                 label=map_method_to_name[method],
-                 linewidth=lw, linestyle='solid',
-                 )
-        plt.fill_between(timestep / 1e8, exponential_moving_average(r_mean - r_std, 0.2), exponential_moving_average(r_mean + r_std, 0.1), alpha=0.1,
-                         color=color)
+        plt.plot(timestep / 1e8, exponential_moving_average(r_mean, 0.1), color=color,
+                label=map_method_to_name[method],
+                linewidth=lw, linestyle='solid',
+                )
+        plt.fill_between(timestep / 1e8, exponential_moving_average(r_mean - r_std, 0.1), exponential_moving_average(r_mean + r_std, 0.1), alpha=0.1,
+                        color=color)
 
     axes = plt.gca()
     axes.set_title(f"{label} {env_name}", fontsize=32, y=1.07)
 
     plt.xlabel('Number of Timesteps (×1e7)', fontsize=25, loc='center')
     plt.grid()
+
+    if env_name == 'Cleanup_5' or env_name == 'Cleanup_7':
+        plt.ylim(top=200)
+        plt.ylim(bottom=-50)
+    elif env_name == 'Common_Harvest_5':
+        plt.ylim(top=1000)
+        plt.ylim(bottom=-50)
+    elif env_name == 'Common_Harvest_7':
+        plt.ylim(top=800)
+        plt.ylim(bottom=-50)
+    else:
+        plt.ylim(bottom=-50)
 
     # Setting the x-axis scale to match 10^8
     x_ticks = np.linspace(0, max(timestep) / 1e8, num=6)
@@ -158,5 +188,5 @@ for line in legend.get_lines():
 
 plt.subplots_adjust(hspace=0.45)
 
-plt.savefig("main_results.pdf", bbox_inches='tight')
+plt.savefig("main_results_hard.pdf", bbox_inches='tight')
 plt.show()

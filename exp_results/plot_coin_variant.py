@@ -8,9 +8,9 @@ root_dir = f"./data/"
 print(os.path.exists(root_dir))
 
 METHODs = ['Selfish', 'Inequity', 'SVO', 'CF_2']
-METHOD_2 = ['CF_001', 'CF_01', 'CF_1', 'CF_10']
-TOTAL_METHODS = ['Selfish', 'Inequity', 'SVO', 'CF_001', 'CF_01', 'CF_1', 'CF_2', 'CF_10']
-SCENARIOs = ['Coin_4_Agents', 'Coin_5_Agents', 'Coin4_Ablation', 'Coin5_Ablation']
+METHOD_2 = ['CF_1', 'CF_2', 'CF_5', 'CF_10']
+TOTAL_METHODS = ['CF_1', 'CF_2', 'CF_5', 'CF_10']
+SCENARIOs = ['Coin_Ablation', 'Coin_4_Ablation', 'LBF_Ablation', 'LBF_4_Ablation']
 COLORs = ['r', 'hotpink', 'c', 'b']
 COLORs = list(reversed(COLORs[:len(METHODs)]))
 color_dict = {k: v for k, v in zip(METHODs, COLORs)}
@@ -21,10 +21,10 @@ color_dict_2 = {k: v for k, v in zip(METHOD_2, COLOR_2)}
 
 LINE_STYPLEs = ['solid' for i in range(20)]
 pos_dict = {
-    'Coin_4_Agents': 141,
-    'Coin_5_Agents': 142,
-    'Coin4_Ablation': 143,
-    'Coin5_Ablation': 144,
+    'Coin_Ablation': 141,
+    'Coin_4_Ablation': 142,
+    'LBF_Ablation': 143,
+    'LBF_4_Ablation': 144,
 }
 
 map_scenario_to_name = {k: k for k in SCENARIOs}
@@ -66,14 +66,10 @@ sorted_methods_list_2 = METHOD_2
 def draw_each(env_name, data_dict, i, color_list, color_list_2, map_method_to_name, map_method_to_name_2, label):
     plt.subplot(i)
 
-    if i in [141, 142]:
-        methods_list = sorted_methods_list
-        color_list = color_list
-        map_method_to_name = map_method_to_name
-    else:
-        methods_list = sorted_methods_list_2
-        color_list = color_list_2
-        map_method_to_name = map_method_to_name_2
+
+    methods_list = sorted_methods_list_2
+    color_list = color_list_2
+    map_method_to_name = map_method_to_name_2
 
     for method in methods_list:
         data = data_dict[method]
@@ -113,11 +109,11 @@ def draw_each(env_name, data_dict, i, color_list, color_list_2, map_method_to_na
             r_mean = r_mean[30:158]
             r_std = r_std[30:158]
 
-        plt.plot(timestep / 1e8, exponential_moving_average(r_mean, 1), color=color,
+        plt.plot(timestep / 1e8, exponential_moving_average(r_mean, 0.2), color=color,
                  label=map_method_to_name[method],
                  linewidth=lw, linestyle='solid',
                  )
-        plt.fill_between(timestep / 1e8, exponential_moving_average(r_mean - r_std, 1), exponential_moving_average(r_mean + r_std, 0.1), alpha=0.1,
+        plt.fill_between(timestep / 1e8, exponential_moving_average(r_mean - r_std, 0.2), exponential_moving_average(r_mean + r_std, 0.1), alpha=0.1,
                          color=color)
 
     # 添加所有方法到图例，即使没有数据
@@ -132,7 +128,7 @@ def draw_each(env_name, data_dict, i, color_list, color_list_2, map_method_to_na
     plt.grid()
 
     x_ticks = np.linspace(0, max(timestep) / 1e8, num=6)
-    x_ticks_labels = ['0', '0.2', '0.4', '0.6', '0.8', '1.0']
+    x_ticks_labels = ['0', '0.4', '0.8', '1.2', '1.6', '2.0']
     plt.xticks(ticks=x_ticks, labels=x_ticks_labels)
 
 plt.figure(figsize=(32, 6))
@@ -174,11 +170,11 @@ print(len(handles), len(labels))
 print(labels)
 
 # Second legend without CF_2
-legend = fig.legend(filtered_handles, filtered_labels, loc='lower center', ncol=7, fontsize=32,
-                    bbox_to_anchor=(0.5, -0.5), bbox_transform=fig.transFigure)
+# legend = fig.legend(filtered_handles, filtered_labels, loc='lower center', ncol=7, fontsize=32,
+#                     bbox_to_anchor=(0.5, -0.5), bbox_transform=fig.transFigure)
 
-for line in legend.get_lines():
-    line.set_linewidth(5)
+# for line in legend.get_lines():
+#     line.set_linewidth(5)
 
 plt.subplots_adjust(hspace=0.45)
 
