@@ -10,6 +10,7 @@ import torch.nn.functional as F
 import wandb
 import socket
 from stable_baselines3.independent_ppo import IndependentPPO
+from stable_baselines3.causal_independentPPO import Causal_IndependentPPO
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
 from torch import nn
@@ -471,6 +472,26 @@ def main(args):
             use_collective_reward=use_collective_reward,
             inequity_averse_reward=inequity_averse_reward,
         )
+    elif model == 'social_influence':
+        model = Causal_IndependentPPO(
+            "CausalInfluencePolicy",
+            num_agents=num_agents,
+            env=env,
+            learning_rate=lr,
+            n_steps=rollout_len,
+            batch_size=batch_size,
+            n_epochs=n_epochs,
+            gamma=gamma,
+            gae_lambda=gae_lambda,
+            ent_coef=ent_coef,
+            max_grad_norm=grad_clip,
+            target_kl=target_kl,
+            policy_kwargs=policy_kwargs,
+            tensorboard_log=tensorboard_log,
+            verbose=verbose,
+            alpha=alpha,
+            model=args.model,
+)
     model.learn(total_timesteps=total_timesteps)
 
     logdir = model.logger.dir

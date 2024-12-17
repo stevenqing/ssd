@@ -17,6 +17,7 @@ from stable_baselines3.common.type_aliases import (
     TransitionRolloutBufferSamples,
     RecurrentDictRolloutBufferSamples,
     RecurrentRolloutBufferSamples,
+    SocialRolloutBufferSamples,
     RNNStates,
 )
 
@@ -378,11 +379,11 @@ class RolloutBuffer(BaseBuffer):
         self.gae_lambda = gae_lambda
         self.gamma = gamma
         self.agent_number = num_agents
-        self.observations, self.actions, self.rewards, self.advantages = None, None, None, None
+        self.observations, self.actions, self.rewards, self.advantages, self.advantages_e, self.advantages_m = None, None, None, None, None, None
         self.all_last_obs, self.all_actions, self.all_rewards, self.cf_rewards, self.inequity_rewards = None, None, None, None, None
         self.all_last_obs_traj, self.all_actions_traj, self.all_rewards_traj = None, None, None
         # self.previous_all_last_obs_traj, self.previous_all_actions_traj, self.previous_all_rewards_traj = None, None, None
-        self.returns, self.episode_starts, self.values, self.log_probs = None, None, None, None
+        self.returns, self.returns_e, self.returns_m, self.episode_starts, self.values, self.values_m, self.values_e, self.log_probs = None, None, None, None, None, None, None, None
         self.all_dones = None
         self.generator_ready = False
         self.model = model
@@ -395,10 +396,17 @@ class RolloutBuffer(BaseBuffer):
         self.actions = np.zeros((self.buffer_size, self.n_envs, self.action_dim), dtype=np.float32)
         self.rewards = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.returns = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.returns_m = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.returns_e = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+
         self.episode_starts = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.values = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.values_m = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.values_e = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.log_probs = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.advantages = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.advantages_m = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.advantages_e = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.generator_ready = False
 
         self.all_last_obs = np.zeros((self.buffer_size, self.n_envs, self.agent_number) + self.obs_shape, dtype=np.float32)
@@ -575,6 +583,59 @@ class RolloutBuffer(BaseBuffer):
         # TD(lambda) estimator, see Github PR #375 or "Telescoping in TD(lambda)"
         # in David Silver Lecture 4: https://www.youtube.com/watch?v=PnHCvfgC_ZA
         self.returns = self.advantages + self.values
+
+    def compute_social_influence_returns_and_advantage(self, last_values: th.Tensor, dones: np.ndarray, alpha: np.int32, use_team_reward=False) -> None:
+        """
+        Post-processing step: compute the lambda-return (TD(lambda) estimate)
+        and GAE(lambda) advantage.
+
+        Uses Generalized Advantage Estimation (https://arxiv.org/abs/1506.02438)
+        to compute the advantage. To obtain Monte-Carlo advantage estimate (A(s) = R - V(S))
+        where R is the sum of discounted reward with value bootstrap
+        (because we don't always have full episode), set ``gae_lambda=1.0`` during initialization.
+
+        The TD(lambda) estimator has also two special cases:
+        - TD(1) is Monte-Carlo estimate (sum of discounted rewards)
+        - TD(0) is one-step estimate with bootstrapping (r_t + gamma * v(s_{t+1}))
+
+        For more information, see discussion in https://github.com/DLR-RM/stable-baselines3/pull/375.
+
+        :param last_values: state value estimation for the last step (one for each env)
+        :param dones: if the last step was a terminal step (one bool for each env).
+        """
+        # Convert to numpy
+        last_values = last_values.clone().cpu().numpy().flatten()
+
+        last_gae_lam = 0
+        for step in reversed(range(self.buffer_size)):
+            if step == self.buffer_size - 1:
+                next_non_terminal = 1.0 - dones
+                next_values = last_values
+                next_values_m = last_values
+                next_values_e = last_values
+            else:
+                next_non_terminal = 1.0 - self.episode_starts[step + 1]
+                next_values = self.values[step + 1]
+                next_values_m = self.values_m[step + 1]
+                next_values_e = self.values_e[step + 1]
+
+            delta_policy = self.rewards[step] + self.gamma * next_values * next_non_terminal - self.values[step]
+            delta_social_policy_m = self.rewards[step] + self.cf_rewards[step].squeeze(-1) + self.gamma * next_values_m * next_non_terminal - self.values_e[step]
+            delta_social_policy_e = self.rewards[step] + self.gamma * next_values_e * next_non_terminal - self.values_e[step]
+
+                # delta = self.rewards[step] + alpha * np.sum(self.cf_rewards[step],axis=-1)/(self.agent_number - 1) + self.gamma * next_values * next_non_terminal - self.values[step]   
+            last_gae_lam = delta_policy + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam
+            last_gae_lambda_m = delta_social_policy_m + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam
+            last_gae_lambda_e = delta_social_policy_e + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam
+
+            self.advantages[step] = last_gae_lam
+            self.advantages_m[step] = last_gae_lambda_m
+            self.advantages_e[step] = last_gae_lambda_e
+        # TD(lambda) estimator, see Github PR #375 or "Telescoping in TD(lambda)"
+        # in David Silver Lecture 4: https://www.youtube.com/watch?v=PnHCvfgC_ZA
+        self.returns = self.advantages + self.values
+        self.returns_m = self.advantages_m + self.values_m
+        self.returns_e = self.advantages_e + self.values_e
 
     def get_trajs_reweighted_reward(self):
         prev_obs_traj = self.previous_all_last_obs_traj
@@ -1064,6 +1125,63 @@ class RolloutBuffer(BaseBuffer):
             self.cf_rewards[batch_inds],
         )
         return TransitionRolloutBufferSamples(*tuple(map(self.to_torch, data)))
+
+
+    def get_social_influence(self, batch_size: Optional[int] = None) -> Generator[RolloutBufferSamples, None, None]:
+        assert self.full, ""
+        indices = np.random.permutation(self.buffer_size * self.n_envs)
+        # Prepare the data
+        if not self.generator_ready:
+
+            _tensor_names = [
+                "observations",
+                "actions",
+                "values",
+                "log_probs",
+                "advantages",
+                "returns",
+                "all_last_obs",
+                "all_actions",
+                "all_rewards",
+                "cf_rewards",
+                "advantages_m",
+                "advantages_e",
+                "returns_m",
+                "returns_e",
+            ]
+
+            for tensor in _tensor_names:
+                self.__dict__[tensor] = self.swap_and_flatten(self.__dict__[tensor])
+            self.generator_ready = True
+
+        # Return everything, don't create minibatches
+        if batch_size is None:
+            batch_size = self.buffer_size * self.n_envs
+
+        start_idx = 0
+        while start_idx < self.buffer_size * self.n_envs:
+            yield self._get_social_influence_samples(indices[start_idx : start_idx + batch_size])
+            start_idx += batch_size
+
+    def _get_social_influence_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> RolloutBufferSamples:
+        data = (
+            self.observations[batch_inds],
+            self.actions[batch_inds],
+            self.values[batch_inds].flatten(),
+            self.log_probs[batch_inds].flatten(),
+            self.advantages[batch_inds].flatten(),
+            self.returns[batch_inds].flatten(),
+            self.all_last_obs[batch_inds],
+            self.all_actions[batch_inds],
+            self.all_rewards[batch_inds],
+            self.cf_rewards[batch_inds],
+            self.advantages_m[batch_inds].flatten(),
+            self.advantages_e[batch_inds].flatten(),
+            self.returns_m[batch_inds].flatten(),
+            self.returns_e[batch_inds].flatten(),
+        )
+        return SocialRolloutBufferSamples(*tuple(map(self.to_torch, data)))
+
 
     def get_sw(self, batch_size: Optional[int] = None) -> Generator[RolloutBufferSamples, None, None]:
         assert self.full, ""

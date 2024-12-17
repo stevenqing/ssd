@@ -497,8 +497,6 @@ class IndependentPPO(OnPolicyAlgorithm):
 
         return obs
 
-
-
     def collect_rollouts(self, last_obs, callbacks,num_timesteps):
 
         all_last_episode_starts = [None] * self.num_agents

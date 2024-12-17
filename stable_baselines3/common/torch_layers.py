@@ -1,6 +1,6 @@
 import warnings
 from itertools import zip_longest
-from typing import Dict, List, Tuple, Type, Union
+from typing import Dict, List, Tuple, Type, Union, Optional
 
 import gym
 import torch as th
@@ -269,6 +269,110 @@ class MlpExtractor(nn.Module):
 
     def forward_critic(self, features: th.Tensor) -> th.Tensor:
         return self.value_net(self.shared_net(features))
+
+
+import torch as th
+import torch.nn as nn
+
+class DualLstmExtractor(nn.Module):
+    """
+    Constructs an LSTM-based extractor with separate Value and Policy Networks for two branches (m and e):
+    - One branch for Ve and πe (e.g., associated with e^k).
+    - Another branch for Vm and πm (e.g., associated with m^k).
+
+    :param feature_dim: Dimension of the input feature vector (time-series input).
+    :param lstm_hidden_dim: Hidden dimension of the LSTM.
+    :param lstm_num_layers: Number of layers in the LSTM.
+    :param activation_fn: Activation function to use after the fully connected layers.
+    :param policy_dim: Output dimension for policy (e.g., π_e and π_m).
+    :param value_dim: Output dimension for value (e.g., V_e and V_m).
+    """
+    def __init__(
+        self,
+        feature_dim: int,
+        lstm_hidden_dim: int,
+        lstm_num_layers: int,
+        activation_fn: Type[nn.Module],
+        policy_dim: int,
+        value_dim: int,
+        device: str = "cpu",
+    ) -> None:
+        super().__init__()
+        self.device = th.device(device)
+
+        # Shared LSTM network
+        self.lstm = nn.LSTM(
+            input_size=feature_dim,
+            hidden_size=lstm_hidden_dim,
+            num_layers=lstm_num_layers,
+            batch_first=True,
+        )
+
+        # Branch for e: Separate policy and value networks
+        self.policy_net_e = nn.Sequential(
+            nn.Linear(lstm_hidden_dim, lstm_hidden_dim),
+            activation_fn(),
+            nn.Linear(lstm_hidden_dim, policy_dim),  # Policy π_e
+            activation_fn(),
+            nn.Softmax(dim=-1)
+        )
+        self.value_net_e = nn.Sequential(
+            nn.Linear(lstm_hidden_dim, lstm_hidden_dim),
+            activation_fn(),
+            nn.Linear(lstm_hidden_dim, value_dim)  # Value V_e
+        )
+
+        # Branch for m: Separate policy and value networks
+        self.policy_net_m = nn.Sequential(
+            nn.Linear(lstm_hidden_dim, lstm_hidden_dim),
+            activation_fn(),
+            nn.Linear(lstm_hidden_dim, policy_dim),  # Policy π_m
+            activation_fn(),
+            nn.Softmax(dim=-1)
+        )
+        self.value_net_m = nn.Sequential(
+            nn.Linear(lstm_hidden_dim, lstm_hidden_dim),
+            activation_fn(),
+            nn.Linear(lstm_hidden_dim, value_dim)  # Value V_m
+        )
+
+    def forward(
+        self,
+        features: th.Tensor,
+        hidden_state: Optional[Tuple[th.Tensor, th.Tensor]] = None,
+    ) -> Tuple[th.Tensor, th.Tensor, th.Tensor, th.Tensor, Tuple[th.Tensor, th.Tensor]]:
+        """
+        :param features: Input features with shape (batch_size, seq_len, feature_dim).
+        :param hidden_state: Tuple (h_0, c_0), initial hidden and cell states for LSTM.
+        :return: Outputs for both branches:
+            - Policy π_e and Value V_e for e.
+            - Policy π_m and Value V_m for m.
+            - Updated hidden state (h_n, c_n) for the next time step.
+        """
+        # LSTM forward pass
+        batch_size = features.size(0)
+        if hidden_state is None:
+            # Initialize hidden states to zeros if not provided
+            h_0 = th.zeros(self.lstm.num_layers, batch_size, self.lstm.hidden_size, device=self.device)
+            c_0 = th.zeros(self.lstm.num_layers, batch_size, self.lstm.hidden_size, device=self.device)
+            hidden_state = (h_0, c_0)
+
+        lstm_out, hidden_state = self.lstm(features, hidden_state)  # Shape: (batch_size, seq_len, lstm_hidden_dim)
+        lstm_last = lstm_out[:, -1, :]  # Use the last hidden state
+
+        # Compute policy and value for e branch
+        policy_e = self.policy_net_e(lstm_last)
+        value_e = self.value_net_e(lstm_last)
+
+        # Compute policy and value for m branch
+        policy_m = self.policy_net_m(lstm_last)
+        value_m = self.value_net_m(lstm_last)
+
+        return policy_e, value_e, policy_m, value_m, hidden_state
+
+
+
+
 
 
 class CombinedExtractor(BaseFeaturesExtractor):

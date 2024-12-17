@@ -40,14 +40,14 @@ def parse_args():
     parser.add_argument(
         "--env-name",
         type=str,
-        default="coin3",
-        choices=["harvest", "cleanup", "coin3", "lbf10", "lbf15"],
+        default="coin4",
+        choices=["harvest", "cleanup", "coin3", "coin4", "lbf10", "lbf15"],
         help="The SSD environment to use",
     )
     parser.add_argument(
         "--num-agents",
         type=int,
-        default=3,
+        default=4,
         help="The number of agents",
     )
     parser.add_argument(
@@ -362,7 +362,7 @@ def main(args):
 
 
 
-    logdir = "/home/shuqingshi/Downloads/coin_results/coin3_ppo_independent/IndependentPPO_2"
+    logdir = "/home/shuqingshi/Downloads/coin4_results (1)/coin4_ppo_independent/IndependentPPO_1"
 
     model = IndependentPPO.load(  # noqa: F841
         logdir, "RewardPolicy", num_agents, env, rollout_len, policy_kwargs, tensorboard_log, verbose
@@ -424,6 +424,6 @@ if __name__ == "__main__":
     #         obs, rewards, done, info = env.step(actions)
     #         rgb_arr.append(env.render(mode='rgb_array'))
     rgb_arr, rewards_list = exp(10, agent_number)
-    rgb_arr_to_video(rgb_arr, 'coin3')
+    rgb_arr_to_video(rgb_arr, 'coin4')
 
     
