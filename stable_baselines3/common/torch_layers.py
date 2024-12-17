@@ -356,7 +356,8 @@ class DualLstmExtractor(nn.Module):
             h_0 = th.zeros(self.lstm.num_layers, batch_size, self.lstm.hidden_size, device=self.device)
             c_0 = th.zeros(self.lstm.num_layers, batch_size, self.lstm.hidden_size, device=self.device)
             hidden_state = (h_0, c_0)
-
+        else:
+            hidden_state = tuple(tensor.to(features.device) for tensor in hidden_state)
         lstm_out, hidden_state = self.lstm(features, hidden_state)  # Shape: (batch_size, seq_len, lstm_hidden_dim)
         lstm_last = lstm_out[:, -1, :]  # Use the last hidden state
 

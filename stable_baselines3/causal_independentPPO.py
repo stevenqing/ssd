@@ -369,7 +369,6 @@ class Causal_IndependentPPO(OnPolicyAlgorithm):
                             social_influence = self.compute_social_influence(policy,all_obs_trajs[steps - 10: steps],all_last_obs,all_actions,polid)
                         else:
                             social_influence = np.zeros((self.num_envs,1))
-                        print(steps)
                         policy.rollout_buffer.add_sw(
                             all_last_obs[polid],
                             all_actions[polid],
