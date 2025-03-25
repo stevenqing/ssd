@@ -1,0 +1,46 @@
+{
+  "os": "Linux-6.8.0-48-generic-x86_64-with-glibc2.17",
+  "python": "3.8.10",
+  "startedAt": "2024-11-25T11:02:06.580423Z",
+  "args": [
+    "--env-name",
+    "coin3",
+    "--num-cpus",
+    "64",
+    "--num-envs",
+    "24",
+    "--num-agents",
+    "3",
+    "--seed",
+    "1",
+    "--total-timesteps",
+    "100_000_000"
+  ],
+  "program": "run_scripts/sb3_train.py",
+  "codePath": "run_scripts/sb3_train.py",
+  "git": {
+    "remote": "git@github.com:stevenqing/ssd.git",
+    "commit": "f9a1924055370d0c8bcc596d53bd68151702f2ef"
+  },
+  "email": "k23048755@kcl.ac.uk",
+  "root": "./",
+  "host": "erc-hpc-login2",
+  "username": "k23048755",
+  "executable": "/scratch_tmp/users/k23048755/miniconda3/envs/ssd/bin/python",
+  "codePathLocal": "run_scripts/sb3_train.py",
+  "cpu_count": 32,
+  "cpu_count_logical": 32,
+  "disk": {
+    "/": {
+      "total": "470940049408",
+      "used": "23198687232"
+    }
+  },
+  "memory": {
+    "total": "270173753344"
+  },
+  "cpu": {
+    "count": 32,
+    "countLogical": 32
+  }
+}

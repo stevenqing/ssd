@@ -1,0 +1,71 @@
+_wandb:
+    value:
+        cli_version: 0.18.7
+        m: []
+        python_version: 3.8.10
+        t:
+            "1":
+                - 1
+                - 2
+                - 3
+                - 12
+                - 30
+                - 55
+            "2":
+                - 1
+                - 2
+                - 3
+                - 12
+                - 30
+                - 55
+            "3":
+                - 13
+                - 16
+                - 23
+                - 55
+            "4": 3.8.10
+            "5": 0.18.7
+            "8":
+                - 5
+            "12": 0.18.7
+            "13": linux-x86_64
+add_apple_growth_rate:
+    value: false
+alpha:
+    value: 1
+beta:
+    value: 0.05
+enable_trajs_learning:
+    value: 0
+env_name:
+    value: coin3
+extractor:
+    value: cbam
+inequity_averse_reward:
+    value: false
+kl_threshold:
+    value: 0.01
+model:
+    value: social_influence
+num_agents:
+    value: 3
+num_cpus:
+    value: 16
+num_envs:
+    value: 4
+project_name:
+    value: ICLR2025_Causal_SSD
+rollout_len:
+    value: 1000
+seed:
+    value: 1
+svo:
+    value: false
+total_timesteps:
+    value: 10000000
+use_collective_reward:
+    value: false
+user_name:
+    value: k23048755
+using_reward_timestep:
+    value: 2000000

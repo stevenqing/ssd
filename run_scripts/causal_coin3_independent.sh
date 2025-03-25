@@ -1,0 +1,9 @@
+python run_scripts/sb3_independent.py \
+--model causal \
+--env-name coin3 \
+--num-cpus 4 \
+--num-envs 2 \
+--num-agents 3 \
+--seed 1 \
+--extractor cbam \
+--total-timesteps 100_000_00 \
