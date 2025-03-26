@@ -1,0 +1,337 @@
+import argparse
+import os 
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+import gym
+import supersuit as ss
+import torch
+import torch.nn.functional as F
+import torch.distributed as dist
+import torch.multiprocessing as mp
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data.distributed import DistributedSampler
+# pip install git+https://github.com/Rohan138/marl-baselines3
+import wandb
+import socket
+from stable_baselines3.independent_ppo import IndependentPPO
+from stable_baselines3.causal_independentPPO import Causal_IndependentPPO
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+from stable_baselines3.common.vec_env.vec_monitor import VecMonitor
+from torch import nn
+import numpy as np
+import random
+from social_dilemmas.envs.pettingzoo_env import parallel_env
+
+def setup(rank, world_size):
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '12355'
+    dist.init_process_group("nccl", rank=rank, world_size=world_size)
+
+def cleanup():
+    dist.destroy_process_group()
+
+def train_model(rank, world_size, args):
+    print(f"Running DDP on rank {rank}.")
+    setup(rank, world_size)
+
+    # 设置设备
+    device = torch.device(f"cuda:{rank}")
+    torch.cuda.set_device(device)
+
+    # 创建环境
+    env = parallel_env(
+        max_cycles=args.rollout_len,
+        env=args.env_name,
+        num_agents=args.num_agents,
+        use_collective_reward=args.use_collective_reward,
+        alpha=args.alpha,
+        beta=args.beta,
+    )
+    env = ss.observation_lambda_v0(env, lambda x, _: x["curr_obs"], lambda s: s["curr_obs"])
+    env = ss.frame_stack_v1(env, 6)
+    env = ss.pettingzoo_env_to_vec_env_v1(env)
+    env = ss.concat_vec_envs_v1(
+        env, num_vec_envs=args.num_envs // world_size, 
+        num_cpus=args.num_cpus // world_size,
+        base_class="stable_baselines3"
+    )
+    env = VecMonitor(env)
+
+    # 策略配置
+    policy_kwargs = dict(
+        features_extractor_class=CustomCNN,
+        features_extractor_kwargs=dict(
+            features_dim=128,
+            num_frames=6,
+            fcnet_hiddens=[1024, 128]
+        ),
+        net_arch=[128],
+        num_agents=args.num_agents,
+    )
+
+    # 创建模型
+    if args.model == 'social_influence':
+        model = Causal_IndependentPPO(
+            "CausalInfluencePolicy",
+            num_agents=args.num_agents,
+            env=env,
+            learning_rate=0.0001,
+            n_steps=args.rollout_len,
+            batch_size=args.batch_size // world_size,
+            n_epochs=30,
+            gamma=1.0,
+            gae_lambda=1.0,
+            ent_coef=0.001,
+            max_grad_norm=40,
+            target_kl=args.kl_threshold,
+            policy_kwargs=policy_kwargs,
+            tensorboard_log=f"./results/{args.env_name}_ppo_independent",
+            verbose=3,
+            alpha=args.alpha,
+            model=args.model,
+            device=device,
+        )
+
+    # 将模型移动到对应GPU
+    model.policy = DDP(
+        model.policy.to(device), 
+        device_ids=[rank],
+        output_device=rank,
+        find_unused_parameters=True
+    )
+
+    # 训练
+    model.learn(total_timesteps=args.total_timesteps)
+
+    cleanup()
+
+def main():
+    args = parse_args()  # 使用原有的parse_args函数
+    
+    # 获取可用的GPU数量
+    world_size = torch.cuda.device_count()
+    if world_size < 2:
+        raise ValueError("需要至少2个GPU来运行此脚本")
+    
+    print(f"使用 {world_size} 个GPU进行训练")
+    
+    # 启动多进程训练
+    mp.spawn(
+        train_model,
+        args=(world_size, args),
+        nprocs=world_size,
+        join=True
+    )
+
+def set_seed(seed: int = 42) -> None:
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    # When running on the CuDNN backend, two further options must be set
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    # Set a fixed value for the hash seed
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    print(f"Random seed set as {seed}")
+
+
+def parse_args():
+    parser = argparse.ArgumentParser("MARL-Baselines3 PPO with Independent Learning")
+    parser.add_argument(
+        "--env-name",
+        type=str,
+        default="harvest",
+        choices=["harvest", "cleanup", "coin3", "coin4", "coin5", "lbf10","lbf15"],
+        help="The SSD environment to use",
+    )
+    parser.add_argument(
+        "--num-agents",
+        type=int,
+        default=5,
+        help="The number of agents",
+    )
+    parser.add_argument(
+        "--num-cpus",
+        type=int,
+        default=1,
+        help="The number of cpus",
+    )
+    parser.add_argument(
+        "--num-envs",
+        type=int,
+        default=12,
+        help="The number of envs",
+    )
+    parser.add_argument(
+        "--kl-threshold",
+        type=float,
+        default=0.01,
+        help="The number of envs",
+    )
+    parser.add_argument(
+        "--rollout-len",
+        type=int,
+        default=1000,
+        help="length of training rollouts AND length at which env is reset",
+    )
+    parser.add_argument(
+        "--total-timesteps",
+        type=int,
+        default=5e8,
+        help="Number of environment timesteps",
+    )
+    parser.add_argument(
+        "--use-collective-reward",
+        type=bool,
+        default=False,
+        help="Give each agent the collective reward across all agents",
+    )
+    parser.add_argument(
+        "--inequity-averse-reward",
+        type=bool,
+        default=False,
+        help="Use inequity averse rewards from 'Inequity aversion \
+            improves cooperation in intertemporal social dilemmas'",
+    )
+    parser.add_argument(
+        "--svo",
+        type=bool,
+        default=False,
+        help="Use inequity averse rewards from 'Inequity aversion \
+            improves cooperation in intertemporal social dilemmas'",
+    )
+    parser.add_argument(
+        "--alpha",
+        type=float,
+        default=1,
+        help="Advantageous inequity aversion factor",
+    )
+    parser.add_argument(
+        "--beta",
+        type=float,
+        default=0.05,
+        help="Disadvantageous inequity aversion factor",
+    )
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--user_name", type=str, default="k23048755")
+    parser.add_argument("--project_name", type=str, default="ICLR2025_Causal_SSD")
+    parser.add_argument("--model", type=str, default='baseline')
+    parser.add_argument("--using_reward_timestep", type=int, default=2000000)
+    parser.add_argument("--extractor", type=str, default='cnn')
+    parser.add_argument("--enable_trajs_learning", type=int, default=0,choices=[0, 1])
+    parser.add_argument("--add_apple_growth_rate",type=bool, default=False)
+    args = parser.parse_args()
+    return args
+
+
+# Use this with lambda wrapper returning observations only
+class ChannelAttention(nn.Module):
+    def __init__(self, channel, reduction=16):
+        super(ChannelAttention, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.max_pool = nn.AdaptiveMaxPool2d(1)
+        self.fc = nn.Sequential(
+            nn.Conv2d(channel, channel // reduction, 1, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(channel // reduction, channel, 1, bias=False)
+        )
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        avg_out = self.fc(self.avg_pool(x))
+        max_out = self.fc(self.max_pool(x))
+        out = avg_out + max_out
+        return x * self.sigmoid(out)
+
+class SpatialAttention(nn.Module):
+    def __init__(self, kernel_size=7):
+        super(SpatialAttention, self).__init__()
+        self.conv = nn.Conv2d(2, 1, kernel_size, padding=kernel_size//2, bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        avg_out = torch.mean(x, dim=1, keepdim=True)
+        max_out, _ = torch.max(x, dim=1, keepdim=True)
+        out = torch.concat([avg_out, max_out], dim=1)
+        out = self.conv(out)
+        return x * self.sigmoid(out) 
+    
+class CBAM(BaseFeaturesExtractor):
+    def __init__(self, 
+                 observation_space: gym.spaces.Box, 
+                 channel=18, 
+                 features_dim=128,
+                 view_len=7, 
+                 num_frames=6, 
+                 fcnet_hiddens=[1024, 128], 
+                 reduction=16, 
+                 kernel_size=7):
+        
+        super(CBAM, self).__init__(observation_space,features_dim)
+
+        self.ca = ChannelAttention(channel, reduction)
+        self.sa = SpatialAttention(kernel_size)
+
+        flat_out = num_frames * 3 * (view_len * 2 + 1) ** 2 # eliminate the padding?
+
+        self.fc1 = nn.Linear(in_features=flat_out, out_features=fcnet_hiddens[0])
+        self.fc2 = nn.Linear(in_features=fcnet_hiddens[0], out_features=fcnet_hiddens[1])
+
+    def forward(self, x):
+        x = x.permute(0, 3, 1, 2)
+        x = self.ca(x)
+        x = self.sa(x)
+
+        # flatten features
+        features = torch.flatten(F.relu(x), start_dim=1)
+        features = F.relu(self.fc1(features))
+        features = F.relu(self.fc2(features))
+        return features
+
+
+
+
+
+class CustomCNN(BaseFeaturesExtractor):
+    """
+    :param observation_space: (gym.Space)
+    :param features_dim: (int) Number of features extracted.
+        This corresponds to the number of unit for the last layer.
+    """
+
+    def __init__(
+        self,
+        observation_space: gym.spaces.Box,
+        features_dim=128,
+        view_len=7,
+        num_frames=6,
+        fcnet_hiddens=[1024, 128],
+    ):
+        super(CustomCNN, self).__init__(observation_space, features_dim)
+        # We assume CxHxW images (channels first)
+        # Re-ordering will be done by pre-preprocessing or wrapper
+
+        flat_out = num_frames * 6 * (view_len * 2 - 1) ** 2
+        self.conv = nn.Conv2d(
+            in_channels=num_frames * 3,  # Input: (3 * 4) x 15 x 15
+            out_channels=num_frames * 6,  # Output: 24 x 13 x 13
+            kernel_size=3,
+            stride=1,
+            padding="valid",
+        )
+        self.fc1 = nn.Linear(in_features=flat_out, out_features=fcnet_hiddens[0])
+        self.fc2 = nn.Linear(in_features=fcnet_hiddens[0], out_features=fcnet_hiddens[1])
+
+    def forward(self, observations) -> torch.Tensor:
+        # Convert to tensor, rescale to [0, 1], and convert from B x H x W x C to B x C x H x W
+        observations = observations.permute(0, 3, 1, 2)
+        features = torch.flatten(F.relu(self.conv(observations)), start_dim=1)
+        features = F.relu(self.fc1(features))
+        features = F.relu(self.fc2(features))
+        return features
+
+
+if __name__ == "__main__":
+    main()

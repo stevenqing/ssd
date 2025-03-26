@@ -99,7 +99,6 @@ class Causal_IndependentPPO(OnPolicyAlgorithm):
         tb_log_name: str = "Causal_IndependentPPO",
         reset_num_timesteps: bool = True,
     ):
-
         num_timesteps = 0
         all_total_timesteps = []
         if not callbacks:
@@ -128,7 +127,6 @@ class Causal_IndependentPPO(OnPolicyAlgorithm):
                 all_total_timesteps.append(total_timesteps)
                 policy._total_timesteps = total_timesteps
             else:
-                # make sure training timestamps are ahead of internal counter
                 all_total_timesteps.append(total_timesteps + policy.num_timesteps)
                 policy._total_timesteps = total_timesteps + policy.num_timesteps
 
@@ -149,64 +147,67 @@ class Causal_IndependentPPO(OnPolicyAlgorithm):
             policy._last_episode_starts = np.ones((self.num_envs,), dtype=bool)
 
         while num_timesteps < total_timesteps:
-            last_obs = self.collect_rollouts(last_obs, callbacks,num_timesteps)
+            last_obs = self.collect_rollouts(last_obs, callbacks, num_timesteps)
+            
             num_timesteps += self.num_envs * self.n_steps
             SW_ep_rew_mean = 0
+            
             for polid, policy in enumerate(self.policies):
                 policy._update_current_progress_remaining(
                     policy.num_timesteps, total_timesteps
                 )
+                
+                # 记录metrics
                 if log_interval is not None and num_timesteps % log_interval == 0:
                     fps = int(policy.num_timesteps / (time.time() - policy.start_time))
                     wandb.log({f"{polid}/fps": fps}, step=num_timesteps)
-                    wandb.log({f"{polid}/ep_rew_mean": safe_mean([ep_info["r"] for ep_info in policy.ep_info_buffer])}, step=num_timesteps)
-                    SW_ep_rew_mean += safe_mean([ep_info["r"] for ep_info in policy.ep_info_buffer])
+                    ep_rew_mean = safe_mean([ep_info["r"] for ep_info in policy.ep_info_buffer])
+                    wandb.log({f"{polid}/ep_rew_mean": ep_rew_mean}, step=num_timesteps)
+                    SW_ep_rew_mean += ep_rew_mean
                     wandb.log({f"{polid}/ep_len_mean": policy.ep_info_buffer[-1]["l"]}, step=num_timesteps)
                     wandb.log({f"{polid}/time_elapsed": int(time.time() - policy.start_time)}, step=num_timesteps)
                     wandb.log({f"{polid}/total_timesteps": policy.num_timesteps}, step=num_timesteps)
 
-                    ep_cf_reward = np.sum(policy.rollout_buffer.cf_rewards)
-                    wandb.log({f"{polid}/cf_reward": ep_cf_reward}, step=num_timesteps)
+                    if hasattr(policy.rollout_buffer, 'cf_rewards'):
+                        ep_cf_reward = np.sum(policy.rollout_buffer.cf_rewards)
+                        wandb.log({f"{polid}/cf_reward": ep_cf_reward}, step=num_timesteps)
+                    
                     policy.logger.record("policy_id", polid, exclude="tensorboard")
-                    policy.logger.record(
-                        "time/iterations", num_timesteps, exclude="tensorboard"
-                    )
-                    if (
-                        len(policy.ep_info_buffer) > 0
-                        and len(policy.ep_info_buffer[0]) > 0
-                    ):
+                    policy.logger.record("time/iterations", num_timesteps, exclude="tensorboard")
+                    
+                    if len(policy.ep_info_buffer) > 0 and len(policy.ep_info_buffer[0]) > 0:
                         policy.logger.record(
                             "rollout/ep_rew_mean",
-                            safe_mean(
-                                [ep_info["r"] for ep_info in policy.ep_info_buffer]
-                            ),
+                            safe_mean([ep_info["r"] for ep_info in policy.ep_info_buffer])
                         )
                         policy.logger.record(
                             "rollout/ep_len_mean",
-                            safe_mean(
-                                [ep_info["l"] for ep_info in policy.ep_info_buffer]
-                            ),
+                            safe_mean([ep_info["l"] for ep_info in policy.ep_info_buffer])
                         )
+                    
                     policy.logger.record("time/fps", fps)
                     policy.logger.record(
                         "time/time_elapsed",
                         int(time.time() - policy.start_time),
-                        exclude="tensorboard",
+                        exclude="tensorboard"
                     )
                     policy.logger.record(
                         "time/total_timesteps",
                         policy.num_timesteps,
-                        exclude="tensorboard",
+                        exclude="tensorboard"
                     )
                     policy.logger.dump(step=policy.num_timesteps)
 
+                # 训练
                 policy.train()
+            
             wandb.log({"SW_ep_rew_mean": SW_ep_rew_mean/self.num_agents}, step=num_timesteps)
             wandb.log({"SW_ep_rew_total": SW_ep_rew_mean}, step=num_timesteps)
+
         for callback in callbacks:
             callback.on_training_end()
 
-    def collect_rollouts(self, last_obs, callbacks,num_timesteps):
+    def collect_rollouts(self, last_obs, callbacks, num_timesteps):
         all_last_episode_starts = [None] * self.num_agents
         all_obs = [None] * self.num_agents
         all_last_obs = [None] * self.num_agents
@@ -215,7 +216,9 @@ class Causal_IndependentPPO(OnPolicyAlgorithm):
         all_infos = [None] * self.num_agents
         all_distributions = [None] * self.num_agents
 
-        all_obs_trajs,all_actions_trajs,all_rewards_trajs = [],[],[]
+        all_obs_trajs = []
+        all_actions_trajs = []
+        all_rewards_trajs = []
         steps = 0
 
         for polid, policy in enumerate(self.policies):
@@ -241,16 +244,18 @@ class Causal_IndependentPPO(OnPolicyAlgorithm):
             all_values = [None] * self.num_agents
             all_log_probs = [None] * self.num_agents
             all_clipped_actions = [None] * self.num_agents
+            
             with th.no_grad():
                 for polid, policy in enumerate(self.policies):
                     obs_tensor = obs_as_tensor(all_last_obs[polid], policy.device)
-                    (
-                        all_actions[polid],
-                        all_values[polid],
-                        all_log_probs[polid],
-                        all_distributions[polid],
-                    ) = policy.policy.forward(obs_tensor)
-                    clipped_actions = all_actions[polid].cpu().numpy()
+                    actions, values, log_probs, distributions = policy.policy.forward(obs_tensor)
+                    
+                    all_actions[polid] = actions
+                    all_values[polid] = values
+                    all_log_probs[polid] = log_probs
+                    all_distributions[polid] = distributions
+                    
+                    clipped_actions = actions.cpu().numpy()
                     if isinstance(self.action_space, Box):
                         clipped_actions = np.clip(
                             clipped_actions,
@@ -258,141 +263,86 @@ class Causal_IndependentPPO(OnPolicyAlgorithm):
                             self.action_space.high,
                         )
                     elif isinstance(self.action_space, Discrete):
-                        # get integer from numpy array
-                        clipped_actions = np.array(
-                            [action.item() for action in clipped_actions]
-                        )
+                        clipped_actions = np.array([action.item() for action in clipped_actions])
                     all_clipped_actions[polid] = clipped_actions
-
-            all_clipped_actions = (
-                np.vstack(all_clipped_actions).transpose().reshape(-1)
-            )  # reshape as (env, action)
+                
+            all_clipped_actions = np.vstack(all_clipped_actions).transpose().reshape(-1)
+            
             obs, rewards, dones, infos = self.env.step(all_clipped_actions)
             
-            if dones.any():
-                for polid in range(self.num_agents):
-                    all_rewards[polid] = np.array(
-                    [
-                        rewards[envid * self.num_agents + polid]
-                        for envid in range(self.num_envs)
-                    ]
-                )
-                all_last_obs_for_trajs = np.expand_dims(np.array([obs for obs in all_last_obs]),axis=0)
-                all_actions_for_trajs = np.expand_dims(np.array([action.cpu().numpy() for action in all_actions]),axis=0)
-                all_rewards_for_trajs = np.expand_dims(np.array([rewards for rewards in all_rewards]),axis=0)
-
-                all_obs_trajs = np.concatenate((all_obs_trajs,all_last_obs_for_trajs),axis=0)
-                all_actions_trajs = np.concatenate((all_actions_trajs,all_actions_for_trajs),axis=0)
-                all_rewards_trajs = np.concatenate((all_rewards_trajs,all_rewards_for_trajs),axis=0)
-
-
-                # all_rewards_trajs.append(all_rewards)
-                # if self.previous_all_last_obs_traj is None or self.previous_all_actions_traj is None or self.previous_all_rewards_traj is None:
-                #     self.previous_all_last_obs_traj = np.array(all_obs_trajs)
-                #     self.previous_all_actions_traj = np.array(all_actions_trajs)
-                #     self.previous_all_rewards_traj = np.array(all_rewards_trajs) 
-                # all_obs_trajs,all_actions_trajs,all_rewards_trajs = np.array(all_obs_trajs),np.array(all_actions_trajs),np.array(all_rewards_trajs)
-            else:
-                for polid in range(self.num_agents):
-                    all_rewards[polid] = np.array(
-                    [
-                        rewards[envid * self.num_agents + polid]
-                        for envid in range(self.num_envs)
-                    ]
-                )
-
-                if isinstance(all_obs_trajs,list):
-                    all_obs_trajs.append(all_last_obs)
-                    all_actions_trajs.append(np.array([action.cpu().numpy() for action in all_actions]))
-                    all_rewards_trajs.append(all_rewards)
-                else:
-                    all_last_obs_for_trajs = np.expand_dims(np.array([obs for obs in all_last_obs]),axis=0)
-                    all_actions_for_trajs = np.expand_dims(np.array([action.cpu().numpy() for action in all_actions]),axis=0)
-                    all_rewards_for_trajs = np.expand_dims(np.array([rewards for rewards in all_rewards]),axis=0)
-
-                    all_obs_trajs = np.concatenate((all_obs_trajs,all_last_obs_for_trajs),axis=0)
-                    all_actions_trajs = np.concatenate((all_actions_trajs,all_actions_for_trajs),axis=0)
-                    all_rewards_trajs = np.concatenate((all_rewards_trajs,all_rewards_for_trajs),axis=0)
-
-                # all_rewards_trajs.append(all_rewards)
-                all_rewards = [None] * self.num_agents
-            ############################################
+            all_obs_trajs.append([obs.copy() for obs in all_last_obs])
+            all_actions_trajs.append([action.cpu().numpy() for action in all_actions])
+            all_rewards_trajs.append([reward for reward in all_rewards if reward is not None])
+            
             for polid in range(self.num_agents):
                 all_obs[polid] = np.array(
-                    [
-                        obs[envid * self.num_agents + polid]
-                        for envid in range(self.num_envs)
-                    ]
+                    [obs[envid * self.num_agents + polid] for envid in range(self.num_envs)]
                 )
                 all_rewards[polid] = np.array(
-                    [
-                        rewards[envid * self.num_agents + polid]
-                        for envid in range(self.num_envs)
-                    ]
+                    [rewards[envid * self.num_agents + polid] for envid in range(self.num_envs)]
                 )
                 all_dones[polid] = np.array(
-                    [
-                        dones[envid * self.num_agents + polid]
-                        for envid in range(self.num_envs)
-                    ]
+                    [dones[envid * self.num_agents + polid] for envid in range(self.num_envs)]
                 )
-                all_infos[polid] = np.array(
-                    [
-                        infos[envid * self.num_agents + polid]
-                        for envid in range(self.num_envs)
-                    ]
-                )
+                all_infos[polid] = [infos[envid * self.num_agents + polid] for envid in range(self.num_envs)]
 
             for policy in self.policies:
                 policy.num_timesteps += self.num_envs
 
             for callback in callbacks:
                 callback.update_locals(locals())
-            if not [callback.on_step() for callback in callbacks]:
-                break
+                if not callback.on_step():
+                    return obs
 
             for polid, policy in enumerate(self.policies):
                 policy._update_info_buffer(all_infos[polid])
 
             steps += 1
 
-
-            # add data to the rollout buffers
             for polid, policy in enumerate(self.policies):
                 if isinstance(self.action_space, Discrete):
                     all_actions[polid] = all_actions[polid].reshape(-1, 1)
                 all_actions[polid] = all_actions[polid].cpu().numpy()
-            rollout_all_actions = all_actions
+
             for polid, policy in enumerate(self.policies):
                 if self.model == 'social_influence':
-                        if len(all_obs_trajs) > 10:
-                            social_influence = self.compute_social_influence(policy,all_obs_trajs[steps - 10: steps],all_last_obs,all_actions,polid)
-                        else:
-                            social_influence = np.zeros((self.num_envs,1))
-                        policy.rollout_buffer.add_sw(
-                            all_last_obs[polid],
-                            all_actions[polid],
-                            all_rewards[polid],
-                            all_last_episode_starts[polid],
-                            all_values[polid],
-                            all_log_probs[polid],
+                    if len(all_obs_trajs) > 10:
+                        social_influence = self.compute_social_influence(
+                            policy,
+                            all_obs_trajs[-10:],
                             all_last_obs,
-                            rollout_all_actions,
-                            all_rewards,
-                            social_influence,
+                            all_actions,
+                            polid
                         )
+                    else:
+                        social_influence = np.zeros((self.num_envs,1))
+                    
+                    policy.rollout_buffer.add_sw(
+                        all_last_obs[polid],
+                        all_actions[polid],
+                        all_rewards[polid],
+                        all_last_episode_starts[polid],
+                        all_values[polid],
+                        all_log_probs[polid],
+                        all_last_obs,
+                        all_actions,
+                        all_rewards,
+                        social_influence,
+                    )
+            
             all_last_obs = all_obs
             all_last_episode_starts = all_dones
 
         with th.no_grad():
             for polid, policy in enumerate(self.policies):
                 obs_tensor = obs_as_tensor(all_last_obs[polid], policy.device)
-                _, value, _,_ = policy.policy.forward(obs_tensor)
+                _, value, _, _ = policy.policy.forward(obs_tensor)
                 if self.model == 'social_influence':
                     policy.rollout_buffer.compute_social_influence_returns_and_advantage(
-                        last_values=value, dones=all_dones[polid], alpha=self.alpha
+                        last_values=value,
+                        dones=all_dones[polid],
+                        alpha=self.alpha
                     )
-
 
         for callback in callbacks:
             callback.on_rollout_end()
@@ -402,36 +352,75 @@ class Causal_IndependentPPO(OnPolicyAlgorithm):
 
         return obs
 
-
-    def compute_social_influence(self,policy,all_obs_trajs,all_last_obs,all_actions,polid):
-        seq_len = len(all_obs_trajs)
-        all_last_obs = obs_as_tensor(np.array(all_last_obs), policy.device)
-        all_obs_trajs = obs_as_tensor(np.array(all_obs_trajs), policy.device)
-        all_actions = obs_as_tensor(np.transpose(np.array(all_actions),(1,0,2)), policy.device)
+    def compute_social_influence(self, policy, all_obs_trajs, all_last_obs, all_actions, polid):
+        """计算社会影响力
         
-        all_obs_trajs = all_obs_trajs.permute(1,2,0,3,4,5)
-        all_obs_trajs = all_obs_trajs.reshape(all_obs_trajs.shape[0],-1,all_obs_trajs.shape[3],all_obs_trajs.shape[4],all_obs_trajs.shape[5])
-        # extract obs features
-        obs_features = []
-        for i in range(self.num_agents):
-                obs_features.append(policy.policy.extract_features(all_obs_trajs[i]))
-        obs_features = th.stack(obs_features,dim=0).permute(1,0,2)
-        obs_features = obs_features.reshape(obs_features.shape[0],self.num_agents,-1)
-        obs_features = obs_features.reshape(-1,seq_len,self.num_agents, obs_features.shape[-1])
-        obs_features = obs_features.permute(2,0,1,3)
+        Args:
+            policy: 当前智能体的策略
+            all_obs_trajs: 所有智能体的观察轨迹历史 [T, num_agents, ...]
+            all_last_obs: 所有智能体的最新观察 [num_agents, ...]
+            all_actions: 所有智能体的动作 [num_agents, ...]
+            polid: 当前智能体的ID
+            
+        Returns:
+            social_influence: 社会影响力得分 [num_envs, 1]
+        """
+        with th.no_grad():
+            # 将数据转移到GPU
+            all_last_obs = th.from_numpy(np.array(all_last_obs)).to(policy.device)
+            all_actions = th.from_numpy(np.transpose(np.array(all_actions),(1,0,2))).to(policy.device)
+            
+            # 处理观察轨迹
+            batch_obs_tensor = th.from_numpy(np.array(all_obs_trajs)).to(policy.device)
+            # [T, num_agents, num_envs, ...] -> [num_agents, num_envs, T, ...]
+            batch_obs_tensor = batch_obs_tensor.permute(1, 2, 0, 3, 4, 5)
+            
+            # 提取特征
+            obs_features_list = []
+            for agent_obs in batch_obs_tensor:
+                # 重塑以批量处理时序数据
+                agent_obs = agent_obs.reshape(-1, *agent_obs.shape[2:])
+                feat = policy.policy.extract_features(agent_obs)
+                # 恢复时序维度 [num_envs, T, feature_dim]
+                feat = feat.reshape(batch_obs_tensor.shape[1], -1, feat.shape[-1])
+                obs_features_list.append(feat)
+            
+            # [num_agents, num_envs, T, feature_dim]
+            obs_features = th.stack(obs_features_list)
+            
+            total_kl_div = th.zeros(self.num_envs, device=policy.device)
+            
+            # 对每个其他智能体计算KL散度
+            for j in range(self.num_agents):
+                if j != polid:
+                    # 使用LSTM提取时序特征
+                    outputs = policy.policy.lstm_extractor(
+                        obs_features[j],  # [num_envs, T, feature_dim]
+                        self.prev_state
+                    )
+                    p_a_given_s, _, p_a_given_m_s, _, self.prev_state = outputs
+                    
+                    # 计算KL散度
+                    kl_div = F.kl_div(
+                        p_a_given_m_s.log(),  # 预测的动作分布
+                        p_a_given_s,          # 实际的动作分布
+                        reduction='none'       # 不要立即求平均
+                    )
+                    
+                    # 对每个环境分别累加KL散度
+                    total_kl_div += kl_div.mean(dim=1)  # 对动作维度求平均
+            
+            # 计算平均社会影响力
+            avg_kl_div = total_kl_div / (self.num_agents - 1)  # 除去自身
+            
+            # 返回每个环境的社会影响力得分
+            social_influence = avg_kl_div.reshape(-1, 1).cpu().numpy()
+            
+            # 应用sigmoid来归一化得分到[0,1]区间
+            social_influence = 1 / (1 + np.exp(-social_influence))
+            
+            return social_influence
 
-        kl_div = 0
-        for i in range(self.num_agents):
-            if i != polid:
-                p_a_given_s,_,p_a_given_m_s,_,self.prev_state = policy.policy.lstm_extractor(obs_features[i],self.prev_state)
-                kl_div_i = F.kl_div(
-                    p_a_given_m_s[:,i].log(), 
-                    p_a_given_s[:,i], 
-                    reduction='batchmean'
-                )
-                kl_div += kl_div_i
-        return kl_div.cpu().detach().numpy()
-    
     @classmethod
     def load(
         cls,

@@ -3,7 +3,7 @@
 
 python run_scripts/sb3_independent.py \
 --model social_influence \
---env-name coin3 \
+--env-name lbf10 \
 --num-cpus 12 \
 --num-envs 32 \
 --num-agents 3 \
